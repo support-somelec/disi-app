@@ -1,15 +1,21 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: SOMELEC Plans d'Action API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: plans
+    description: Plans d'action operations
+  - name: users
+    description: User operations
+  - name: attachments
+    description: Attachment operations
+
 paths:
   /healthz:
     get:
@@ -24,6 +30,277 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /users:
+    get:
+      operationId: getUsers
+      tags: [users]
+      summary: Get all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /plans:
+    get:
+      operationId: getPlans
+      tags: [plans]
+      summary: Get all plans d'action
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: directionId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+    post:
+      operationId: createPlan
+      tags: [plans]
+      summary: Create a new plan d'action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlanRequest"
+      responses:
+        "201":
+          description: Plan created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+
+  /plans/{id}:
+    get:
+      operationId: getPlan
+      tags: [plans]
+      summary: Get a plan d'action by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Plan found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+        "404":
+          description: Plan not found
+    put:
+      operationId: updatePlan
+      tags: [plans]
+      summary: Update a plan d'action
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePlanRequest"
+      responses:
+        "200":
+          description: Plan updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+
+  /plans/{id}/validate:
+    post:
+      operationId: validatePlan
+      tags: [plans]
+      summary: Validate or reject a plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidatePlanRequest"
+      responses:
+        "200":
+          description: Plan validated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+
+  /plans/{id}/moyens:
+    get:
+      operationId: getPlanMoyens
+      tags: [plans]
+      summary: Get moyens for a plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of moyens
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Moyen"
+    post:
+      operationId: addMoyen
+      tags: [plans]
+      summary: Add a moyen to a plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMoyenRequest"
+      responses:
+        "201":
+          description: Moyen added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Moyen"
+
+  /plans/{id}/moyens/{moyenId}:
+    delete:
+      operationId: deleteMoyen
+      tags: [plans]
+      summary: Delete a moyen from a plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: moyenId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Moyen deleted
+
+  /plans/{id}/attachments:
+    get:
+      operationId: getPlanAttachments
+      tags: [attachments]
+      summary: Get attachments for a plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Attachment"
+    post:
+      operationId: addAttachment
+      tags: [attachments]
+      summary: Add an attachment (base64)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAttachmentRequest"
+      responses:
+        "201":
+          description: Attachment added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+
+  /plans/{id}/attachments/{attachmentId}:
+    delete:
+      operationId: deleteAttachment
+      tags: [attachments]
+      summary: Delete an attachment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: attachmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Attachment deleted
+
+  /directions:
+    get:
+      operationId: getDirections
+      tags: [users]
+      summary: Get all directions
+      responses:
+        "200":
+          description: List of directions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Direction"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +311,235 @@ components:
       required:
         - status
 
+    Direction:
+      type: object
+      properties:
+        id:
+          type: integer
+        nom:
+          type: string
+        code:
+          type: string
+      required:
+        - id
+        - nom
+        - code
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        nom:
+          type: string
+        prenom:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [direction, controle_technique, directeur_general]
+        directionId:
+          type: integer
+        directionNom:
+          type: string
+      required:
+        - id
+        - nom
+        - prenom
+        - email
+        - role
+
+    Plan:
+      type: object
+      properties:
+        id:
+          type: integer
+        titre:
+          type: string
+        description:
+          type: string
+        dateDebut:
+          type: string
+          format: date
+        duree:
+          type: integer
+        directionId:
+          type: integer
+        directionNom:
+          type: string
+        statut:
+          type: string
+          enum: [brouillon, en_attente_ct, en_attente_dg, approuve, rejete, ouvert]
+        createdById:
+          type: integer
+        createdByNom:
+          type: string
+        budgetTotal:
+          type: number
+        commentaireRejet:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        moyens:
+          type: array
+          items:
+            $ref: "#/components/schemas/Moyen"
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
+      required:
+        - id
+        - titre
+        - description
+        - dateDebut
+        - duree
+        - directionId
+        - statut
+        - createdById
+        - budgetTotal
+        - createdAt
+        - updatedAt
+
+    Moyen:
+      type: object
+      properties:
+        id:
+          type: integer
+        planId:
+          type: integer
+        categorie:
+          type: string
+          enum: [materiel, carburant, logement, logistique, prime, indemnite_journaliere]
+        description:
+          type: string
+        budget:
+          type: number
+        unite:
+          type: string
+        quantite:
+          type: number
+      required:
+        - id
+        - planId
+        - categorie
+        - description
+        - budget
+
+    Attachment:
+      type: object
+      properties:
+        id:
+          type: integer
+        planId:
+          type: integer
+        nom:
+          type: string
+        type:
+          type: string
+        taille:
+          type: integer
+        url:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - planId
+        - nom
+        - type
+        - createdAt
+
+    CreatePlanRequest:
+      type: object
+      properties:
+        titre:
+          type: string
+        description:
+          type: string
+        dateDebut:
+          type: string
+          format: date
+        duree:
+          type: integer
+        directionId:
+          type: integer
+        createdById:
+          type: integer
+      required:
+        - titre
+        - description
+        - dateDebut
+        - duree
+        - directionId
+        - createdById
+
+    UpdatePlanRequest:
+      type: object
+      properties:
+        titre:
+          type: string
+        description:
+          type: string
+        dateDebut:
+          type: string
+          format: date
+        duree:
+          type: integer
+        directionId:
+          type: integer
+
+    ValidatePlanRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [approuver, rejeter]
+        validatedById:
+          type: integer
+        commentaire:
+          type: string
+      required:
+        - action
+        - validatedById
+
+    CreateMoyenRequest:
+      type: object
+      properties:
+        categorie:
+          type: string
+          enum: [materiel, carburant, logement, logistique, prime, indemnite_journaliere]
+        description:
+          type: string
+        budget:
+          type: number
+        unite:
+          type: string
+        quantite:
+          type: number
+      required:
+        - categorie
+        - description
+        - budget
+
+    CreateAttachmentRequest:
+      type: object
+      properties:
+        nom:
+          type: string
+        type:
+          type: string
+        taille:
+          type: integer
+        data:
+          type: string
+          description: Base64 encoded file content
+      required:
+        - nom
+        - type

@@ -1,0 +1,347 @@
+import { Router, type IRouter } from "express";
+import { db } from "@workspace/db";
+import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable } from "@workspace/db/schema";
+import { eq, and, sql } from "drizzle-orm";
+import {
+  CreatePlanBody,
+  UpdatePlanBody,
+  ValidatePlanBody,
+  AddMoyenBody,
+  AddAttachmentBody,
+} from "@workspace/api-zod";
+
+const router: IRouter = Router();
+
+async function getPlanWithDetails(planId: number) {
+  const plans = await db
+    .select({
+      id: plansTable.id,
+      titre: plansTable.titre,
+      description: plansTable.description,
+      dateDebut: plansTable.dateDebut,
+      duree: plansTable.duree,
+      directionId: plansTable.directionId,
+      directionNom: directionsTable.nom,
+      statut: plansTable.statut,
+      createdById: plansTable.createdById,
+      createdByNom: usersTable.nom,
+      commentaireRejet: plansTable.commentaireRejet,
+      createdAt: plansTable.createdAt,
+      updatedAt: plansTable.updatedAt,
+    })
+    .from(plansTable)
+    .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+    .leftJoin(usersTable, eq(plansTable.createdById, usersTable.id))
+    .where(eq(plansTable.id, planId));
+
+  if (!plans.length) return null;
+
+  const plan = plans[0];
+
+  const moyens = await db.select().from(moyensTable).where(eq(moyensTable.planId, planId));
+  const attachments = await db
+    .select({
+      id: attachmentsTable.id,
+      planId: attachmentsTable.planId,
+      nom: attachmentsTable.nom,
+      type: attachmentsTable.type,
+      taille: attachmentsTable.taille,
+      createdAt: attachmentsTable.createdAt,
+    })
+    .from(attachmentsTable)
+    .where(eq(attachmentsTable.planId, planId));
+
+  const budgetTotal = moyens.reduce((sum, m) => sum + Number(m.budget), 0);
+
+  return {
+    ...plan,
+    budgetTotal,
+    moyens: moyens.map(m => ({
+      ...m,
+      budget: Number(m.budget),
+      quantite: m.quantite ? Number(m.quantite) : null,
+    })),
+    attachments,
+  };
+}
+
+// GET /plans
+router.get("/plans", async (req, res) => {
+  try {
+    const { status, directionId } = req.query;
+
+    let conditions = [];
+    if (status) conditions.push(eq(plansTable.statut, String(status)));
+    if (directionId) conditions.push(eq(plansTable.directionId, Number(directionId)));
+
+    const plansRaw = await db
+      .select({
+        id: plansTable.id,
+        titre: plansTable.titre,
+        description: plansTable.description,
+        dateDebut: plansTable.dateDebut,
+        duree: plansTable.duree,
+        directionId: plansTable.directionId,
+        directionNom: directionsTable.nom,
+        statut: plansTable.statut,
+        createdById: plansTable.createdById,
+        createdByNom: usersTable.nom,
+        commentaireRejet: plansTable.commentaireRejet,
+        createdAt: plansTable.createdAt,
+        updatedAt: plansTable.updatedAt,
+      })
+      .from(plansTable)
+      .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+      .leftJoin(usersTable, eq(plansTable.createdById, usersTable.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(plansTable.createdAt);
+
+    const plansWithBudget = await Promise.all(
+      plansRaw.map(async (plan) => {
+        const moyens = await db.select().from(moyensTable).where(eq(moyensTable.planId, plan.id));
+        const budgetTotal = moyens.reduce((sum, m) => sum + Number(m.budget), 0);
+        return { ...plan, budgetTotal, moyens: [], attachments: [] };
+      })
+    );
+
+    res.json(plansWithBudget);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /plans
+router.post("/plans", async (req, res) => {
+  try {
+    const body = CreatePlanBody.parse(req.body);
+    const [plan] = await db
+      .insert(plansTable)
+      .values({
+        titre: body.titre,
+        description: body.description,
+        dateDebut: body.dateDebut,
+        duree: body.duree,
+        directionId: body.directionId,
+        createdById: body.createdById,
+        statut: "brouillon",
+      })
+      .returning();
+
+    const result = await getPlanWithDetails(plan.id);
+    res.status(201).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// GET /plans/:id
+router.get("/plans/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const plan = await getPlanWithDetails(id);
+    if (!plan) return res.status(404).json({ error: "Plan not found" });
+    res.json(plan);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PUT /plans/:id
+router.put("/plans/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const body = UpdatePlanBody.parse(req.body);
+
+    const updates: Partial<typeof plansTable.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+    if (body.titre !== undefined) updates.titre = body.titre;
+    if (body.description !== undefined) updates.description = body.description;
+    if (body.dateDebut !== undefined) updates.dateDebut = body.dateDebut;
+    if (body.duree !== undefined) updates.duree = body.duree;
+    if (body.directionId !== undefined) updates.directionId = body.directionId;
+
+    await db.update(plansTable).set(updates).where(eq(plansTable.id, id));
+    const plan = await getPlanWithDetails(id);
+    if (!plan) return res.status(404).json({ error: "Plan not found" });
+    res.json(plan);
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// POST /plans/:id/validate
+router.post("/plans/:id/validate", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const body = ValidatePlanBody.parse(req.body);
+
+    const existingPlans = await db.select().from(plansTable).where(eq(plansTable.id, id));
+    if (!existingPlans.length) return res.status(404).json({ error: "Plan not found" });
+
+    const currentPlan = existingPlans[0];
+    let newStatut = currentPlan.statut;
+    let commentaireRejet = currentPlan.commentaireRejet;
+
+    if (body.action === "approuver") {
+      if (currentPlan.statut === "brouillon" || currentPlan.statut === "en_attente_ct") {
+        newStatut = "en_attente_ct";
+      }
+      if (currentPlan.statut === "en_attente_ct") {
+        newStatut = "en_attente_dg";
+      } else if (currentPlan.statut === "en_attente_dg") {
+        newStatut = "ouvert";
+      }
+    } else if (body.action === "rejeter") {
+      newStatut = "rejete";
+      commentaireRejet = body.commentaire ?? "Rejeté sans commentaire";
+    }
+
+    await db
+      .update(plansTable)
+      .set({ statut: newStatut, commentaireRejet, updatedAt: new Date() })
+      .where(eq(plansTable.id, id));
+
+    const plan = await getPlanWithDetails(id);
+    res.json(plan);
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// GET /plans/:id/moyens
+router.get("/plans/:id/moyens", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyens = await db.select().from(moyensTable).where(eq(moyensTable.planId, planId));
+    res.json(
+      moyens.map(m => ({
+        ...m,
+        budget: Number(m.budget),
+        quantite: m.quantite ? Number(m.quantite) : null,
+      }))
+    );
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /plans/:id/moyens
+router.post("/plans/:id/moyens", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const body = AddMoyenBody.parse(req.body);
+
+    const [moyen] = await db
+      .insert(moyensTable)
+      .values({
+        planId,
+        categorie: body.categorie,
+        description: body.description,
+        budget: String(body.budget),
+        unite: body.unite,
+        quantite: body.quantite !== undefined ? String(body.quantite) : null,
+      })
+      .returning();
+
+    res.status(201).json({
+      ...moyen,
+      budget: Number(moyen.budget),
+      quantite: moyen.quantite ? Number(moyen.quantite) : null,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// DELETE /plans/:id/moyens/:moyenId
+router.delete("/plans/:id/moyens/:moyenId", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    await db
+      .delete(moyensTable)
+      .where(and(eq(moyensTable.id, moyenId), eq(moyensTable.planId, planId)));
+    res.status(204).send();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /plans/:id/attachments
+router.get("/plans/:id/attachments", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const attachments = await db
+      .select({
+        id: attachmentsTable.id,
+        planId: attachmentsTable.planId,
+        nom: attachmentsTable.nom,
+        type: attachmentsTable.type,
+        taille: attachmentsTable.taille,
+        createdAt: attachmentsTable.createdAt,
+      })
+      .from(attachmentsTable)
+      .where(eq(attachmentsTable.planId, planId));
+    res.json(attachments);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /plans/:id/attachments
+router.post("/plans/:id/attachments", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const body = AddAttachmentBody.parse(req.body);
+
+    const [attachment] = await db
+      .insert(attachmentsTable)
+      .values({
+        planId,
+        nom: body.nom,
+        type: body.type,
+        taille: body.taille,
+        data: body.data,
+      })
+      .returning();
+
+    res.status(201).json({
+      id: attachment.id,
+      planId: attachment.planId,
+      nom: attachment.nom,
+      type: attachment.type,
+      taille: attachment.taille,
+      createdAt: attachment.createdAt,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// DELETE /plans/:id/attachments/:attachmentId
+router.delete("/plans/:id/attachments/:attachmentId", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const attachmentId = Number(req.params.attachmentId);
+    await db
+      .delete(attachmentsTable)
+      .where(and(eq(attachmentsTable.id, attachmentId), eq(attachmentsTable.planId, planId)));
+    res.status(204).send();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+export default router;

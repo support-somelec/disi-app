@@ -1,0 +1,19 @@
+packages:
+  "framer-motion": "For page transitions and interactive element animations"
+  "date-fns": "For human-readable date formatting"
+  "clsx": "For conditional class names merging"
+  "tailwind-merge": "For conflict-free tailwind class merging"
+  "lucide-react": "For beautiful crisp UI icons"
+
+images:
+  - path: "artifacts/somelec-plans/public/images/logo-somelec.png"
+    description: "A clean, minimalist, highly professional corporate logo for a government electricity utility company named SOMELEC. Features a subtle lightning bolt motif inside a shield or circle, deep navy blue and bright electric blue/yellow accents. Solid white transparent background."
+    aspect_ratio: "1:1"
+  - path: "artifacts/somelec-plans/public/images/auth-bg.png"
+    description: "An abstract, soft-focus background image depicting clean energy, power lines against a clear blue sky, or modern energy infrastructure. Very light, airy, and professional. Deep blue and teal color tones with high transparency suitable for a background."
+    aspect_ratio: "16:9"
+
+notes:
+  - Using pre-generated React Query hooks from @workspace/api-client-react
+  - Simulating authentication via a role selector in the navigation bar
+  - File uploads use FileReader to convert to Base64 data URLs before sending to the API

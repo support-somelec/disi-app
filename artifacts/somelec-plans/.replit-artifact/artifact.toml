@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "SOMELEC - Gestion des Plans d'Action"
+version = "1.0.0"
+id = "artifacts/somelec-plans"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 21631
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/somelec-plans run dev"
+
+[services.env]
+PORT = "21631"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/somelec-plans", "run", "build"]
+publicDir = "artifacts/somelec-plans/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
