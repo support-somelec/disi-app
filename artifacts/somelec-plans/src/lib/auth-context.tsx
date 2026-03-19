@@ -1,21 +1,28 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useGetUsers } from "@workspace/api-client-react";
-import type { User, UserRole } from "@workspace/api-client-react";
+import type { User } from "@workspace/api-client-react";
 
 interface AuthContextType {
   currentUser: User | null;
-  setCurrentUser: (user: User | null) => void;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => void;
   availableUsers: User[];
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Fallback mock users in case the database is empty
+const SESSION_KEY = "somelec_user";
+
 const MOCK_USERS: User[] = [
-  { id: 1, nom: "Dupont", prenom: "Jean", email: "j.dupont@somelec.mr", role: "direction", directionId: 1, directionNom: "Direction Production" },
-  { id: 2, nom: "Martin", prenom: "Sophie", email: "s.martin@somelec.mr", role: "controle_technique" },
-  { id: 3, nom: "Diallo", prenom: "Amadou", email: "a.diallo@somelec.mr", role: "directeur_general" },
+  { id: 1, nom: "Hadj", prenom: "Mohamed", email: "mohammed.hadj@somelec.mr", role: "directeur_general", directionId: 1, directionNom: "Direction Générale" },
+  { id: 2, nom: "Mint Ahmed", prenom: "Fatimetou", email: "fatimetou.ahmed@somelec.mr", role: "controle_technique", directionId: 1, directionNom: "Direction Générale" },
+  { id: 3, nom: "Ould Brahim", prenom: "Sidi", email: "sidi.brahim@somelec.mr", role: "direction", directionId: 2, directionNom: "Direction Technique" },
+  { id: 4, nom: "Ould Mohamed", prenom: "Ahmed", email: "ahmed.mohamed@somelec.mr", role: "direction", directionId: 6, directionNom: "Direction de la Production" },
+  { id: 5, nom: "Diallo", prenom: "Aminata", email: "aminata.diallo@somelec.mr", role: "direction", directionId: 3, directionNom: "Direction Commerciale" },
+  { id: 6, nom: "Ba", prenom: "Oumar", email: "oumar.ba@somelec.mr", role: "direction", directionId: 4, directionNom: "Direction Financière" },
+  { id: 7, nom: "Ould Salem", prenom: "Moctar", email: "moctar.salem@somelec.mr", role: "direction", directionId: 5, directionNom: "Direction des Ressources Humaines" },
 ];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -24,15 +31,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const users = apiUsers?.length ? apiUsers : MOCK_USERS;
 
-  // Auto-login first user for demo purposes
   useEffect(() => {
-    if (!currentUser && users.length > 0) {
-      setCurrentUser(users[0]);
+    const saved = sessionStorage.getItem(SESSION_KEY);
+    if (saved) {
+      try {
+        setCurrentUser(JSON.parse(saved));
+      } catch {
+        sessionStorage.removeItem(SESSION_KEY);
+      }
     }
-  }, [users, currentUser]);
+  }, []);
+
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    if (!password || password.length < 4) {
+      return { success: false, error: "Mot de passe incorrect." };
+    }
+
+    const found = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!found) {
+      return { success: false, error: "Aucun compte trouvé avec cet email." };
+    }
+
+    if (password !== "somelec2026") {
+      return { success: false, error: "Mot de passe incorrect." };
+    }
+
+    setCurrentUser(found);
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(found));
+    return { success: true };
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    sessionStorage.removeItem(SESSION_KEY);
+  };
 
   return (
-    <AuthContext.Provider value={{ currentUser, setCurrentUser, availableUsers: users, isLoading }}>
+    <AuthContext.Provider value={{
+      currentUser,
+      isAuthenticated: currentUser !== null,
+      login,
+      logout,
+      availableUsers: users,
+      isLoading,
+    }}>
       {children}
     </AuthContext.Provider>
   );

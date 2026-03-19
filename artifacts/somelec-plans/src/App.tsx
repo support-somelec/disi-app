@@ -1,16 +1,16 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
-import { AuthProvider } from "@/lib/auth-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import CreatePlan from "@/pages/CreatePlan";
 import PlanDetails from "@/pages/PlanDetails";
+import Login from "@/pages/Login";
 
-// Configure react-query client with defaults
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -22,11 +22,32 @@ const queryClient = new QueryClient({
 });
 
 function Router() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/plans/nouveau" component={CreatePlan} />
-      <Route path="/plans/:id" component={PlanDetails} />
+      <Route path="/login" component={Login} />
+      <Route path="/">
+        {isAuthenticated ? (
+          <AppLayout><Dashboard /></AppLayout>
+        ) : (
+          <Redirect to="/login" />
+        )}
+      </Route>
+      <Route path="/plans/nouveau">
+        {isAuthenticated ? (
+          <AppLayout><CreatePlan /></AppLayout>
+        ) : (
+          <Redirect to="/login" />
+        )}
+      </Route>
+      <Route path="/plans/:id">
+        {isAuthenticated ? (
+          <AppLayout><PlanDetails /></AppLayout>
+        ) : (
+          <Redirect to="/login" />
+        )}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -38,9 +59,7 @@ function App() {
       <AuthProvider>
         <TooltipProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AppLayout>
-              <Router />
-            </AppLayout>
+            <Router />
           </WouterRouter>
           <Toaster />
         </TooltipProvider>
