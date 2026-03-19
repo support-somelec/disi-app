@@ -7,6 +7,7 @@
  */
 
 export * from "./attachment";
+export * from "./consommerMoyenRequest";
 export * from "./createAttachmentRequest";
 export * from "./createMoyenRequest";
 export * from "./createMoyenRequestCategorie";

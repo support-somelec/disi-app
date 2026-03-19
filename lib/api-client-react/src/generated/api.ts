@@ -18,6 +18,7 @@ import type {
 
 import type {
   Attachment,
+  ConsommerMoyenRequest,
   CreateAttachmentRequest,
   CreateMoyenRequest,
   CreatePlanRequest,
@@ -41,7 +42,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -182,7 +182,7 @@ export function useGetUsers<
 }
 
 /**
- * @summary Get all plans d'action
+ * @summary Get plans d'action
  */
 export const getGetPlansUrl = (params?: GetPlansParams) => {
   const normalizedParams = new URLSearchParams();
@@ -249,7 +249,7 @@ export type GetPlansQueryResult = NonNullable<
 export type GetPlansQueryError = ErrorType<unknown>;
 
 /**
- * @summary Get all plans d'action
+ * @summary Get plans d'action
  */
 
 export function useGetPlans<
@@ -362,7 +362,7 @@ export const useCreatePlan = <
 };
 
 /**
- * @summary Get a plan d'action by ID
+ * @summary Get a plan by ID
  */
 export const getGetPlanUrl = (id: number) => {
   return `/api/plans/${id}`;
@@ -416,7 +416,7 @@ export type GetPlanQueryResult = NonNullable<
 export type GetPlanQueryError = ErrorType<void>;
 
 /**
- * @summary Get a plan d'action by ID
+ * @summary Get a plan by ID
  */
 
 export function useGetPlan<
@@ -439,7 +439,7 @@ export function useGetPlan<
 }
 
 /**
- * @summary Update a plan d'action
+ * @summary Update a plan
  */
 export const getUpdatePlanUrl = (id: number) => {
   return `/api/plans/${id}`;
@@ -503,7 +503,7 @@ export type UpdatePlanMutationBody = BodyType<UpdatePlanRequest>;
 export type UpdatePlanMutationError = ErrorType<unknown>;
 
 /**
- * @summary Update a plan d'action
+ * @summary Update a plan
  */
 export const useUpdatePlan = <
   TError = ErrorType<unknown>,
@@ -787,7 +787,7 @@ export const useAddMoyen = <
 };
 
 /**
- * @summary Delete a moyen from a plan
+ * @summary Delete a moyen
  */
 export const getDeleteMoyenUrl = (id: number, moyenId: number) => {
   return `/api/plans/${id}/moyens/${moyenId}`;
@@ -849,7 +849,7 @@ export type DeleteMoyenMutationResult = NonNullable<
 export type DeleteMoyenMutationError = ErrorType<unknown>;
 
 /**
- * @summary Delete a moyen from a plan
+ * @summary Delete a moyen
  */
 export const useDeleteMoyen = <
   TError = ErrorType<unknown>,
@@ -869,6 +869,94 @@ export const useDeleteMoyen = <
   TContext
 > => {
   return useMutation(getDeleteMoyenMutationOptions(options));
+};
+
+/**
+ * @summary Record consumption for a moyen
+ */
+export const getConsommerMoyenUrl = (id: number, moyenId: number) => {
+  return `/api/plans/${id}/moyens/${moyenId}/consommer`;
+};
+
+export const consommerMoyen = async (
+  id: number,
+  moyenId: number,
+  consommerMoyenRequest: ConsommerMoyenRequest,
+  options?: RequestInit,
+): Promise<Moyen> => {
+  return customFetch<Moyen>(getConsommerMoyenUrl(id, moyenId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(consommerMoyenRequest),
+  });
+};
+
+export const getConsommerMoyenMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof consommerMoyen>>,
+    TError,
+    { id: number; moyenId: number; data: BodyType<ConsommerMoyenRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof consommerMoyen>>,
+  TError,
+  { id: number; moyenId: number; data: BodyType<ConsommerMoyenRequest> },
+  TContext
+> => {
+  const mutationKey = ["consommerMoyen"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof consommerMoyen>>,
+    { id: number; moyenId: number; data: BodyType<ConsommerMoyenRequest> }
+  > = (props) => {
+    const { id, moyenId, data } = props ?? {};
+
+    return consommerMoyen(id, moyenId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConsommerMoyenMutationResult = NonNullable<
+  Awaited<ReturnType<typeof consommerMoyen>>
+>;
+export type ConsommerMoyenMutationBody = BodyType<ConsommerMoyenRequest>;
+export type ConsommerMoyenMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Record consumption for a moyen
+ */
+export const useConsommerMoyen = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof consommerMoyen>>,
+    TError,
+    { id: number; moyenId: number; data: BodyType<ConsommerMoyenRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof consommerMoyen>>,
+  TError,
+  { id: number; moyenId: number; data: BodyType<ConsommerMoyenRequest> },
+  TContext
+> => {
+  return useMutation(getConsommerMoyenMutationOptions(options));
 };
 
 /**
@@ -959,7 +1047,7 @@ export function useGetPlanAttachments<
 }
 
 /**
- * @summary Add an attachment (base64)
+ * @summary Add an attachment
  */
 export const getAddAttachmentUrl = (id: number) => {
   return `/api/plans/${id}/attachments`;
@@ -1023,7 +1111,7 @@ export type AddAttachmentMutationBody = BodyType<CreateAttachmentRequest>;
 export type AddAttachmentMutationError = ErrorType<unknown>;
 
 /**
- * @summary Add an attachment (base64)
+ * @summary Add an attachment
  */
 export const useAddAttachment = <
   TError = ErrorType<unknown>,

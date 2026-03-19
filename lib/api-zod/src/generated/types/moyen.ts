@@ -15,4 +15,5 @@ export interface Moyen {
   budget: number;
   unite?: string;
   quantite?: number;
+  montantConsomme: number;
 }

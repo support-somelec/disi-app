@@ -12,4 +12,8 @@ export const UserRole = {
   direction: "direction",
   controle_technique: "controle_technique",
   directeur_general: "directeur_general",
+  dmg: "dmg",
+  da: "da",
+  controle_financier: "controle_financier",
+  direction_financiere: "direction_financiere",
 } as const;

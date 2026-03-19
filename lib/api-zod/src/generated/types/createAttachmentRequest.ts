@@ -10,6 +10,5 @@ export interface CreateAttachmentRequest {
   nom: string;
   type: string;
   taille?: number;
-  /** Base64 encoded file content */
   data?: string;
 }

@@ -11,7 +11,7 @@ export const plansTable = pgTable("plans", {
   dateDebut: date("date_debut").notNull(),
   duree: integer("duree").notNull(),
   directionId: integer("direction_id").notNull().references(() => directionsTable.id),
-  statut: text("statut").notNull().default("brouillon"), // brouillon, en_attente_ct, en_attente_dg, approuve, rejete, ouvert
+  statut: text("statut").notNull().default("brouillon"),
   createdById: integer("created_by_id").notNull().references(() => usersTable.id),
   commentaireRejet: text("commentaire_rejet"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -21,11 +21,12 @@ export const plansTable = pgTable("plans", {
 export const moyensTable = pgTable("moyens", {
   id: serial("id").primaryKey(),
   planId: integer("plan_id").notNull().references(() => plansTable.id, { onDelete: "cascade" }),
-  categorie: text("categorie").notNull(), // materiel, carburant, logement, logistique, prime, indemnite_journaliere
+  categorie: text("categorie").notNull(),
   description: text("description").notNull(),
   budget: numeric("budget", { precision: 12, scale: 2 }).notNull(),
   unite: text("unite"),
   quantite: numeric("quantite", { precision: 10, scale: 2 }),
+  montantConsomme: numeric("montant_consomme", { precision: 12, scale: 2 }).default("0").notNull(),
 });
 
 export const attachmentsTable = pgTable("attachments", {
@@ -34,7 +35,7 @@ export const attachmentsTable = pgTable("attachments", {
   nom: text("nom").notNull(),
   type: text("type").notNull(),
   taille: integer("taille"),
-  data: text("data"), // base64 content
+  data: text("data"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

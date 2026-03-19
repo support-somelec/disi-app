@@ -21,6 +21,7 @@ export interface Plan {
   createdById: number;
   createdByNom?: string;
   budgetTotal: number;
+  montantConsomme: number;
   commentaireRejet?: string;
   createdAt: Date;
   updatedAt: Date;

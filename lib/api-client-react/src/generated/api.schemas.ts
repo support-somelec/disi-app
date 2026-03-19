@@ -21,6 +21,10 @@ export const UserRole = {
   direction: "direction",
   controle_technique: "controle_technique",
   directeur_general: "directeur_general",
+  dmg: "dmg",
+  da: "da",
+  controle_financier: "controle_financier",
+  direction_financiere: "direction_financiere",
 } as const;
 
 export interface User {
@@ -64,6 +68,7 @@ export interface Moyen {
   budget: number;
   unite?: string;
   quantite?: number;
+  montantConsomme: number;
 }
 
 export interface Attachment {
@@ -88,6 +93,7 @@ export interface Plan {
   createdById: number;
   createdByNom?: string;
   budgetTotal: number;
+  montantConsomme: number;
   commentaireRejet?: string;
   createdAt: string;
   updatedAt: string;
@@ -146,15 +152,20 @@ export interface CreateMoyenRequest {
   quantite?: number;
 }
 
+export interface ConsommerMoyenRequest {
+  montant: number;
+  note?: string;
+}
+
 export interface CreateAttachmentRequest {
   nom: string;
   type: string;
   taille?: number;
-  /** Base64 encoded file content */
   data?: string;
 }
 
 export type GetPlansParams = {
   status?: string;
   directionId?: number;
+  createdById?: number;
 };

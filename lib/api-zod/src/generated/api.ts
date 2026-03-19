@@ -8,7 +8,6 @@
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -23,18 +22,27 @@ export const GetUsersResponseItem = zod.object({
   nom: zod.string(),
   prenom: zod.string(),
   email: zod.string(),
-  role: zod.enum(["direction", "controle_technique", "directeur_general"]),
+  role: zod.enum([
+    "direction",
+    "controle_technique",
+    "directeur_general",
+    "dmg",
+    "da",
+    "controle_financier",
+    "direction_financiere",
+  ]),
   directionId: zod.number().optional(),
   directionNom: zod.string().optional(),
 });
 export const GetUsersResponse = zod.array(GetUsersResponseItem);
 
 /**
- * @summary Get all plans d'action
+ * @summary Get plans d'action
  */
 export const GetPlansQueryParams = zod.object({
   status: zod.coerce.string().optional(),
   directionId: zod.coerce.number().optional(),
+  createdById: zod.coerce.number().optional(),
 });
 
 export const GetPlansResponseItem = zod.object({
@@ -56,6 +64,7 @@ export const GetPlansResponseItem = zod.object({
   createdById: zod.number(),
   createdByNom: zod.string().optional(),
   budgetTotal: zod.number(),
+  montantConsomme: zod.number(),
   commentaireRejet: zod.string().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
@@ -76,6 +85,7 @@ export const GetPlansResponseItem = zod.object({
         budget: zod.number(),
         unite: zod.string().optional(),
         quantite: zod.number().optional(),
+        montantConsomme: zod.number(),
       }),
     )
     .optional(),
@@ -108,7 +118,7 @@ export const CreatePlanBody = zod.object({
 });
 
 /**
- * @summary Get a plan d'action by ID
+ * @summary Get a plan by ID
  */
 export const GetPlanParams = zod.object({
   id: zod.coerce.number(),
@@ -133,6 +143,7 @@ export const GetPlanResponse = zod.object({
   createdById: zod.number(),
   createdByNom: zod.string().optional(),
   budgetTotal: zod.number(),
+  montantConsomme: zod.number(),
   commentaireRejet: zod.string().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
@@ -153,6 +164,7 @@ export const GetPlanResponse = zod.object({
         budget: zod.number(),
         unite: zod.string().optional(),
         quantite: zod.number().optional(),
+        montantConsomme: zod.number(),
       }),
     )
     .optional(),
@@ -172,7 +184,7 @@ export const GetPlanResponse = zod.object({
 });
 
 /**
- * @summary Update a plan d'action
+ * @summary Update a plan
  */
 export const UpdatePlanParams = zod.object({
   id: zod.coerce.number(),
@@ -205,6 +217,7 @@ export const UpdatePlanResponse = zod.object({
   createdById: zod.number(),
   createdByNom: zod.string().optional(),
   budgetTotal: zod.number(),
+  montantConsomme: zod.number(),
   commentaireRejet: zod.string().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
@@ -225,6 +238,7 @@ export const UpdatePlanResponse = zod.object({
         budget: zod.number(),
         unite: zod.string().optional(),
         quantite: zod.number().optional(),
+        montantConsomme: zod.number(),
       }),
     )
     .optional(),
@@ -275,6 +289,7 @@ export const ValidatePlanResponse = zod.object({
   createdById: zod.number(),
   createdByNom: zod.string().optional(),
   budgetTotal: zod.number(),
+  montantConsomme: zod.number(),
   commentaireRejet: zod.string().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
@@ -295,6 +310,7 @@ export const ValidatePlanResponse = zod.object({
         budget: zod.number(),
         unite: zod.string().optional(),
         quantite: zod.number().optional(),
+        montantConsomme: zod.number(),
       }),
     )
     .optional(),
@@ -335,6 +351,7 @@ export const GetPlanMoyensResponseItem = zod.object({
   budget: zod.number(),
   unite: zod.string().optional(),
   quantite: zod.number().optional(),
+  montantConsomme: zod.number(),
 });
 export const GetPlanMoyensResponse = zod.array(GetPlanMoyensResponseItem);
 
@@ -361,11 +378,42 @@ export const AddMoyenBody = zod.object({
 });
 
 /**
- * @summary Delete a moyen from a plan
+ * @summary Delete a moyen
  */
 export const DeleteMoyenParams = zod.object({
   id: zod.coerce.number(),
   moyenId: zod.coerce.number(),
+});
+
+/**
+ * @summary Record consumption for a moyen
+ */
+export const ConsommerMoyenParams = zod.object({
+  id: zod.coerce.number(),
+  moyenId: zod.coerce.number(),
+});
+
+export const ConsommerMoyenBody = zod.object({
+  montant: zod.number(),
+  note: zod.string().optional(),
+});
+
+export const ConsommerMoyenResponse = zod.object({
+  id: zod.number(),
+  planId: zod.number(),
+  categorie: zod.enum([
+    "materiel",
+    "carburant",
+    "logement",
+    "logistique",
+    "prime",
+    "indemnite_journaliere",
+  ]),
+  description: zod.string(),
+  budget: zod.number(),
+  unite: zod.string().optional(),
+  quantite: zod.number().optional(),
+  montantConsomme: zod.number(),
 });
 
 /**
@@ -389,7 +437,7 @@ export const GetPlanAttachmentsResponse = zod.array(
 );
 
 /**
- * @summary Add an attachment (base64)
+ * @summary Add an attachment
  */
 export const AddAttachmentParams = zod.object({
   id: zod.coerce.number(),
@@ -399,7 +447,7 @@ export const AddAttachmentBody = zod.object({
   nom: zod.string(),
   type: zod.string(),
   taille: zod.number().optional(),
-  data: zod.string().optional().describe("Base64 encoded file content"),
+  data: zod.string().optional(),
 });
 
 /**

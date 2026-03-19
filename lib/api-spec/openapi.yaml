@@ -8,13 +8,9 @@ servers:
     description: Base API path
 tags:
   - name: health
-    description: Health operations
   - name: plans
-    description: Plans d'action operations
   - name: users
-    description: User operations
   - name: attachments
-    description: Attachment operations
 
 paths:
   /healthz:
@@ -22,7 +18,6 @@ paths:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -50,7 +45,7 @@ paths:
     get:
       operationId: getPlans
       tags: [plans]
-      summary: Get all plans d'action
+      summary: Get plans d'action
       parameters:
         - name: status
           in: query
@@ -58,6 +53,11 @@ paths:
           schema:
             type: string
         - name: directionId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: createdById
           in: query
           required: false
           schema:
@@ -93,7 +93,7 @@ paths:
     get:
       operationId: getPlan
       tags: [plans]
-      summary: Get a plan d'action by ID
+      summary: Get a plan by ID
       parameters:
         - name: id
           in: path
@@ -108,11 +108,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/Plan"
         "404":
-          description: Plan not found
+          description: Not found
     put:
       operationId: updatePlan
       tags: [plans]
-      summary: Update a plan d'action
+      summary: Update a plan
       parameters:
         - name: id
           in: path
@@ -206,7 +206,7 @@ paths:
     delete:
       operationId: deleteMoyen
       tags: [plans]
-      summary: Delete a moyen from a plan
+      summary: Delete a moyen
       parameters:
         - name: id
           in: path
@@ -220,7 +220,37 @@ paths:
             type: integer
       responses:
         "204":
-          description: Moyen deleted
+          description: Deleted
+
+  /plans/{id}/moyens/{moyenId}/consommer:
+    post:
+      operationId: consommerMoyen
+      tags: [plans]
+      summary: Record consumption for a moyen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: moyenId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsommerMoyenRequest"
+      responses:
+        "200":
+          description: Consumption recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Moyen"
 
   /plans/{id}/attachments:
     get:
@@ -245,7 +275,7 @@ paths:
     post:
       operationId: addAttachment
       tags: [attachments]
-      summary: Add an attachment (base64)
+      summary: Add an attachment
       parameters:
         - name: id
           in: path
@@ -284,7 +314,7 @@ paths:
             type: integer
       responses:
         "204":
-          description: Attachment deleted
+          description: Deleted
 
   /directions:
     get:
@@ -308,8 +338,7 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
     Direction:
       type: object
@@ -320,10 +349,7 @@ components:
           type: string
         code:
           type: string
-      required:
-        - id
-        - nom
-        - code
+      required: [id, nom, code]
 
     User:
       type: object
@@ -338,17 +364,12 @@ components:
           type: string
         role:
           type: string
-          enum: [direction, controle_technique, directeur_general]
+          enum: [direction, controle_technique, directeur_general, dmg, da, controle_financier, direction_financiere]
         directionId:
           type: integer
         directionNom:
           type: string
-      required:
-        - id
-        - nom
-        - prenom
-        - email
-        - role
+      required: [id, nom, prenom, email, role]
 
     Plan:
       type: object
@@ -377,6 +398,8 @@ components:
           type: string
         budgetTotal:
           type: number
+        montantConsomme:
+          type: number
         commentaireRejet:
           type: string
         createdAt:
@@ -393,18 +416,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Attachment"
-      required:
-        - id
-        - titre
-        - description
-        - dateDebut
-        - duree
-        - directionId
-        - statut
-        - createdById
-        - budgetTotal
-        - createdAt
-        - updatedAt
+      required: [id, titre, description, dateDebut, duree, directionId, statut, createdById, budgetTotal, montantConsomme, createdAt, updatedAt]
 
     Moyen:
       type: object
@@ -424,12 +436,9 @@ components:
           type: string
         quantite:
           type: number
-      required:
-        - id
-        - planId
-        - categorie
-        - description
-        - budget
+        montantConsomme:
+          type: number
+      required: [id, planId, categorie, description, budget, montantConsomme]
 
     Attachment:
       type: object
@@ -449,12 +458,7 @@ components:
         createdAt:
           type: string
           format: date-time
-      required:
-        - id
-        - planId
-        - nom
-        - type
-        - createdAt
+      required: [id, planId, nom, type, createdAt]
 
     CreatePlanRequest:
       type: object
@@ -472,13 +476,7 @@ components:
           type: integer
         createdById:
           type: integer
-      required:
-        - titre
-        - description
-        - dateDebut
-        - duree
-        - directionId
-        - createdById
+      required: [titre, description, dateDebut, duree, directionId, createdById]
 
     UpdatePlanRequest:
       type: object
@@ -505,9 +503,7 @@ components:
           type: integer
         commentaire:
           type: string
-      required:
-        - action
-        - validatedById
+      required: [action, validatedById]
 
     CreateMoyenRequest:
       type: object
@@ -523,10 +519,16 @@ components:
           type: string
         quantite:
           type: number
-      required:
-        - categorie
-        - description
-        - budget
+      required: [categorie, description, budget]
+
+    ConsommerMoyenRequest:
+      type: object
+      properties:
+        montant:
+          type: number
+        note:
+          type: string
+      required: [montant]
 
     CreateAttachmentRequest:
       type: object
@@ -539,7 +541,4 @@ components:
           type: integer
         data:
           type: string
-          description: Base64 encoded file content
-      required:
-        - nom
-        - type
+      required: [nom, type]

@@ -15,6 +15,29 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const SESSION_KEY = "somelec_user";
 
+// Role → visibility rule
+export const ROLES_SEE_ALL = ["directeur_general", "controle_technique", "dmg", "da", "controle_financier", "direction_financiere"];
+
+// Category → responsible role mapping
+export const CATEGORY_ROLE: Record<string, string> = {
+  carburant: "dmg",
+  materiel: "da",
+  prime: "controle_financier",
+  logement: "direction_financiere",
+  indemnite_journaliere: "direction_financiere",
+  logistique: "direction_financiere",
+};
+
+export const ROLE_LABELS: Record<string, string> = {
+  direction: "Direction",
+  controle_technique: "Contrôle Technique",
+  directeur_general: "Directeur Général",
+  dmg: "Direction Matériel & Garage",
+  da: "Direction des Approvisionnements",
+  controle_financier: "Contrôle Financier",
+  direction_financiere: "Direction Financière",
+};
+
 const MOCK_USERS: User[] = [
   { id: 1, nom: "Hadj", prenom: "Mohamed", email: "mohammed.hadj@somelec.mr", role: "directeur_general", directionId: 1, directionNom: "Direction Générale" },
   { id: 2, nom: "Mint Ahmed", prenom: "Fatimetou", email: "fatimetou.ahmed@somelec.mr", role: "controle_technique", directionId: 1, directionNom: "Direction Générale" },
@@ -23,6 +46,10 @@ const MOCK_USERS: User[] = [
   { id: 5, nom: "Diallo", prenom: "Aminata", email: "aminata.diallo@somelec.mr", role: "direction", directionId: 3, directionNom: "Direction Commerciale" },
   { id: 6, nom: "Ba", prenom: "Oumar", email: "oumar.ba@somelec.mr", role: "direction", directionId: 4, directionNom: "Direction Financière" },
   { id: 7, nom: "Ould Salem", prenom: "Moctar", email: "moctar.salem@somelec.mr", role: "direction", directionId: 5, directionNom: "Direction des Ressources Humaines" },
+  { id: 8, nom: "Ould Vall", prenom: "Mokhtar", email: "mokhtar.vall@somelec.mr", role: "dmg" },
+  { id: 9, nom: "Mint Brahim", prenom: "Mariem", email: "mariem.brahim@somelec.mr", role: "da" },
+  { id: 10, nom: "Ould Cheikh", prenom: "Elemine", email: "elemine.cheikh@somelec.mr", role: "controle_financier" },
+  { id: 11, nom: "Ould Abdi", prenom: "Yahya", email: "yahya.abdi@somelec.mr", role: "direction_financiere", directionId: 4, directionNom: "Direction Financière" },
 ];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -46,16 +73,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!password || password.length < 4) {
       return { success: false, error: "Mot de passe incorrect." };
     }
-
     const found = users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (!found) {
       return { success: false, error: "Aucun compte trouvé avec cet email." };
     }
-
     if (password !== "somelec2026") {
       return { success: false, error: "Mot de passe incorrect." };
     }
-
     setCurrentUser(found);
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(found));
     return { success: true };
@@ -67,14 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{
-      currentUser,
-      isAuthenticated: currentUser !== null,
-      login,
-      logout,
-      availableUsers: users,
-      isLoading,
-    }}>
+    <AuthContext.Provider value={{ currentUser, isAuthenticated: currentUser !== null, login, logout, availableUsers: users, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
@@ -82,8 +99,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
+  if (context === undefined) throw new Error("useAuth must be used within an AuthProvider");
   return context;
 }

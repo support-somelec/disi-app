@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetPlansParams = {
-  status?: string;
-  directionId?: number;
-  createdById?: number;
-};
+export interface ConsommerMoyenRequest {
+  montant: number;
+  note?: string;
+}

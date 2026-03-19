@@ -126,7 +126,11 @@ export default function Login() {
               {[
                 { label: "Directeur Général", email: "mohammed.hadj@somelec.mr" },
                 { label: "Contrôle Technique", email: "fatimetou.ahmed@somelec.mr" },
-                { label: "Direction Technique", email: "sidi.brahim@somelec.mr" },
+                { label: "Direction Technique (crée des plans)", email: "sidi.brahim@somelec.mr" },
+                { label: "DMG — Carburant", email: "mokhtar.vall@somelec.mr" },
+                { label: "DA — Matériel", email: "mariem.brahim@somelec.mr" },
+                { label: "Contrôle Financier — Primes", email: "elemine.cheikh@somelec.mr" },
+                { label: "Direction Financière — Logement", email: "yahya.abdi@somelec.mr" },
               ].map(u => (
                 <button
                   key={u.email}
