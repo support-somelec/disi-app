@@ -111,7 +111,7 @@ router.get("/plans", async (req, res) => {
 
     res.json(plansWithBudget);
   } catch (err) {
-    console.error(err);
+    console.error(String(err));
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -119,7 +119,9 @@ router.get("/plans", async (req, res) => {
 // POST /plans
 router.post("/plans", async (req, res) => {
   try {
-    const body = CreatePlanBody.parse(req.body);
+    const raw = req.body;
+    if (raw.dateDebut && typeof raw.dateDebut === "string") raw.dateDebut = new Date(raw.dateDebut);
+    const body = CreatePlanBody.parse(raw);
     const [plan] = await db
       .insert(plansTable)
       .values({
@@ -136,7 +138,7 @@ router.post("/plans", async (req, res) => {
     const result = await getPlanWithDetails(plan.id);
     res.status(201).json(result);
   } catch (err) {
-    console.error(err);
+    console.error("POST /plans error:", String(err));
     res.status(400).json({ error: String(err) });
   }
 });
@@ -149,7 +151,7 @@ router.get("/plans/:id", async (req, res) => {
     if (!plan) return res.status(404).json({ error: "Plan not found" });
     res.json(plan);
   } catch (err) {
-    console.error(err);
+    console.error(String(err));
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -158,7 +160,9 @@ router.get("/plans/:id", async (req, res) => {
 router.put("/plans/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const body = UpdatePlanBody.parse(req.body);
+    const raw = req.body;
+    if (raw.dateDebut && typeof raw.dateDebut === "string") raw.dateDebut = new Date(raw.dateDebut);
+    const body = UpdatePlanBody.parse(raw);
     const updates: Partial<typeof plansTable.$inferInsert> = { updatedAt: new Date() };
     if (body.titre !== undefined) updates.titre = body.titre;
     if (body.description !== undefined) updates.description = body.description;
@@ -170,7 +174,7 @@ router.put("/plans/:id", async (req, res) => {
     if (!plan) return res.status(404).json({ error: "Plan not found" });
     res.json(plan);
   } catch (err) {
-    console.error(err);
+    console.error(String(err));
     res.status(400).json({ error: String(err) });
   }
 });
@@ -199,7 +203,7 @@ router.post("/plans/:id/validate", async (req, res) => {
     const plan = await getPlanWithDetails(id);
     res.json(plan);
   } catch (err) {
-    console.error(err);
+    console.error(String(err));
     res.status(400).json({ error: String(err) });
   }
 });
@@ -216,7 +220,7 @@ router.get("/plans/:id/moyens", async (req, res) => {
       montantConsomme: Number(m.montantConsomme),
     })));
   } catch (err) {
-    console.error(err);
+    console.error(String(err));
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -243,7 +247,7 @@ router.post("/plans/:id/moyens", async (req, res) => {
       montantConsomme: Number(moyen.montantConsomme),
     });
   } catch (err) {
-    console.error(err);
+    console.error(String(err));
     res.status(400).json({ error: String(err) });
   }
 });
@@ -273,7 +277,7 @@ router.post("/plans/:id/moyens/:moyenId/consommer", async (req, res) => {
       montantConsomme: Number(updated.montantConsomme),
     });
   } catch (err) {
-    console.error(err);
+    console.error(String(err));
     res.status(400).json({ error: String(err) });
   }
 });
@@ -286,7 +290,7 @@ router.delete("/plans/:id/moyens/:moyenId", async (req, res) => {
     await db.delete(moyensTable).where(and(eq(moyensTable.id, moyenId), eq(moyensTable.planId, planId)));
     res.status(204).send();
   } catch (err) {
-    console.error(err);
+    console.error(String(err));
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -305,7 +309,7 @@ router.get("/plans/:id/attachments", async (req, res) => {
     }).from(attachmentsTable).where(eq(attachmentsTable.planId, planId));
     res.json(attachments);
   } catch (err) {
-    console.error(err);
+    console.error(String(err));
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -323,7 +327,7 @@ router.post("/plans/:id/attachments", async (req, res) => {
       type: attachment.type, taille: attachment.taille, createdAt: attachment.createdAt,
     });
   } catch (err) {
-    console.error(err);
+    console.error(String(err));
     res.status(400).json({ error: String(err) });
   }
 });
@@ -336,7 +340,7 @@ router.delete("/plans/:id/attachments/:attachmentId", async (req, res) => {
     await db.delete(attachmentsTable).where(and(eq(attachmentsTable.id, attachmentId), eq(attachmentsTable.planId, planId)));
     res.status(204).send();
   } catch (err) {
-    console.error(err);
+    console.error(String(err));
     res.status(500).json({ error: "Internal server error" });
   }
 });
