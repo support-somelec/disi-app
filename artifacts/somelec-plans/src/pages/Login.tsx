@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
-import { Zap, Mail, Lock, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -36,8 +36,8 @@ export default function Login() {
 
       <div className="relative w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 shadow-2xl mb-4">
-            <Zap className="h-8 w-8 text-white" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white shadow-2xl mb-4 p-2">
+            <img src="/logo.png" alt="SOMELEC" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight">SOMELEC</h1>
           <p className="text-blue-300 text-sm mt-1 uppercase tracking-widest font-medium">

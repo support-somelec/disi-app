@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
-import { Zap, LayoutDashboard, FilePlus, User, LogOut, Shield, ChevronDown } from "lucide-react";
+import { LayoutDashboard, FilePlus, User, LogOut, Shield, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -42,9 +42,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link href="/" className="flex items-center gap-3 group">
-              <div className="bg-primary p-2 rounded-xl text-white shadow-md group-hover:scale-105 transition-transform">
-                <Zap className="h-5 w-5" />
-              </div>
+              <img src="/logo.png" alt="SOMELEC" className="h-9 w-9 object-contain group-hover:scale-105 transition-transform" />
               <div className="flex flex-col">
                 <span className="font-bold text-xl leading-none text-primary tracking-tight">SOMELEC</span>
                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Plans d'Action</span>
