@@ -124,13 +124,13 @@ export default function Login() {
             <p className="text-xs text-slate-500 text-center mb-3">Comptes de démonstration :</p>
             <div className="space-y-1.5">
               {[
-                { label: "DG", email: "mohammed.hadj@somelec.mr" },
-                { label: "CT", email: "fatimetou.ahmed@somelec.mr" },
-                { label: "DT", email: "sidi.brahim@somelec.mr" },
-                { label: "DMG", email: "mokhtar.vall@somelec.mr" },
-                { label: "DA", email: "mariem.brahim@somelec.mr" },
-                { label: "CF", email: "elemine.cheikh@somelec.mr" },
-                { label: "DF", email: "yahya.abdi@somelec.mr" },
+                { label: "DG", email: "dg@somelec.mr" },
+                { label: "CT", email: "ct@somelec.mr" },
+                { label: "DT", email: "dt@somelec.mr" },
+                { label: "DMG", email: "dmg@somelec.mr" },
+                { label: "DA", email: "da@somelec.mr" },
+                { label: "CF", email: "cf@somelec.mr" },
+                { label: "DF", email: "df@somelec.mr" },
               ].map(u => (
                 <button
                   key={u.email}
