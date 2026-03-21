@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { useCreatePlan, useGetDirections, useAddMoyen, useAddAttachment } from "@workspace/api-client-react";
+import { useCreatePlan, useGetDirections, useAddMoyen, useAddAttachment, useValidatePlan } from "@workspace/api-client-react";
 import type { Plan, CreateMoyenRequestCategorie } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -25,6 +25,7 @@ export default function CreatePlan() {
   const createPlanMutation = useCreatePlan();
   const addMoyenMutation = useAddMoyen();
   const addAttachmentMutation = useAddAttachment();
+  const validatePlanMutation = useValidatePlan();
 
   // Step 1 State
   const [formData, setFormData] = useState({
@@ -99,8 +100,8 @@ export default function CreatePlan() {
   };
 
   const handleFinish = async () => {
-    if (!createdPlan) return;
-    
+    if (!createdPlan || !currentUser) return;
+
     // Upload all attachments
     for (const att of attachments) {
       try {
@@ -114,10 +115,20 @@ export default function CreatePlan() {
           }
         });
       } catch (err) {
-        console.error("Failed to upload attachment", err);
+        console.error("Failed to upload attachment", String(err));
       }
     }
-    
+
+    // Submit plan to CT review (brouillon → en_attente_ct)
+    try {
+      await validatePlanMutation.mutateAsync({
+        id: createdPlan.id,
+        data: { action: "approuver", validatedById: currentUser.id }
+      });
+    } catch (err) {
+      console.error("Failed to submit plan", String(err));
+    }
+
     setLocation("/");
   };
 
@@ -323,7 +334,7 @@ export default function CreatePlan() {
 
                 <div className="pt-8 flex justify-between border-t mt-8">
                   <Button type="button" variant="outline" onClick={() => setStep(2)}><ArrowLeft className="mr-2 w-4 h-4" /> Retour</Button>
-                  <Button type="button" size="lg" className="bg-success hover:bg-success/90 text-white" onClick={handleFinish} isLoading={addAttachmentMutation.isPending}>
+                  <Button type="button" size="lg" className="bg-success hover:bg-success/90 text-white" onClick={handleFinish} isLoading={addAttachmentMutation.isPending || validatePlanMutation.isPending}>
                     Soumettre le Plan <CheckCircle2 className="ml-2 w-5 h-5" />
                   </Button>
                 </div>
