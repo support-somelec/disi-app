@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useRoute, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { useGetPlan, useGetPlanMoyens, useGetPlanAttachments, useValidatePlan, useConsommerMoyen } from "@workspace/api-client-react";
 import type { Moyen } from "@workspace/api-client-react";
 import { useAuth, CATEGORY_ROLE, ROLE_LABELS } from "@/lib/auth-context";
@@ -52,11 +53,14 @@ export default function PlanDetails() {
   const { currentUser } = useAuth();
   const [, setLocation] = useLocation();
 
+  const queryClient = useQueryClient();
   const { data: plan, isLoading, refetch: refetchPlan } = useGetPlan(id);
   const { data: moyens = [], refetch: refetchMoyens } = useGetPlanMoyens(id);
   const { data: attachments = [] } = useGetPlanAttachments(id);
   const validateMutation = useValidatePlan();
   const consommerMutation = useConsommerMoyen();
+
+  const invalidatePlans = () => queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
 
   const [commentaire, setCommentaire] = useState("");
   const [consommationValues, setConsommationValues] = useState<Record<number, string>>({});
@@ -78,7 +82,7 @@ export default function PlanDetails() {
     if (!currentUser) return;
     await validateMutation.mutateAsync({ id, data: { action, validatedById: currentUser.id, commentaire: commentaire || undefined } });
     setCommentaire("");
-    refetchPlan();
+    await Promise.all([refetchPlan(), invalidatePlans()]);
   };
 
   const handleConsommer = async (moyen: Moyen) => {
@@ -88,8 +92,7 @@ export default function PlanDetails() {
     try {
       await consommerMutation.mutateAsync({ id, moyenId: moyen.id, data: { montant: val } });
       setConsommationValues(prev => ({ ...prev, [moyen.id]: "" }));
-      refetchMoyens();
-      refetchPlan();
+      await Promise.all([refetchMoyens(), refetchPlan(), invalidatePlans()]);
     } finally {
       setSavingMoyen(null);
     }
