@@ -124,13 +124,13 @@ export default function Login() {
             <p className="text-xs text-slate-500 text-center mb-3">Comptes de démonstration :</p>
             <div className="space-y-1.5">
               {[
-                { label: "Directeur Général", email: "mohammed.hadj@somelec.mr" },
-                { label: "Contrôle Technique", email: "fatimetou.ahmed@somelec.mr" },
-                { label: "Direction Technique (crée des plans)", email: "sidi.brahim@somelec.mr" },
-                { label: "DMG — Carburant", email: "mokhtar.vall@somelec.mr" },
-                { label: "DA — Matériel", email: "mariem.brahim@somelec.mr" },
-                { label: "Contrôle Financier — Primes", email: "elemine.cheikh@somelec.mr" },
-                { label: "Direction Financière — Logement", email: "yahya.abdi@somelec.mr" },
+                { label: "DG", email: "mohammed.hadj@somelec.mr" },
+                { label: "CT", email: "fatimetou.ahmed@somelec.mr" },
+                { label: "DT", email: "sidi.brahim@somelec.mr" },
+                { label: "DMG", email: "mokhtar.vall@somelec.mr" },
+                { label: "DA", email: "mariem.brahim@somelec.mr" },
+                { label: "CF", email: "elemine.cheikh@somelec.mr" },
+                { label: "DF", email: "yahya.abdi@somelec.mr" },
               ].map(u => (
                 <button
                   key={u.email}
