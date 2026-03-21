@@ -39,17 +39,17 @@ export const ROLE_LABELS: Record<string, string> = {
 };
 
 const MOCK_USERS: User[] = [
-  { id: 1, nom: "Hadj", prenom: "Mohamed", email: "dg@somelec.mr", role: "directeur_general", directionId: 1, directionNom: "Direction Générale" },
-  { id: 2, nom: "Mint Ahmed", prenom: "Fatimetou", email: "ct@somelec.mr", role: "controle_technique", directionId: 1, directionNom: "Direction Générale" },
-  { id: 3, nom: "Ould Brahim", prenom: "Sidi", email: "dt@somelec.mr", role: "direction", directionId: 2, directionNom: "Direction Technique" },
+  { id: 1, nom: "", prenom: "DG", email: "dg@somelec.mr", role: "directeur_general", directionId: 1, directionNom: "Direction Générale" },
+  { id: 2, nom: "", prenom: "CT", email: "ct@somelec.mr", role: "controle_technique", directionId: 1, directionNom: "Direction Générale" },
+  { id: 3, nom: "", prenom: "DT", email: "dt@somelec.mr", role: "direction", directionId: 2, directionNom: "Direction Technique" },
   { id: 4, nom: "Ould Mohamed", prenom: "Ahmed", email: "ahmed.mohamed@somelec.mr", role: "direction", directionId: 6, directionNom: "Direction de la Production" },
   { id: 5, nom: "Diallo", prenom: "Aminata", email: "aminata.diallo@somelec.mr", role: "direction", directionId: 3, directionNom: "Direction Commerciale" },
   { id: 6, nom: "Ba", prenom: "Oumar", email: "oumar.ba@somelec.mr", role: "direction", directionId: 4, directionNom: "Direction Financière" },
   { id: 7, nom: "Ould Salem", prenom: "Moctar", email: "moctar.salem@somelec.mr", role: "direction", directionId: 5, directionNom: "Direction des Ressources Humaines" },
-  { id: 8, nom: "Ould Vall", prenom: "Mokhtar", email: "dmg@somelec.mr", role: "dmg" },
-  { id: 9, nom: "Mint Brahim", prenom: "Mariem", email: "da@somelec.mr", role: "da" },
-  { id: 10, nom: "Ould Cheikh", prenom: "Elemine", email: "cf@somelec.mr", role: "controle_financier" },
-  { id: 11, nom: "Ould Abdi", prenom: "Yahya", email: "df@somelec.mr", role: "direction_financiere", directionId: 4, directionNom: "Direction Financière" },
+  { id: 8, nom: "", prenom: "DMG", email: "dmg@somelec.mr", role: "dmg" },
+  { id: 9, nom: "", prenom: "DA", email: "da@somelec.mr", role: "da" },
+  { id: 10, nom: "", prenom: "CF", email: "cf@somelec.mr", role: "controle_financier" },
+  { id: 11, nom: "", prenom: "DF", email: "df@somelec.mr", role: "direction_financiere", directionId: 4, directionNom: "Direction Financière" },
 ];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
