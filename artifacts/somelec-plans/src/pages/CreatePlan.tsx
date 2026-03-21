@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { ArrowRight, ArrowLeft, CheckCircle2, UploadCloud, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, CheckCircle2, UploadCloud, Plus, Trash2, FilePlus } from "lucide-react";
 
 const STEPS = [
   { id: 1, title: "Informations" },
