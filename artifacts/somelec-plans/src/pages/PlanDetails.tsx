@@ -336,9 +336,15 @@ export default function PlanDetails() {
                         <p className="text-sm font-semibold truncate">{att.nom}</p>
                         <p className="text-xs text-muted-foreground uppercase">{att.type.split("/")[1] ?? "Fichier"} • {((att.taille ?? 0) / 1024).toFixed(0)} KB</p>
                       </div>
-                      <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-primary">
-                        <Download className="w-4 h-4" />
-                      </Button>
+                      <a
+                        href={`/api/plans/${plan.id}/attachments/${att.id}/download`}
+                        download={att.nom}
+                        className="shrink-0"
+                      >
+                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Télécharger">
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </a>
                     </li>
                   ))}
                 </ul>

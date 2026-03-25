@@ -375,6 +375,34 @@ router.post("/plans/:id/attachments", async (req, res) => {
   }
 });
 
+// GET /plans/:id/attachments/:attachmentId/download
+router.get("/plans/:id/attachments/:attachmentId/download", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const attachmentId = Number(req.params.attachmentId);
+    const rows = await db.select().from(attachmentsTable)
+      .where(and(eq(attachmentsTable.id, attachmentId), eq(attachmentsTable.planId, planId)));
+    if (!rows.length) return res.status(404).json({ error: "Attachment not found" });
+    const att = rows[0];
+    if (!att.data) return res.status(404).json({ error: "No file data stored" });
+
+    // att.data is a base64 data URL like "data:application/pdf;base64,..."
+    const match = att.data.match(/^data:(.+);base64,(.+)$/);
+    if (!match) return res.status(400).json({ error: "Invalid file data format" });
+
+    const mimeType = match[1];
+    const buffer = Buffer.from(match[2], "base64");
+
+    res.setHeader("Content-Type", mimeType);
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(att.nom)}"`);
+    res.setHeader("Content-Length", buffer.length.toString());
+    res.send(buffer);
+  } catch (err) {
+    console.error(String(err));
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // DELETE /plans/:id/attachments/:attachmentId
 router.delete("/plans/:id/attachments/:attachmentId", async (req, res) => {
   try {
