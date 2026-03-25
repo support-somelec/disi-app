@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { directionsTable, usersTable } from "@workspace/db/schema";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 
 const DIRECTIONS = [
   { nom: "Direction Générale",              code: "DG" },
@@ -28,6 +28,18 @@ const USERS = [
   { nom: "", prenom: "CF",  email: "cf@somelec.mr",  role: "controle_financier", directionIdx: null },
   { nom: "", prenom: "DF",  email: "df@somelec.mr",  role: "direction_financiere", directionIdx: 3 },
 ];
+
+export async function ensureAdminUser() {
+  try {
+    const existing = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, "admin@somelec.mr"));
+    if (existing.length === 0) {
+      await db.insert(usersTable).values({ nom: "", prenom: "Admin", email: "admin@somelec.mr", role: "admin", directionId: null });
+      console.log("[seed] Admin user created.");
+    }
+  } catch (err) {
+    console.error("[seed] Error ensuring admin user:", String(err));
+  }
+}
 
 export async function seedIfEmpty() {
   try {

@@ -1,5 +1,5 @@
 import app from "./app";
-import { seedIfEmpty } from "./seed";
+import { seedIfEmpty, ensureAdminUser } from "./seed";
 
 const rawPort = process.env["PORT"];
 
@@ -15,8 +15,10 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-seedIfEmpty().then(() => {
-  app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
+seedIfEmpty()
+  .then(() => ensureAdminUser())
+  .then(() => {
+    app.listen(port, () => {
+      console.log(`Server listening on port ${port}`);
+    });
   });
-});
