@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./analyticsCategorieRow";
+export * from "./analyticsData";
+export * from "./analyticsDirectionRow";
 export * from "./attachment";
 export * from "./cloturerPlanRequest";
 export * from "./consommerMoyenRequest";

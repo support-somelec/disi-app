@@ -9,6 +9,7 @@
 export interface Attachment {
   id: number;
   planId: number;
+  moyenId?: number;
   nom: string;
   type: string;
   taille?: number;

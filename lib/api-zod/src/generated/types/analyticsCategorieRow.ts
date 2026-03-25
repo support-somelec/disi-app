@@ -6,10 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface CreateAttachmentRequest {
-  moyenId?: number;
-  nom: string;
-  type: string;
-  taille?: number;
-  data?: string;
+export interface AnalyticsCategorieRow {
+  categorie: string;
+  budgetTotal: number;
+  montantConsomme: number;
+  nombreMoyens: number;
 }

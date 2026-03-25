@@ -84,6 +84,7 @@ export default function PlanDetails() {
   const [commentaire, setCommentaire] = useState("");
   const [consommationValues, setConsommationValues] = useState<Record<number, string>>({});
   const [savingMoyen, setSavingMoyen] = useState<number | null>(null);
+  const [dechargeFiles, setDechargeFiles] = useState<Record<number, { file: File; base64: string } | null>>({});
 
   // Closure state
   const [rapportCloture, setRapportCloture] = useState("");
@@ -112,14 +113,34 @@ export default function PlanDetails() {
     await Promise.all([refetchPlan(), invalidatePlans()]);
   };
 
+  const handleDechargeChange = (moyenId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      if (evt.target?.result) {
+        setDechargeFiles(prev => ({ ...prev, [moyenId]: { file, base64: evt.target!.result!.toString() } }));
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   const handleConsommer = async (moyen: Moyen) => {
     const val = parseFloat(consommationValues[moyen.id] ?? "");
     if (isNaN(val) || val < 0) return;
+    const decharge = dechargeFiles[moyen.id];
+    if (!decharge) return; // décharge required
     setSavingMoyen(moyen.id);
     try {
+      await addAttachmentMutation.mutateAsync({
+        id,
+        data: { moyenId: moyen.id, nom: decharge.file.name, type: decharge.file.type, taille: decharge.file.size, data: decharge.base64 },
+      });
       await consommerMutation.mutateAsync({ id, moyenId: moyen.id, data: { montant: val } });
       setConsommationValues(prev => ({ ...prev, [moyen.id]: "" }));
-      await Promise.all([refetchMoyens(), refetchPlan(), invalidatePlans()]);
+      setDechargeFiles(prev => ({ ...prev, [moyen.id]: null }));
+      await Promise.all([refetchMoyens(), refetchPlan(), refetchAttachments(), invalidatePlans()]);
     } finally {
       setSavingMoyen(null);
     }
@@ -283,16 +304,18 @@ export default function PlanDetails() {
                     <th className="px-5 py-3">Qté</th>
                     <th className="px-5 py-3 text-right">Budget</th>
                     <th className="px-5 py-3 text-right">Consommé</th>
+                    <th className="px-5 py-3 text-center">Décharge</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
                   {moyens.length === 0 ? (
-                    <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">Aucun moyen défini.</td></tr>
+                    <tr><td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">Aucun moyen défini.</td></tr>
                   ) : moyens.map((m) => {
                     const cat = CATEGORIE_LABELS[m.categorie] ?? { label: m.categorie, icon: Activity, color: "text-gray-600 bg-gray-50" };
                     const Icon = cat.icon;
                     const consomme = Number(m.montantConsomme ?? 0);
                     const over = consomme > Number(m.budget) && Number(m.budget) > 0;
+                    const moyenDecharge = attachments.find(a => a.moyenId === m.id);
                     return (
                       <tr key={m.id} className={cn("hover:bg-muted/10", over ? "bg-destructive/5" : "")}>
                         <td className="px-5 py-4">
@@ -310,6 +333,17 @@ export default function PlanDetails() {
                               <ProgressBar value={consomme} max={Number(m.budget)} className="mt-1 w-20 ml-auto" />
                             </div>
                           ) : <span className="text-muted-foreground text-xs">—</span>}
+                        </td>
+                        <td className="px-5 py-4 text-center">
+                          {moyenDecharge ? (
+                            <a href={`/api/plans/${plan.id}/attachments/${moyenDecharge.id}/download`} download={moyenDecharge.nom} title={moyenDecharge.nom}>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium hover:bg-green-200 transition-colors cursor-pointer">
+                                <Download className="w-3 h-3" /> OK
+                              </span>
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -478,6 +512,8 @@ export default function PlanDetails() {
                   const Icon = cat.icon;
                   const current = Number(m.montantConsomme ?? 0);
                   const budget = Number(m.budget);
+                  const decharge = dechargeFiles[m.id];
+                  const canSave = !!consommationValues[m.id] && !!decharge;
                   return (
                     <div key={m.id} className="bg-white rounded-xl border border-orange-100 p-4 space-y-3">
                       <div className="flex items-center gap-2">
@@ -500,11 +536,34 @@ export default function PlanDetails() {
                         <Button
                           size="sm"
                           onClick={() => handleConsommer(m)}
-                          disabled={savingMoyen === m.id || !consommationValues[m.id]}
+                          disabled={savingMoyen === m.id || !canSave}
+                          title={!decharge ? "Joignez d'abord la décharge" : "Enregistrer"}
                           className="bg-orange-600 hover:bg-orange-700 text-white shrink-0"
                         >
                           {savingMoyen === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
                         </Button>
+                      </div>
+                      {/* Décharge obligatoire */}
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-semibold text-orange-700 uppercase tracking-wide flex items-center gap-1">
+                          <FilePlus className="w-3 h-3" /> Décharge (obligatoire)
+                        </label>
+                        {decharge ? (
+                          <div className="flex items-center gap-2 p-2 border border-orange-200 rounded-lg bg-orange-50 text-xs">
+                            <FilePlus className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                            <span className="flex-1 truncate text-orange-800 font-medium">{decharge.file.name}</span>
+                            <button onClick={() => setDechargeFiles(prev => ({ ...prev, [m.id]: null }))} className="text-muted-foreground hover:text-destructive shrink-0">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="relative border border-dashed border-orange-300 hover:border-orange-500 transition-colors rounded-lg p-2.5 text-center cursor-pointer bg-orange-50/40">
+                            <input type="file" onChange={e => handleDechargeChange(m.id, e)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                            <div className="flex items-center justify-center gap-1.5 text-xs text-orange-600">
+                              <UploadCloud className="w-3.5 h-3.5" /> Joindre la décharge
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

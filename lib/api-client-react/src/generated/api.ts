@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AnalyticsData,
   Attachment,
   CloturerPlanRequest,
   ConsommerMoyenRequest,
@@ -361,6 +362,81 @@ export const useCreatePlan = <
 > => {
   return useMutation(getCreatePlanMutationOptions(options));
 };
+
+/**
+ * @summary Get budget/consumption analytics by direction and category
+ */
+export const getGetPlansAnalyticsUrl = () => {
+  return `/api/plans/analytics`;
+};
+
+export const getPlansAnalytics = async (
+  options?: RequestInit,
+): Promise<AnalyticsData> => {
+  return customFetch<AnalyticsData>(getGetPlansAnalyticsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPlansAnalyticsQueryKey = () => {
+  return [`/api/plans/analytics`] as const;
+};
+
+export const getGetPlansAnalyticsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPlansAnalytics>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPlansAnalytics>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPlansAnalyticsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPlansAnalytics>>
+  > = ({ signal }) => getPlansAnalytics({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPlansAnalytics>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPlansAnalyticsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPlansAnalytics>>
+>;
+export type GetPlansAnalyticsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get budget/consumption analytics by direction and category
+ */
+
+export function useGetPlansAnalytics<
+  TData = Awaited<ReturnType<typeof getPlansAnalytics>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPlansAnalytics>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPlansAnalyticsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get a plan by ID

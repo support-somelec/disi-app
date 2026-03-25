@@ -9,6 +9,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import CreatePlan from "@/pages/CreatePlan";
 import PlanDetails from "@/pages/PlanDetails";
+import Analytics from "@/pages/Analytics";
 import Login from "@/pages/Login";
 
 const queryClient = new QueryClient({
@@ -44,6 +45,13 @@ function Router() {
       <Route path="/plans/:id">
         {isAuthenticated ? (
           <AppLayout><PlanDetails /></AppLayout>
+        ) : (
+          <Redirect to="/login" />
+        )}
+      </Route>
+      <Route path="/analyse">
+        {isAuthenticated ? (
+          <AppLayout><Analytics /></AppLayout>
         ) : (
           <Redirect to="/login" />
         )}

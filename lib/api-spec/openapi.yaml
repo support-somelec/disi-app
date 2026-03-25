@@ -89,6 +89,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/Plan"
 
+  /plans/analytics:
+    get:
+      operationId: getPlansAnalytics
+      tags: [plans]
+      summary: Get budget/consumption analytics by direction and category
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsData"
+
   /plans/{id}:
     get:
       operationId: getPlan
@@ -479,6 +492,8 @@ components:
           type: integer
         planId:
           type: integer
+        moyenId:
+          type: integer
         nom:
           type: string
         type:
@@ -574,6 +589,8 @@ components:
     CreateAttachmentRequest:
       type: object
       properties:
+        moyenId:
+          type: integer
         nom:
           type: string
         type:
@@ -583,3 +600,46 @@ components:
         data:
           type: string
       required: [nom, type]
+
+    AnalyticsDirectionRow:
+      type: object
+      properties:
+        directionId:
+          type: integer
+        directionNom:
+          type: string
+        directionCode:
+          type: string
+        nombrePlans:
+          type: integer
+        budgetTotal:
+          type: number
+        montantConsomme:
+          type: number
+      required: [directionId, directionNom, directionCode, nombrePlans, budgetTotal, montantConsomme]
+
+    AnalyticsCategorieRow:
+      type: object
+      properties:
+        categorie:
+          type: string
+        budgetTotal:
+          type: number
+        montantConsomme:
+          type: number
+        nombreMoyens:
+          type: integer
+      required: [categorie, budgetTotal, montantConsomme, nombreMoyens]
+
+    AnalyticsData:
+      type: object
+      properties:
+        byDirection:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyticsDirectionRow"
+        byCategorie:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyticsCategorieRow"
+      required: [byDirection, byCategorie]

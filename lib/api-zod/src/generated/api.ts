@@ -100,6 +100,7 @@ export const GetPlansResponseItem = zod.object({
       zod.object({
         id: zod.number(),
         planId: zod.number(),
+        moyenId: zod.number().optional(),
         nom: zod.string(),
         type: zod.string(),
         taille: zod.number().optional(),
@@ -121,6 +122,30 @@ export const CreatePlanBody = zod.object({
   duree: zod.number(),
   directionId: zod.number(),
   createdById: zod.number(),
+});
+
+/**
+ * @summary Get budget/consumption analytics by direction and category
+ */
+export const GetPlansAnalyticsResponse = zod.object({
+  byDirection: zod.array(
+    zod.object({
+      directionId: zod.number(),
+      directionNom: zod.string(),
+      directionCode: zod.string(),
+      nombrePlans: zod.number(),
+      budgetTotal: zod.number(),
+      montantConsomme: zod.number(),
+    }),
+  ),
+  byCategorie: zod.array(
+    zod.object({
+      categorie: zod.string(),
+      budgetTotal: zod.number(),
+      montantConsomme: zod.number(),
+      nombreMoyens: zod.number(),
+    }),
+  ),
 });
 
 /**
@@ -184,6 +209,7 @@ export const GetPlanResponse = zod.object({
       zod.object({
         id: zod.number(),
         planId: zod.number(),
+        moyenId: zod.number().optional(),
         nom: zod.string(),
         type: zod.string(),
         taille: zod.number().optional(),
@@ -263,6 +289,7 @@ export const UpdatePlanResponse = zod.object({
       zod.object({
         id: zod.number(),
         planId: zod.number(),
+        moyenId: zod.number().optional(),
         nom: zod.string(),
         type: zod.string(),
         taille: zod.number().optional(),
@@ -340,6 +367,7 @@ export const ValidatePlanResponse = zod.object({
       zod.object({
         id: zod.number(),
         planId: zod.number(),
+        moyenId: zod.number().optional(),
         nom: zod.string(),
         type: zod.string(),
         taille: zod.number().optional(),
@@ -416,6 +444,7 @@ export const CloturerPlanResponse = zod.object({
       zod.object({
         id: zod.number(),
         planId: zod.number(),
+        moyenId: zod.number().optional(),
         nom: zod.string(),
         type: zod.string(),
         taille: zod.number().optional(),
@@ -523,6 +552,7 @@ export const GetPlanAttachmentsParams = zod.object({
 export const GetPlanAttachmentsResponseItem = zod.object({
   id: zod.number(),
   planId: zod.number(),
+  moyenId: zod.number().optional(),
   nom: zod.string(),
   type: zod.string(),
   taille: zod.number().optional(),
@@ -541,6 +571,7 @@ export const AddAttachmentParams = zod.object({
 });
 
 export const AddAttachmentBody = zod.object({
+  moyenId: zod.number().optional(),
   nom: zod.string(),
   type: zod.string(),
   taille: zod.number().optional(),

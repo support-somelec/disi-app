@@ -77,6 +77,7 @@ export interface Moyen {
 export interface Attachment {
   id: number;
   planId: number;
+  moyenId?: number;
   nom: string;
   type: string;
   taille?: number;
@@ -169,10 +170,32 @@ export interface ConsommerMoyenRequest {
 }
 
 export interface CreateAttachmentRequest {
+  moyenId?: number;
   nom: string;
   type: string;
   taille?: number;
   data?: string;
+}
+
+export interface AnalyticsDirectionRow {
+  directionId: number;
+  directionNom: string;
+  directionCode: string;
+  nombrePlans: number;
+  budgetTotal: number;
+  montantConsomme: number;
+}
+
+export interface AnalyticsCategorieRow {
+  categorie: string;
+  budgetTotal: number;
+  montantConsomme: number;
+  nombreMoyens: number;
+}
+
+export interface AnalyticsData {
+  byDirection: AnalyticsDirectionRow[];
+  byCategorie: AnalyticsCategorieRow[];
 }
 
 export type GetPlansParams = {

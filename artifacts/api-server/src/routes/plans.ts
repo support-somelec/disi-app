@@ -61,6 +61,7 @@ async function getPlanWithDetails(planId: number) {
     .select({
       id: attachmentsTable.id,
       planId: attachmentsTable.planId,
+      moyenId: attachmentsTable.moyenId,
       nom: attachmentsTable.nom,
       type: attachmentsTable.type,
       taille: attachmentsTable.taille,
@@ -85,6 +86,55 @@ async function getPlanWithDetails(planId: number) {
     attachments,
   };
 }
+
+// GET /plans/analytics
+router.get("/plans/analytics", async (req, res) => {
+  try {
+    const byDirectionRaw = await db
+      .select({
+        directionId: plansTable.directionId,
+        directionNom: directionsTable.nom,
+        directionCode: directionsTable.code,
+        nombrePlans: sql<number>`count(distinct ${plansTable.id})`,
+        budgetTotal: sql<number>`coalesce(sum(${moyensTable.budget}), 0)`,
+        montantConsomme: sql<number>`coalesce(sum(${moyensTable.montantConsomme}), 0)`,
+      })
+      .from(plansTable)
+      .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+      .leftJoin(moyensTable, eq(moyensTable.planId, plansTable.id))
+      .groupBy(plansTable.directionId, directionsTable.nom, directionsTable.code)
+      .orderBy(directionsTable.nom);
+
+    const byCategorieRaw = await db
+      .select({
+        categorie: moyensTable.categorie,
+        budgetTotal: sql<number>`coalesce(sum(${moyensTable.budget}), 0)`,
+        montantConsomme: sql<number>`coalesce(sum(${moyensTable.montantConsomme}), 0)`,
+        nombreMoyens: sql<number>`count(*)`,
+      })
+      .from(moyensTable)
+      .groupBy(moyensTable.categorie)
+      .orderBy(moyensTable.categorie);
+
+    res.json({
+      byDirection: byDirectionRaw.map(r => ({
+        ...r,
+        budgetTotal: Number(r.budgetTotal),
+        montantConsomme: Number(r.montantConsomme),
+        nombrePlans: Number(r.nombrePlans),
+      })),
+      byCategorie: byCategorieRaw.map(r => ({
+        ...r,
+        budgetTotal: Number(r.budgetTotal),
+        montantConsomme: Number(r.montantConsomme),
+        nombreMoyens: Number(r.nombreMoyens),
+      })),
+    });
+  } catch (err) {
+    console.error(String(err));
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // GET /plans
 router.get("/plans", async (req, res) => {
@@ -345,6 +395,7 @@ router.get("/plans/:id/attachments", async (req, res) => {
     const attachments = await db.select({
       id: attachmentsTable.id,
       planId: attachmentsTable.planId,
+      moyenId: attachmentsTable.moyenId,
       nom: attachmentsTable.nom,
       type: attachmentsTable.type,
       taille: attachmentsTable.taille,
@@ -363,11 +414,11 @@ router.post("/plans/:id/attachments", async (req, res) => {
     const planId = Number(req.params.id);
     const body = AddAttachmentBody.parse(req.body);
     const [attachment] = await db.insert(attachmentsTable).values({
-      planId, nom: body.nom, type: body.type, taille: body.taille, data: body.data,
+      planId, moyenId: body.moyenId ?? null, nom: body.nom, type: body.type, taille: body.taille, data: body.data,
     }).returning();
     res.status(201).json({
-      id: attachment.id, planId: attachment.planId, nom: attachment.nom,
-      type: attachment.type, taille: attachment.taille, createdAt: attachment.createdAt,
+      id: attachment.id, planId: attachment.planId, moyenId: attachment.moyenId,
+      nom: attachment.nom, type: attachment.type, taille: attachment.taille, createdAt: attachment.createdAt,
     });
   } catch (err) {
     console.error(String(err));

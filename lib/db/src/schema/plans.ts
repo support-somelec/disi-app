@@ -35,6 +35,7 @@ export const moyensTable = pgTable("moyens", {
 export const attachmentsTable = pgTable("attachments", {
   id: serial("id").primaryKey(),
   planId: integer("plan_id").notNull().references(() => plansTable.id, { onDelete: "cascade" }),
+  moyenId: integer("moyen_id").references(() => moyensTable.id, { onDelete: "cascade" }),
   nom: text("nom").notNull(),
   type: text("type").notNull(),
   taille: integer("taille"),
