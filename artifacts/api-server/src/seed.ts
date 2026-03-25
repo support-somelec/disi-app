@@ -14,6 +14,7 @@ const DIRECTIONS = [
 ];
 
 const USERS = [
+  { nom: "", prenom: "Admin",  email: "admin@somelec.mr",           role: "admin",              directionIdx: null },
   { nom: "", prenom: "DG",     email: "dg@somelec.mr",              role: "directeur_general",  directionIdx: 0 },
   { nom: "", prenom: "DGA",    email: "dga@somelec.mr",             role: "dga",                directionIdx: 0 },
   { nom: "", prenom: "CT",     email: "ct@somelec.mr",              role: "controle_technique", directionIdx: 0 },

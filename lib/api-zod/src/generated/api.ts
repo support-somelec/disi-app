@@ -31,11 +31,86 @@ export const GetUsersResponseItem = zod.object({
     "da",
     "controle_financier",
     "direction_financiere",
+    "admin",
   ]),
   directionId: zod.number().optional(),
   directionNom: zod.string().optional(),
 });
 export const GetUsersResponse = zod.array(GetUsersResponseItem);
+
+/**
+ * @summary Create a new user
+ */
+export const CreateUserBody = zod.object({
+  nom: zod.string(),
+  prenom: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "direction",
+    "controle_technique",
+    "dga",
+    "directeur_general",
+    "dmg",
+    "da",
+    "controle_financier",
+    "direction_financiere",
+    "admin",
+  ]),
+  directionId: zod.number().optional(),
+});
+
+/**
+ * @summary Update user role or direction
+ */
+export const UpdateUserParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateUserBody = zod.object({
+  nom: zod.string().optional(),
+  prenom: zod.string().optional(),
+  role: zod
+    .enum([
+      "direction",
+      "controle_technique",
+      "dga",
+      "directeur_general",
+      "dmg",
+      "da",
+      "controle_financier",
+      "direction_financiere",
+      "admin",
+    ])
+    .optional(),
+  directionId: zod.number().optional(),
+});
+
+export const UpdateUserResponse = zod.object({
+  id: zod.number(),
+  nom: zod.string(),
+  prenom: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "direction",
+    "controle_technique",
+    "dga",
+    "directeur_general",
+    "dmg",
+    "da",
+    "controle_financier",
+    "direction_financiere",
+    "admin",
+  ]),
+  directionId: zod.number().optional(),
+  directionNom: zod.string().optional(),
+});
+
+/**
+ * @summary Delete a user
+ */
+export const DeleteUserParams = zod.object({
+  id: zod.coerce.number(),
+});
 
 /**
  * @summary Get plans d'action

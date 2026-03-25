@@ -40,6 +40,61 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    put:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user role or direction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: User deleted
 
   /plans:
     get:
@@ -402,7 +457,7 @@ components:
           type: string
         role:
           type: string
-          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere]
+          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, admin]
         directionId:
           type: integer
         directionNom:
@@ -643,3 +698,32 @@ components:
           items:
             $ref: "#/components/schemas/AnalyticsCategorieRow"
       required: [byDirection, byCategorie]
+
+    CreateUserRequest:
+      type: object
+      properties:
+        nom:
+          type: string
+        prenom:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, admin]
+        directionId:
+          type: integer
+      required: [nom, prenom, email, role]
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        nom:
+          type: string
+        prenom:
+          type: string
+        role:
+          type: string
+          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, admin]
+        directionId:
+          type: integer

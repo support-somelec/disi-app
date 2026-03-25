@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 
@@ -120,10 +120,20 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-white/10">
+          <div className="mt-5 text-center">
+            <Link
+              href="/register"
+              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Créer un nouveau compte →
+            </Link>
+          </div>
+
+          <div className="mt-5 pt-5 border-t border-white/10">
             <p className="text-xs text-slate-500 text-center mb-3">Comptes de démonstration :</p>
             <div className="space-y-1.5">
               {[
+                { label: "Admin", email: "admin@somelec.mr" },
                 { label: "DG", email: "dg@somelec.mr" },
                 { label: "DGA", email: "dga@somelec.mr" },
                 { label: "CT", email: "ct@somelec.mr" },

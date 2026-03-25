@@ -11,6 +11,8 @@ import CreatePlan from "@/pages/CreatePlan";
 import PlanDetails from "@/pages/PlanDetails";
 import Analytics from "@/pages/Analytics";
 import Login from "@/pages/Login";
+import Register from "@/pages/Register";
+import AdminUsers from "@/pages/AdminUsers";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +30,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
       <Route path="/">
         {isAuthenticated ? (
           <AppLayout><Dashboard /></AppLayout>
@@ -52,6 +55,13 @@ function Router() {
       <Route path="/analyse">
         {isAuthenticated ? (
           <AppLayout><Analytics /></AppLayout>
+        ) : (
+          <Redirect to="/login" />
+        )}
+      </Route>
+      <Route path="/admin/utilisateurs">
+        {isAuthenticated ? (
+          <AppLayout><AdminUsers /></AppLayout>
         ) : (
           <Redirect to="/login" />
         )}

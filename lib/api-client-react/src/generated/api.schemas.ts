@@ -26,6 +26,7 @@ export const UserRole = {
   da: "da",
   controle_financier: "controle_financier",
   direction_financiere: "direction_financiere",
+  admin: "admin",
 } as const;
 
 export interface User {
@@ -196,6 +197,51 @@ export interface AnalyticsCategorieRow {
 export interface AnalyticsData {
   byDirection: AnalyticsDirectionRow[];
   byCategorie: AnalyticsCategorieRow[];
+}
+
+export type CreateUserRequestRole =
+  (typeof CreateUserRequestRole)[keyof typeof CreateUserRequestRole];
+
+export const CreateUserRequestRole = {
+  direction: "direction",
+  controle_technique: "controle_technique",
+  dga: "dga",
+  directeur_general: "directeur_general",
+  dmg: "dmg",
+  da: "da",
+  controle_financier: "controle_financier",
+  direction_financiere: "direction_financiere",
+  admin: "admin",
+} as const;
+
+export interface CreateUserRequest {
+  nom: string;
+  prenom: string;
+  email: string;
+  role: CreateUserRequestRole;
+  directionId?: number;
+}
+
+export type UpdateUserRequestRole =
+  (typeof UpdateUserRequestRole)[keyof typeof UpdateUserRequestRole];
+
+export const UpdateUserRequestRole = {
+  direction: "direction",
+  controle_technique: "controle_technique",
+  dga: "dga",
+  directeur_general: "directeur_general",
+  dmg: "dmg",
+  da: "da",
+  controle_financier: "controle_financier",
+  direction_financiere: "direction_financiere",
+  admin: "admin",
+} as const;
+
+export interface UpdateUserRequest {
+  nom?: string;
+  prenom?: string;
+  role?: UpdateUserRequestRole;
+  directionId?: number;
 }
 
 export type GetPlansParams = {

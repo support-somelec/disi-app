@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
-import { LayoutDashboard, FilePlus, User, LogOut, Shield, ChevronDown, BarChart2 } from "lucide-react";
+import { LayoutDashboard, FilePlus, User, LogOut, Shield, ChevronDown, BarChart2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -13,6 +13,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { href: "/", label: "Tableau de Bord", icon: LayoutDashboard },
     { href: "/plans/nouveau", label: "Nouveau Plan", icon: FilePlus, roles: ["direction"] },
     { href: "/analyse", label: "Analyse", icon: BarChart2, roles: ["directeur_general", "dga"] },
+    { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users, roles: ["admin"] },
   ];
 
   const getRoleLabel = (role: string) => {

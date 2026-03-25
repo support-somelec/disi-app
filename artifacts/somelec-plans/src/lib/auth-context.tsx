@@ -18,6 +18,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const SESSION_KEY = "somelec_user";
 
 const MOCK_USERS: User[] = [
+  { id: 0, nom: "", prenom: "Admin", email: "admin@somelec.mr", role: "admin" },
   { id: 1, nom: "", prenom: "DG",  email: "dg@somelec.mr",  role: "directeur_general",    directionId: 1, directionNom: "Direction Générale" },
   { id: 12,nom: "", prenom: "DGA", email: "dga@somelec.mr", role: "dga",                   directionId: 1, directionNom: "Direction Générale" },
   { id: 2, nom: "", prenom: "CT",  email: "ct@somelec.mr",  role: "controle_technique",    directionId: 1, directionNom: "Direction Générale" },
