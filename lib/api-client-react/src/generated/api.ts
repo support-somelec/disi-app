@@ -18,6 +18,7 @@ import type {
 
 import type {
   Attachment,
+  CloturerPlanRequest,
   ConsommerMoyenRequest,
   CreateAttachmentRequest,
   CreateMoyenRequest,
@@ -610,6 +611,93 @@ export const useValidatePlan = <
   TContext
 > => {
   return useMutation(getValidatePlanMutationOptions(options));
+};
+
+/**
+ * @summary Close a plan (clôture)
+ */
+export const getCloturerPlanUrl = (id: number) => {
+  return `/api/plans/${id}/cloturer`;
+};
+
+export const cloturerPlan = async (
+  id: number,
+  cloturerPlanRequest: CloturerPlanRequest,
+  options?: RequestInit,
+): Promise<Plan> => {
+  return customFetch<Plan>(getCloturerPlanUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(cloturerPlanRequest),
+  });
+};
+
+export const getCloturerPlanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cloturerPlan>>,
+    TError,
+    { id: number; data: BodyType<CloturerPlanRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cloturerPlan>>,
+  TError,
+  { id: number; data: BodyType<CloturerPlanRequest> },
+  TContext
+> => {
+  const mutationKey = ["cloturerPlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cloturerPlan>>,
+    { id: number; data: BodyType<CloturerPlanRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return cloturerPlan(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CloturerPlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cloturerPlan>>
+>;
+export type CloturerPlanMutationBody = BodyType<CloturerPlanRequest>;
+export type CloturerPlanMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Close a plan (clôture)
+ */
+export const useCloturerPlan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cloturerPlan>>,
+    TError,
+    { id: number; data: BodyType<CloturerPlanRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cloturerPlan>>,
+  TError,
+  { id: number; data: BodyType<CloturerPlanRequest> },
+  TContext
+> => {
+  return useMutation(getCloturerPlanMutationOptions(options));
 };
 
 /**

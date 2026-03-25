@@ -20,6 +20,7 @@ export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 export const UserRole = {
   direction: "direction",
   controle_technique: "controle_technique",
+  dga: "dga",
   directeur_general: "directeur_general",
   dmg: "dmg",
   da: "da",
@@ -42,10 +43,12 @@ export type PlanStatut = (typeof PlanStatut)[keyof typeof PlanStatut];
 export const PlanStatut = {
   brouillon: "brouillon",
   en_attente_ct: "en_attente_ct",
+  en_attente_dga: "en_attente_dga",
   en_attente_dg: "en_attente_dg",
   approuve: "approuve",
   rejete: "rejete",
   ouvert: "ouvert",
+  cloture: "cloture",
 } as const;
 
 export type MoyenCategorie =
@@ -83,6 +86,7 @@ export interface Attachment {
 
 export interface Plan {
   id: number;
+  reference?: string;
   titre: string;
   description: string;
   dateDebut: string;
@@ -95,6 +99,8 @@ export interface Plan {
   budgetTotal: number;
   montantConsomme: number;
   commentaireRejet?: string;
+  rapportCloture?: string;
+  dateCloture?: string;
   createdAt: string;
   updatedAt: string;
   moyens?: Moyen[];
@@ -130,6 +136,11 @@ export interface ValidatePlanRequest {
   action: ValidatePlanRequestAction;
   validatedById: number;
   commentaire?: string;
+}
+
+export interface CloturerPlanRequest {
+  rapportCloture: string;
+  cloturedById: number;
 }
 
 export type CreateMoyenRequestCategorie =

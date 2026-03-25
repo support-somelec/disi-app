@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, numeric, timestamp, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, timestamp, date, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { directionsTable } from "./directions";
@@ -6,6 +6,7 @@ import { usersTable } from "./users";
 
 export const plansTable = pgTable("plans", {
   id: serial("id").primaryKey(),
+  reference: varchar("reference", { length: 30 }),
   titre: text("titre").notNull(),
   description: text("description").notNull(),
   dateDebut: date("date_debut").notNull(),
@@ -14,6 +15,8 @@ export const plansTable = pgTable("plans", {
   statut: text("statut").notNull().default("brouillon"),
   createdById: integer("created_by_id").notNull().references(() => usersTable.id),
   commentaireRejet: text("commentaire_rejet"),
+  rapportCloture: text("rapport_cloture"),
+  dateCloture: timestamp("date_cloture"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -1,7 +1,10 @@
 import React, { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGetPlan, useGetPlanMoyens, useGetPlanAttachments, useValidatePlan, useConsommerMoyen } from "@workspace/api-client-react";
+import {
+  useGetPlan, useGetPlanMoyens, useGetPlanAttachments,
+  useValidatePlan, useConsommerMoyen, useCloturerPlan, useAddAttachment
+} from "@workspace/api-client-react";
 import type { Moyen } from "@workspace/api-client-react";
 import { useAuth, CATEGORY_ROLE, ROLE_LABELS } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -11,7 +14,8 @@ import { formatCurrency } from "@/lib/utils";
 import {
   Calendar, Building, Clock, CheckCircle2, FileText, Activity,
   AlertCircle, FileDigit, Download, ShieldCheck, TrendingDown, Fuel,
-  Package, Home, DollarSign, BadgeDollarSign, Loader2, ChevronRight
+  Package, Home, DollarSign, BadgeDollarSign, Loader2, ChevronRight,
+  Lock, FilePlus, Trash2, UploadCloud
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -27,13 +31,26 @@ const CATEGORIE_LABELS: Record<string, { label: string; icon: React.ElementType;
 };
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "secondary"|"warning"|"info"|"success"|"destructive"|"default" }> = {
-  brouillon:     { label: 'Brouillon',   variant: 'secondary' },
-  en_attente_ct: { label: 'En attente CT', variant: 'warning' },
-  en_attente_dg: { label: 'En attente DG', variant: 'info' },
-  approuve:      { label: 'Approuvé',    variant: 'success' },
-  rejete:        { label: 'Rejeté',      variant: 'destructive' },
-  ouvert:        { label: 'Plan Ouvert', variant: 'success' },
+  brouillon:      { label: "Brouillon",    variant: "secondary" },
+  en_attente_ct:  { label: "Attente CT",   variant: "warning" },
+  en_attente_dga: { label: "Attente DGA",  variant: "warning" },
+  en_attente_dg:  { label: "Attente DG",   variant: "info" },
+  approuve:       { label: "Approuvé",     variant: "success" },
+  rejete:         { label: "Rejeté",       variant: "destructive" },
+  ouvert:         { label: "Plan Ouvert",  variant: "success" },
+  cloture:        { label: "Clôturé",      variant: "default" },
 };
+
+const VALIDATION_STEPS = [
+  { key: "creation",      label: "Direction",  sub: "Création",        statuts: ["brouillon"] },
+  { key: "ct",            label: "CT",         sub: "Contrôle Tech.",  statuts: ["en_attente_ct"] },
+  { key: "dga",           label: "DGA",        sub: "Dir. Gén. Adj.",  statuts: ["en_attente_dga"] },
+  { key: "dg",            label: "DG",         sub: "Directeur Gén.",  statuts: ["en_attente_dg"] },
+  { key: "ouvert",        label: "Ouvert",     sub: "En exécution",    statuts: ["ouvert"] },
+  { key: "cloture",       label: "Clôture",    sub: "Terminé",         statuts: ["cloture"] },
+];
+
+const STATUS_ORDER = ["brouillon", "en_attente_ct", "en_attente_dga", "en_attente_dg", "ouvert", "cloture"];
 
 function ProgressBar({ value, max, className }: { value: number; max: number; className?: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
@@ -56,15 +73,22 @@ export default function PlanDetails() {
   const queryClient = useQueryClient();
   const { data: plan, isLoading, refetch: refetchPlan } = useGetPlan(id);
   const { data: moyens = [], refetch: refetchMoyens } = useGetPlanMoyens(id);
-  const { data: attachments = [] } = useGetPlanAttachments(id);
+  const { data: attachments = [], refetch: refetchAttachments } = useGetPlanAttachments(id);
   const validateMutation = useValidatePlan();
   const consommerMutation = useConsommerMoyen();
+  const cloturerMutation = useCloturerPlan();
+  const addAttachmentMutation = useAddAttachment();
 
   const invalidatePlans = () => queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
 
   const [commentaire, setCommentaire] = useState("");
   const [consommationValues, setConsommationValues] = useState<Record<number, string>>({});
   const [savingMoyen, setSavingMoyen] = useState<number | null>(null);
+
+  // Closure state
+  const [rapportCloture, setRapportCloture] = useState("");
+  const [clotureFiles, setClotureFiles] = useState<Array<{ file: File; base64: string }>>([]);
+  const [isClosing, setIsClosing] = useState(false);
 
   if (isLoading || !plan) {
     return (
@@ -77,6 +101,9 @@ export default function PlanDetails() {
   const statusConfig = STATUS_CONFIG[plan.statut] ?? { label: plan.statut, variant: "default" as const };
   const budgetTotal = moyens.reduce((s, m) => s + Number(m.budget), 0) || plan.budgetTotal || 0;
   const montantConsomme = moyens.reduce((s, m) => s + Number(m.montantConsomme ?? 0), 0);
+  const isOverBudget = montantConsomme > budgetTotal && budgetTotal > 0;
+
+  const currentStatusIndex = STATUS_ORDER.indexOf(plan.statut);
 
   const handleValidate = async (action: "approuver" | "rejeter") => {
     if (!currentUser) return;
@@ -98,15 +125,43 @@ export default function PlanDetails() {
     }
   };
 
-  const canValidateCT = currentUser?.role === "controle_technique" && plan.statut === "en_attente_ct";
-  const canValidateDG = currentUser?.role === "directeur_general" && plan.statut === "en_attente_dg";
-  const isDG = currentUser?.role === "directeur_general";
+  const handleClotureFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setClotureFiles(prev => [...prev, { file, base64: event.target!.result!.toString() }]);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
-  // For functional roles: get their responsible categories
+  const handleCloturer = async () => {
+    if (!currentUser || !rapportCloture.trim()) return;
+    setIsClosing(true);
+    try {
+      for (const att of clotureFiles) {
+        await addAttachmentMutation.mutateAsync({
+          id,
+          data: { nom: att.file.name, type: att.file.type, taille: att.file.size, data: att.base64 }
+        });
+      }
+      await cloturerMutation.mutateAsync({ id, data: { rapportCloture: rapportCloture.trim(), cloturedById: currentUser.id } });
+      await Promise.all([refetchPlan(), refetchAttachments(), invalidatePlans()]);
+    } finally {
+      setIsClosing(false);
+    }
+  };
+
+  const canValidateCT  = currentUser?.role === "controle_technique" && plan.statut === "en_attente_ct";
+  const canValidateDGA = currentUser?.role === "dga"                && plan.statut === "en_attente_dga";
+  const canValidateDG  = currentUser?.role === "directeur_general"  && plan.statut === "en_attente_dg";
+  const canCloturer    = plan.statut === "ouvert" && (plan.createdById === currentUser?.id || (currentUser?.role === "direction" && currentUser?.directionId === plan.directionId));
+  const isDG = currentUser?.role === "directeur_general" || currentUser?.role === "dga";
+
   const myRole = currentUser?.role ?? "";
-  const myCategories = Object.entries(CATEGORY_ROLE)
-    .filter(([, role]) => role === myRole)
-    .map(([cat]) => cat);
+  const myCategories = Object.entries(CATEGORY_ROLE).filter(([, role]) => role === myRole).map(([cat]) => cat);
   const isFunctionalRole = myCategories.length > 0;
   const myMoyens = isFunctionalRole ? moyens.filter(m => myCategories.includes(m.categorie)) : [];
   const canSaisirConsommation = isFunctionalRole && ["ouvert", "approuve"].includes(plan.statut) && myMoyens.length > 0;
@@ -114,39 +169,92 @@ export default function PlanDetails() {
   return (
     <div className="space-y-6 animate-in fade-in pb-20">
       {/* Header */}
-      <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-border/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
+      <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-border/50 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-primary/5 to-transparent rounded-full -translate-y-1/2 translate-x-1/4 pointer-events-none" />
-        <div className="space-y-3 relative z-10">
-          <div className="flex items-center gap-3">
-            <Badge variant="outline" className="font-mono text-muted-foreground">#{plan.id.toString().padStart(4, "0")}</Badge>
-            <Badge variant={statusConfig.variant} className="px-3 py-1 text-sm">{statusConfig.label}</Badge>
+
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+          <div className="space-y-3 flex-1">
+            <div className="flex items-center gap-3 flex-wrap">
+              <Badge variant="outline" className="font-mono text-muted-foreground text-xs">
+                {plan.reference ?? `#${plan.id.toString().padStart(4, "0")}`}
+              </Badge>
+              <Badge variant={isOverBudget ? "destructive" : statusConfig.variant} className="px-3 py-1 text-sm">
+                {statusConfig.label}
+              </Badge>
+              {isOverBudget && <Badge variant="destructive" className="gap-1">⚠ Dépassement budget</Badge>}
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground leading-tight">{plan.titre}</h1>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1.5"><Building className="w-4 h-4" /> {plan.directionNom ?? `Dir. ${plan.directionId}`}</span>
+              <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4" /> {format(new Date(plan.dateDebut), "dd MMM yyyy", { locale: fr })}</span>
+              <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> {plan.duree} Jours</span>
+            </div>
           </div>
-          <h1 className="text-3xl font-bold text-foreground leading-tight">{plan.titre}</h1>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5"><Building className="w-4 h-4" /> {plan.directionNom ?? `Dir. ${plan.directionId}`}</span>
-            <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4" /> {format(new Date(plan.dateDebut), "dd MMM yyyy", { locale: fr })}</span>
-            <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> {plan.duree} Jours</span>
+
+          <div className={cn("bg-muted/30 p-5 rounded-xl border min-w-[200px] space-y-3", isOverBudget ? "border-destructive/30 bg-destructive/5" : "border-border/50")}>
+            <div className="text-right">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Budget Total</div>
+              <div className={cn("text-3xl font-bold", isOverBudget ? "text-destructive" : "text-primary")}>{formatCurrency(budgetTotal)}</div>
+            </div>
+            {montantConsomme > 0 && (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Consommé</span>
+                  <span className={cn("font-semibold", isOverBudget ? "text-destructive" : "text-warning")}>{formatCurrency(montantConsomme)}</span>
+                </div>
+                <ProgressBar value={montantConsomme} max={budgetTotal} />
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Restant</span>
+                  <span className={cn("font-semibold", isOverBudget ? "text-destructive" : "text-success")}>{formatCurrency(budgetTotal - montantConsomme)}</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="bg-muted/30 p-5 rounded-xl border border-border/50 min-w-[220px] relative z-10 space-y-3">
-          <div className="text-right">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Budget Total Estimé</div>
-            <div className="text-3xl font-bold text-primary">{formatCurrency(budgetTotal)}</div>
+        {/* Horizontal Validation Stepper */}
+        <div className="mt-6 pt-6 border-t border-border/50 relative z-10">
+          <div className="flex items-center justify-between gap-1">
+            {VALIDATION_STEPS.map((step, idx) => {
+              const stepStatusIndex = STATUS_ORDER.indexOf(step.statuts[0]);
+              const isDone = plan.statut !== "rejete"
+                ? (stepStatusIndex === 0 || currentStatusIndex > stepStatusIndex || (step.key === "cloture" && plan.statut === "cloture"))
+                : stepStatusIndex === 0;
+              const isActive = step.statuts.includes(plan.statut);
+              const isRejected = plan.statut === "rejete" && isActive;
+
+              return (
+                <React.Fragment key={step.key}>
+                  <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all",
+                      isDone ? "bg-success border-success text-white" :
+                      isActive ? "bg-warning border-warning text-white animate-pulse" :
+                      isRejected ? "bg-destructive border-destructive text-white" :
+                      "bg-muted border-border text-muted-foreground"
+                    )}>
+                      {isDone ? <CheckCircle2 className="w-4 h-4" /> : <span>{idx + 1}</span>}
+                    </div>
+                    <div className="text-center hidden sm:block">
+                      <div className={cn("text-xs font-semibold leading-none",
+                        isDone ? "text-success" :
+                        isActive ? "text-warning" :
+                        "text-muted-foreground"
+                      )}>{step.label}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5 leading-none">{step.sub}</div>
+                    </div>
+                  </div>
+                  {idx < VALIDATION_STEPS.length - 1 && (
+                    <div className={cn(
+                      "h-0.5 flex-1 max-w-[40px] rounded transition-all",
+                      currentStatusIndex > STATUS_ORDER.indexOf(step.statuts[0]) && plan.statut !== "rejete"
+                        ? "bg-success" : "bg-muted"
+                    )} />
+                  )}
+                </React.Fragment>
+              );
+            })}
           </div>
-          {montantConsomme > 0 && (
-            <>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Consommé</span>
-                <span className="font-semibold text-warning">{formatCurrency(montantConsomme)}</span>
-              </div>
-              <ProgressBar value={montantConsomme} max={budgetTotal} />
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Restant</span>
-                <span className="font-semibold text-success">{formatCurrency(budgetTotal - montantConsomme)}</span>
-              </div>
-            </>
-          )}
         </div>
       </div>
 
@@ -184,8 +292,9 @@ export default function PlanDetails() {
                     const cat = CATEGORIE_LABELS[m.categorie] ?? { label: m.categorie, icon: Activity, color: "text-gray-600 bg-gray-50" };
                     const Icon = cat.icon;
                     const consomme = Number(m.montantConsomme ?? 0);
+                    const over = consomme > Number(m.budget) && Number(m.budget) > 0;
                     return (
-                      <tr key={m.id} className="hover:bg-muted/10">
+                      <tr key={m.id} className={cn("hover:bg-muted/10", over ? "bg-destructive/5" : "")}>
                         <td className="px-5 py-4">
                           <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium", cat.color)}>
                             <Icon className="w-3.5 h-3.5" /> {cat.label}
@@ -197,14 +306,10 @@ export default function PlanDetails() {
                         <td className="px-5 py-4 text-right">
                           {consomme > 0 ? (
                             <div>
-                              <span className={cn("font-semibold", consomme > Number(m.budget) ? "text-destructive" : "text-warning")}>
-                                {formatCurrency(consomme)}
-                              </span>
+                              <span className={cn("font-semibold", over ? "text-destructive" : "text-warning")}>{formatCurrency(consomme)}</span>
                               <ProgressBar value={consomme} max={Number(m.budget)} className="mt-1 w-20 ml-auto" />
                             </div>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">—</span>
-                          )}
+                          ) : <span className="text-muted-foreground text-xs">—</span>}
                         </td>
                       </tr>
                     );
@@ -240,13 +345,26 @@ export default function PlanDetails() {
               )}
             </CardContent>
           </Card>
+
+          {/* Closure info (when closed) */}
+          {plan.statut === "cloture" && plan.rapportCloture && (
+            <Card className="border-green-200 bg-green-50/50">
+              <CardHeader className="border-b border-green-200/60 pb-4">
+                <CardTitle className="text-base flex items-center gap-2 text-green-800"><Lock className="w-5 h-5" /> Rapport de Clôture</CardTitle>
+                {plan.dateCloture && (
+                  <p className="text-xs text-green-700 mt-1">Clôturé le {format(new Date(plan.dateCloture), "dd MMMM yyyy", { locale: fr })}</p>
+                )}
+              </CardHeader>
+              <CardContent className="p-6 text-foreground leading-relaxed whitespace-pre-wrap text-sm">{plan.rapportCloture}</CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
 
-          {/* Validation panel - CT or DG */}
-          {(canValidateCT || canValidateDG) && (
+          {/* Validation panel - CT, DGA, DG */}
+          {(canValidateCT || canValidateDGA || canValidateDG) && (
             <Card className="border-warning/30 bg-warning/5 shadow-lg">
               <CardHeader className="border-b border-warning/20 pb-4">
                 <CardTitle className="text-base flex items-center gap-2 text-warning-foreground font-bold">
@@ -269,9 +387,7 @@ export default function PlanDetails() {
                     variant="destructive" className="flex-1"
                     onClick={() => handleValidate("rejeter")}
                     disabled={validateMutation.isPending || !commentaire}
-                  >
-                    Rejeter
-                  </Button>
+                  >Rejeter</Button>
                   <Button
                     className="flex-1 bg-success hover:bg-success/90 text-white"
                     onClick={() => handleValidate("approuver")}
@@ -280,6 +396,61 @@ export default function PlanDetails() {
                     <CheckCircle2 className="w-4 h-4 mr-2" /> Approuver
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Closure panel - creating direction */}
+          {canCloturer && (
+            <Card className="border-primary/30 bg-primary/5 shadow-lg">
+              <CardHeader className="border-b border-primary/20 pb-4">
+                <CardTitle className="text-base flex items-center gap-2 text-primary font-bold">
+                  <Lock className="w-5 h-5" /> Clôturer le Plan
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">Ajoutez le rapport et le PV de réception.</p>
+              </CardHeader>
+              <CardContent className="p-5 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Rapport de Clôture *</label>
+                  <textarea
+                    className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[100px]"
+                    placeholder="Décrivez les résultats, bilan et observations..."
+                    value={rapportCloture}
+                    onChange={(e) => setRapportCloture(e.target.value)}
+                  />
+                </div>
+
+                {/* File upload for closure docs */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Pièces jointes (Rapport, PV...)</label>
+                  <div className="relative border-2 border-dashed border-border hover:border-primary/50 transition-colors rounded-xl p-4 text-center bg-white cursor-pointer">
+                    <input type="file" onChange={handleClotureFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    <UploadCloud className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
+                    <p className="text-xs text-muted-foreground">Cliquez pour ajouter</p>
+                  </div>
+                  {clotureFiles.length > 0 && (
+                    <ul className="space-y-1.5">
+                      {clotureFiles.map((att, i) => (
+                        <li key={i} className="flex items-center gap-2 p-2 border rounded-lg bg-white text-sm">
+                          <FilePlus className="w-4 h-4 text-primary shrink-0" />
+                          <span className="flex-1 truncate text-xs">{att.file.name}</span>
+                          <button onClick={() => setClotureFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <Button
+                  className="w-full bg-primary hover:bg-primary/90 text-white"
+                  onClick={handleCloturer}
+                  disabled={isClosing || !rapportCloture.trim()}
+                  isLoading={isClosing}
+                >
+                  <Lock className="w-4 h-4 mr-2" /> Clôturer le Plan
+                </Button>
               </CardContent>
             </Card>
           )}
@@ -314,10 +485,8 @@ export default function PlanDetails() {
                       <ProgressBar value={current} max={budget} />
                       <div className="flex gap-2 items-center">
                         <input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          placeholder={`Nouveau montant (UM)`}
+                          type="number" min={0} step={0.01}
+                          placeholder="Nouveau montant (MRU)"
                           value={consommationValues[m.id] ?? ""}
                           onChange={e => setConsommationValues(prev => ({ ...prev, [m.id]: e.target.value }))}
                           className="flex-1 px-3 py-2 rounded-lg border border-orange-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -368,7 +537,9 @@ export default function PlanDetails() {
                 })}
                 <div className="pt-3 border-t border-border/50 flex justify-between font-semibold text-sm">
                   <span>Total consommé</span>
-                  <span className="text-warning">{((budgetTotal > 0 ? montantConsomme / budgetTotal : 0) * 100).toFixed(1)}% — {formatCurrency(montantConsomme)}</span>
+                  <span className={cn(isOverBudget ? "text-destructive" : "text-warning")}>
+                    {((budgetTotal > 0 ? montantConsomme / budgetTotal : 0) * 100).toFixed(1)}% — {formatCurrency(montantConsomme)}
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -388,56 +559,6 @@ export default function PlanDetails() {
               </CardContent>
             </Card>
           )}
-
-          {/* Validation Circuit */}
-          <Card>
-            <CardHeader className="border-b border-border/50 pb-4">
-              <CardTitle className="text-base">Circuit de Validation</CardTitle>
-            </CardHeader>
-            <CardContent className="p-5">
-              <ol className="space-y-4">
-                {[
-                  { label: "Direction", sub: "Création du plan", done: true, active: false },
-                  {
-                    label: "Contrôle Technique",
-                    sub: "Vérification technique",
-                    done: !["brouillon", "en_attente_ct"].includes(plan.statut) && plan.statut !== "rejete",
-                    active: plan.statut === "en_attente_ct",
-                    rejected: plan.statut === "rejete" && ["en_attente_ct"].includes(plan.statut),
-                  },
-                  {
-                    label: "Directeur Général",
-                    sub: "Approbation finale",
-                    done: ["ouvert"].includes(plan.statut),
-                    active: plan.statut === "en_attente_dg",
-                  },
-                  {
-                    label: "Plan Ouvert",
-                    sub: "Exécution en cours",
-                    done: plan.statut === "ouvert",
-                    active: false,
-                  },
-                ].map((step, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <div className={cn(
-                      "mt-0.5 w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold border-2 border-white",
-                      step.done ? "bg-success" :
-                      step.active ? "bg-warning animate-pulse" :
-                      "bg-muted text-muted-foreground"
-                    )}>
-                      {step.done ? <CheckCircle2 className="w-4 h-4" /> : <span className="text-xs">{i + 1}</span>}
-                    </div>
-                    <div>
-                      <p className={cn("text-sm font-semibold", step.active ? "text-warning" : step.done ? "text-success" : "text-muted-foreground")}>
-                        {step.label}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{step.sub}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

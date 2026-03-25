@@ -125,6 +125,7 @@ export default function Login() {
             <div className="space-y-1.5">
               {[
                 { label: "DG", email: "dg@somelec.mr" },
+                { label: "DGA", email: "dga@somelec.mr" },
                 { label: "CT", email: "ct@somelec.mr" },
                 { label: "DT", email: "dt@somelec.mr" },
                 { label: "DMG", email: "dmg@somelec.mr" },

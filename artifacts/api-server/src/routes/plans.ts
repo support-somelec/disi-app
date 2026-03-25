@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable } from "@workspace/db/schema";
-import { eq, and, SQL } from "drizzle-orm";
+import { eq, and, SQL, sql } from "drizzle-orm";
 import {
   CreatePlanBody,
   UpdatePlanBody,
@@ -9,14 +9,30 @@ import {
   AddMoyenBody,
   AddAttachmentBody,
   ConsommerMoyenBody,
+  CloturerPlanBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+async function generateReference(directionId: number, createdAt: Date): Promise<string> {
+  const dir = await db.select({ code: directionsTable.code, id: directionsTable.id })
+    .from(directionsTable).where(eq(directionsTable.id, directionId));
+  const code = dir[0]?.code ?? String(directionId);
+  const mm = String(createdAt.getMonth() + 1).padStart(2, "0");
+  const yyyy = createdAt.getFullYear();
+  const prefix = `${code}-${mm}${yyyy}-`;
+  const count = await db.select({ n: sql<number>`count(*)` })
+    .from(plansTable)
+    .where(sql`reference LIKE ${prefix + "%"}`);
+  const seq = (Number(count[0]?.n ?? 0) + 1).toString().padStart(3, "0");
+  return `${prefix}${seq}`;
+}
 
 async function getPlanWithDetails(planId: number) {
   const plans = await db
     .select({
       id: plansTable.id,
+      reference: plansTable.reference,
       titre: plansTable.titre,
       description: plansTable.description,
       dateDebut: plansTable.dateDebut,
@@ -27,6 +43,8 @@ async function getPlanWithDetails(planId: number) {
       createdById: plansTable.createdById,
       createdByNom: usersTable.nom,
       commentaireRejet: plansTable.commentaireRejet,
+      rapportCloture: plansTable.rapportCloture,
+      dateCloture: plansTable.dateCloture,
       createdAt: plansTable.createdAt,
       updatedAt: plansTable.updatedAt,
     })
@@ -72,7 +90,6 @@ async function getPlanWithDetails(planId: number) {
 router.get("/plans", async (req, res) => {
   try {
     const { status, directionId, createdById } = req.query;
-
     const conditions: SQL[] = [];
     if (status) conditions.push(eq(plansTable.statut, String(status)));
     if (directionId) conditions.push(eq(plansTable.directionId, Number(directionId)));
@@ -81,6 +98,7 @@ router.get("/plans", async (req, res) => {
     const plansRaw = await db
       .select({
         id: plansTable.id,
+        reference: plansTable.reference,
         titre: plansTable.titre,
         description: plansTable.description,
         dateDebut: plansTable.dateDebut,
@@ -91,6 +109,8 @@ router.get("/plans", async (req, res) => {
         createdById: plansTable.createdById,
         createdByNom: usersTable.nom,
         commentaireRejet: plansTable.commentaireRejet,
+        rapportCloture: plansTable.rapportCloture,
+        dateCloture: plansTable.dateCloture,
         createdAt: plansTable.createdAt,
         updatedAt: plansTable.updatedAt,
       })
@@ -122,9 +142,12 @@ router.post("/plans", async (req, res) => {
     const raw = req.body;
     if (raw.dateDebut && typeof raw.dateDebut === "string") raw.dateDebut = new Date(raw.dateDebut);
     const body = CreatePlanBody.parse(raw);
+    const now = new Date();
+    const reference = await generateReference(body.directionId, now);
     const [plan] = await db
       .insert(plansTable)
       .values({
+        reference,
         titre: body.titre,
         description: body.description,
         dateDebut: body.dateDebut,
@@ -191,15 +214,40 @@ router.post("/plans/:id/validate", async (req, res) => {
     let commentaireRejet = current.commentaireRejet;
 
     if (body.action === "approuver") {
-      if (current.statut === "brouillon") newStatut = "en_attente_ct";
-      else if (current.statut === "en_attente_ct") newStatut = "en_attente_dg";
-      else if (current.statut === "en_attente_dg") newStatut = "ouvert";
+      if (current.statut === "brouillon")         newStatut = "en_attente_ct";
+      else if (current.statut === "en_attente_ct")  newStatut = "en_attente_dga";
+      else if (current.statut === "en_attente_dga") newStatut = "en_attente_dg";
+      else if (current.statut === "en_attente_dg")  newStatut = "ouvert";
     } else if (body.action === "rejeter") {
       newStatut = "rejete";
       commentaireRejet = body.commentaire ?? "Rejeté sans commentaire";
     }
 
     await db.update(plansTable).set({ statut: newStatut, commentaireRejet, updatedAt: new Date() }).where(eq(plansTable.id, id));
+    const plan = await getPlanWithDetails(id);
+    res.json(plan);
+  } catch (err) {
+    console.error(String(err));
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// POST /plans/:id/cloturer
+router.post("/plans/:id/cloturer", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const body = CloturerPlanBody.parse(req.body);
+    const existing = await db.select().from(plansTable).where(eq(plansTable.id, id));
+    if (!existing.length) return res.status(404).json({ error: "Plan not found" });
+    if (existing[0].statut !== "ouvert") return res.status(400).json({ error: "Le plan doit être ouvert pour être clôturé" });
+
+    await db.update(plansTable).set({
+      statut: "cloture",
+      rapportCloture: body.rapportCloture,
+      dateCloture: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(plansTable.id, id));
+
     const plan = await getPlanWithDetails(id);
     res.json(plan);
   } catch (err) {
@@ -239,7 +287,6 @@ router.post("/plans/:id/moyens", async (req, res) => {
       quantite: body.quantite !== undefined ? String(body.quantite) : null,
       montantConsomme: "0",
     }).returning();
-
     res.status(201).json({
       ...moyen,
       budget: Number(moyen.budget),
@@ -258,18 +305,14 @@ router.post("/plans/:id/moyens/:moyenId/consommer", async (req, res) => {
     const planId = Number(req.params.id);
     const moyenId = Number(req.params.moyenId);
     const body = ConsommerMoyenBody.parse(req.body);
-
     const existing = await db.select().from(moyensTable)
       .where(and(eq(moyensTable.id, moyenId), eq(moyensTable.planId, planId)));
     if (!existing.length) return res.status(404).json({ error: "Moyen not found" });
-
     const [updated] = await db.update(moyensTable)
       .set({ montantConsomme: String(body.montant) })
       .where(eq(moyensTable.id, moyenId))
       .returning();
-
     await db.update(plansTable).set({ updatedAt: new Date() }).where(eq(plansTable.id, planId));
-
     res.json({
       ...updated,
       budget: Number(updated.budget),

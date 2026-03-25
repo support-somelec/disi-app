@@ -25,6 +25,7 @@ export const GetUsersResponseItem = zod.object({
   role: zod.enum([
     "direction",
     "controle_technique",
+    "dga",
     "directeur_general",
     "dmg",
     "da",
@@ -47,6 +48,7 @@ export const GetPlansQueryParams = zod.object({
 
 export const GetPlansResponseItem = zod.object({
   id: zod.number(),
+  reference: zod.string().optional(),
   titre: zod.string(),
   description: zod.string(),
   dateDebut: zod.date(),
@@ -56,16 +58,20 @@ export const GetPlansResponseItem = zod.object({
   statut: zod.enum([
     "brouillon",
     "en_attente_ct",
+    "en_attente_dga",
     "en_attente_dg",
     "approuve",
     "rejete",
     "ouvert",
+    "cloture",
   ]),
   createdById: zod.number(),
   createdByNom: zod.string().optional(),
   budgetTotal: zod.number(),
   montantConsomme: zod.number(),
   commentaireRejet: zod.string().optional(),
+  rapportCloture: zod.string().optional(),
+  dateCloture: zod.date().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
   moyens: zod
@@ -126,6 +132,7 @@ export const GetPlanParams = zod.object({
 
 export const GetPlanResponse = zod.object({
   id: zod.number(),
+  reference: zod.string().optional(),
   titre: zod.string(),
   description: zod.string(),
   dateDebut: zod.date(),
@@ -135,16 +142,20 @@ export const GetPlanResponse = zod.object({
   statut: zod.enum([
     "brouillon",
     "en_attente_ct",
+    "en_attente_dga",
     "en_attente_dg",
     "approuve",
     "rejete",
     "ouvert",
+    "cloture",
   ]),
   createdById: zod.number(),
   createdByNom: zod.string().optional(),
   budgetTotal: zod.number(),
   montantConsomme: zod.number(),
   commentaireRejet: zod.string().optional(),
+  rapportCloture: zod.string().optional(),
+  dateCloture: zod.date().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
   moyens: zod
@@ -200,6 +211,7 @@ export const UpdatePlanBody = zod.object({
 
 export const UpdatePlanResponse = zod.object({
   id: zod.number(),
+  reference: zod.string().optional(),
   titre: zod.string(),
   description: zod.string(),
   dateDebut: zod.date(),
@@ -209,16 +221,20 @@ export const UpdatePlanResponse = zod.object({
   statut: zod.enum([
     "brouillon",
     "en_attente_ct",
+    "en_attente_dga",
     "en_attente_dg",
     "approuve",
     "rejete",
     "ouvert",
+    "cloture",
   ]),
   createdById: zod.number(),
   createdByNom: zod.string().optional(),
   budgetTotal: zod.number(),
   montantConsomme: zod.number(),
   commentaireRejet: zod.string().optional(),
+  rapportCloture: zod.string().optional(),
+  dateCloture: zod.date().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
   moyens: zod
@@ -272,6 +288,7 @@ export const ValidatePlanBody = zod.object({
 
 export const ValidatePlanResponse = zod.object({
   id: zod.number(),
+  reference: zod.string().optional(),
   titre: zod.string(),
   description: zod.string(),
   dateDebut: zod.date(),
@@ -281,16 +298,96 @@ export const ValidatePlanResponse = zod.object({
   statut: zod.enum([
     "brouillon",
     "en_attente_ct",
+    "en_attente_dga",
     "en_attente_dg",
     "approuve",
     "rejete",
     "ouvert",
+    "cloture",
   ]),
   createdById: zod.number(),
   createdByNom: zod.string().optional(),
   budgetTotal: zod.number(),
   montantConsomme: zod.number(),
   commentaireRejet: zod.string().optional(),
+  rapportCloture: zod.string().optional(),
+  dateCloture: zod.date().optional(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+  moyens: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        planId: zod.number(),
+        categorie: zod.enum([
+          "materiel",
+          "carburant",
+          "logement",
+          "logistique",
+          "prime",
+          "indemnite_journaliere",
+        ]),
+        description: zod.string(),
+        budget: zod.number(),
+        unite: zod.string().optional(),
+        quantite: zod.number().optional(),
+        montantConsomme: zod.number(),
+      }),
+    )
+    .optional(),
+  attachments: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        planId: zod.number(),
+        nom: zod.string(),
+        type: zod.string(),
+        taille: zod.number().optional(),
+        url: zod.string().optional(),
+        createdAt: zod.date(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Close a plan (clôture)
+ */
+export const CloturerPlanParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CloturerPlanBody = zod.object({
+  rapportCloture: zod.string(),
+  cloturedById: zod.number(),
+});
+
+export const CloturerPlanResponse = zod.object({
+  id: zod.number(),
+  reference: zod.string().optional(),
+  titre: zod.string(),
+  description: zod.string(),
+  dateDebut: zod.date(),
+  duree: zod.number(),
+  directionId: zod.number(),
+  directionNom: zod.string().optional(),
+  statut: zod.enum([
+    "brouillon",
+    "en_attente_ct",
+    "en_attente_dga",
+    "en_attente_dg",
+    "approuve",
+    "rejete",
+    "ouvert",
+    "cloture",
+  ]),
+  createdById: zod.number(),
+  createdByNom: zod.string().optional(),
+  budgetTotal: zod.number(),
+  montantConsomme: zod.number(),
+  commentaireRejet: zod.string().optional(),
+  rapportCloture: zod.string().optional(),
+  dateCloture: zod.date().optional(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
   moyens: zod

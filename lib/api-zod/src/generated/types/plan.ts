@@ -11,6 +11,7 @@ import type { PlanStatut } from "./planStatut";
 
 export interface Plan {
   id: number;
+  reference?: string;
   titre: string;
   description: string;
   dateDebut: Date;
@@ -23,6 +24,8 @@ export interface Plan {
   budgetTotal: number;
   montantConsomme: number;
   commentaireRejet?: string;
+  rapportCloture?: string;
+  dateCloture?: Date;
   createdAt: Date;
   updatedAt: Date;
   moyens?: Moyen[];

@@ -158,6 +158,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/Plan"
 
+  /plans/{id}/cloturer:
+    post:
+      operationId: cloturerPlan
+      tags: [plans]
+      summary: Close a plan (clôture)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloturerPlanRequest"
+      responses:
+        "200":
+          description: Plan closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+
   /plans/{id}/moyens:
     get:
       operationId: getPlanMoyens
@@ -364,7 +389,7 @@ components:
           type: string
         role:
           type: string
-          enum: [direction, controle_technique, directeur_general, dmg, da, controle_financier, direction_financiere]
+          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere]
         directionId:
           type: integer
         directionNom:
@@ -376,6 +401,8 @@ components:
       properties:
         id:
           type: integer
+        reference:
+          type: string
         titre:
           type: string
         description:
@@ -391,7 +418,7 @@ components:
           type: string
         statut:
           type: string
-          enum: [brouillon, en_attente_ct, en_attente_dg, approuve, rejete, ouvert]
+          enum: [brouillon, en_attente_ct, en_attente_dga, en_attente_dg, approuve, rejete, ouvert, cloture]
         createdById:
           type: integer
         createdByNom:
@@ -402,6 +429,11 @@ components:
           type: number
         commentaireRejet:
           type: string
+        rapportCloture:
+          type: string
+        dateCloture:
+          type: string
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -504,6 +536,15 @@ components:
         commentaire:
           type: string
       required: [action, validatedById]
+
+    CloturerPlanRequest:
+      type: object
+      properties:
+        rapportCloture:
+          type: string
+        cloturedById:
+          type: integer
+      required: [rapportCloture, cloturedById]
 
     CreateMoyenRequest:
       type: object
