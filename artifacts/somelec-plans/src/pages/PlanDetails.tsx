@@ -15,8 +15,11 @@ import {
   Calendar, Building, Clock, CheckCircle2, FileText, Activity,
   AlertCircle, FileDigit, Download, ShieldCheck, TrendingDown, Fuel,
   Package, Home, DollarSign, BadgeDollarSign, Loader2, ChevronRight,
-  Lock, FilePlus, Trash2, UploadCloud, PlayCircle, Hourglass, CheckCheck, Send
+  Lock, FilePlus, Trash2, UploadCloud, PlayCircle, Hourglass, CheckCheck, Send, TriangleAlert
 } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
+} from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -84,8 +87,10 @@ export default function PlanDetails() {
 
   const [commentaire, setCommentaire] = useState("");
   const [consommationValues, setConsommationValues] = useState<Record<number, string>>({});
+  const [consommeErrors, setConsommeErrors] = useState<Record<number, string>>({});
   const [savingMoyen, setSavingMoyen] = useState<number | null>(null);
   const [demandingMoyen, setDemandingMoyen] = useState<number | null>(null);
+  const [demandConfirm, setDemandConfirm] = useState<Moyen | null>(null);
   const [dechargeFiles, setDechargeFiles] = useState<Record<number, { file: File; base64: string } | null>>({});
 
   // Closure state
@@ -132,7 +137,19 @@ export default function PlanDetails() {
     const val = parseFloat(consommationValues[moyen.id] ?? "");
     if (isNaN(val) || val < 0) return;
     const decharge = dechargeFiles[moyen.id];
-    if (!decharge) return; // décharge required
+    if (!decharge) return;
+
+    // Client-side budget check (except logistique)
+    const budget = Number(moyen.budget);
+    if (moyen.categorie !== "logistique" && val > budget) {
+      setConsommeErrors(prev => ({
+        ...prev,
+        [moyen.id]: `Dépassement non autorisé : ${val.toLocaleString("fr-MR")} MRU saisi > ${budget.toLocaleString("fr-MR")} MRU prévu.`,
+      }));
+      return;
+    }
+    setConsommeErrors(prev => ({ ...prev, [moyen.id]: "" }));
+
     setSavingMoyen(moyen.id);
     try {
       await addAttachmentMutation.mutateAsync({
@@ -143,6 +160,10 @@ export default function PlanDetails() {
       setConsommationValues(prev => ({ ...prev, [moyen.id]: "" }));
       setDechargeFiles(prev => ({ ...prev, [moyen.id]: null }));
       await Promise.all([refetchMoyens(), refetchPlan(), refetchAttachments(), invalidatePlans()]);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+        ?? (err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
+      setConsommeErrors(prev => ({ ...prev, [moyen.id]: msg }));
     } finally {
       setSavingMoyen(null);
     }
@@ -371,7 +392,7 @@ export default function PlanDetails() {
                               variant="outline"
                               className="h-7 text-xs gap-1 px-2"
                               disabled={isDemanderLoading}
-                              onClick={() => handleDemander(m)}
+                              onClick={() => setDemandConfirm(m)}
                             >
                               {isDemanderLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                               Demander
@@ -592,8 +613,16 @@ export default function PlanDetails() {
                           type="number" min={0} step={0.01}
                           placeholder="Nouveau montant (MRU)"
                           value={consommationValues[m.id] ?? ""}
-                          onChange={e => setConsommationValues(prev => ({ ...prev, [m.id]: e.target.value }))}
-                          className="flex-1 px-3 py-2 rounded-lg border border-orange-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                          onChange={e => {
+                            setConsommationValues(prev => ({ ...prev, [m.id]: e.target.value }));
+                            setConsommeErrors(prev => ({ ...prev, [m.id]: "" }));
+                          }}
+                          className={cn(
+                            "flex-1 px-3 py-2 rounded-lg border bg-white text-sm focus:outline-none focus:ring-2",
+                            consommeErrors[m.id]
+                              ? "border-destructive focus:ring-destructive/40"
+                              : "border-orange-200 focus:ring-orange-300"
+                          )}
                         />
                         <Button
                           size="sm"
@@ -605,6 +634,17 @@ export default function PlanDetails() {
                           {savingMoyen === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
                         </Button>
                       </div>
+                      {consommeErrors[m.id] && (
+                        <div className="flex items-start gap-1.5 text-xs text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2">
+                          <TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          <span>{consommeErrors[m.id]}</span>
+                        </div>
+                      )}
+                      {m.categorie === "logistique" && (
+                        <p className="text-[11px] text-blue-600 italic">
+                          ℹ️ Catégorie Logistique : un dépassement du budget est autorisé.
+                        </p>
+                      )}
                       {/* Décharge obligatoire */}
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-semibold text-orange-700 uppercase tracking-wide flex items-center gap-1">
@@ -688,6 +728,66 @@ export default function PlanDetails() {
           )}
         </div>
       </div>
+
+      {/* ─── Demande d'exécution — popup de confirmation ─── */}
+      <Dialog open={!!demandConfirm} onOpenChange={(open) => { if (!open) setDemandConfirm(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="w-5 h-5 text-primary" />
+              Confirmer la demande d'exécution
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              Vous êtes sur le point d'initier une demande d'exécution pour le moyen suivant. Cette action notifiera le service responsable par e-mail.
+            </DialogDescription>
+          </DialogHeader>
+
+          {demandConfirm && (
+            <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2 text-sm">
+              {(() => {
+                const cat = CATEGORIE_LABELS[demandConfirm.categorie] ?? { label: demandConfirm.categorie, icon: Activity, color: "" };
+                const CatIcon = cat.icon;
+                return (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium", cat.color)}>
+                        <CatIcon className="w-3.5 h-3.5" /> {cat.label}
+                      </span>
+                    </div>
+                    <p className="font-semibold text-foreground">{demandConfirm.description}</p>
+                    <p className="text-muted-foreground">
+                      Budget prévu : <span className="font-semibold text-primary">{formatCurrency(Number(demandConfirm.budget))}</span>
+                    </p>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDemandConfirm(null)}
+              disabled={!!demandingMoyen}
+            >
+              Annuler
+            </Button>
+            <Button
+              className="bg-primary hover:bg-primary/90 text-white"
+              disabled={!!demandingMoyen}
+              onClick={async () => {
+                if (!demandConfirm) return;
+                const m = demandConfirm;
+                setDemandConfirm(null);
+                await handleDemander(m);
+              }}
+            >
+              {demandingMoyen ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              Confirmer la demande
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

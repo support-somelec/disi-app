@@ -477,6 +477,14 @@ router.post("/plans/:id/moyens/:moyenId/consommer", async (req, res) => {
       return res.status(400).json({ error: "Ce moyen n'a pas de demande d'exécution en cours. La direction doit d'abord initier une demande." });
     }
 
+    // Block budget overage for all categories except logistique
+    const budget = Number(moyen.budget);
+    if (moyen.categorie !== "logistique" && body.montant > budget) {
+      return res.status(400).json({
+        error: `Le montant saisi (${body.montant.toLocaleString("fr-MR")} MRU) dépasse le budget prévu (${budget.toLocaleString("fr-MR")} MRU). Les dépassements de budget ne sont pas autorisés pour cette catégorie.`,
+      });
+    }
+
     const [updated] = await db.update(moyensTable)
       .set({ montantConsomme: String(body.montant), demandeStatus: "consommee" })
       .where(eq(moyensTable.id, moyenId))
