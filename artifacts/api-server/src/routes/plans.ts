@@ -430,6 +430,9 @@ router.post("/plans/:id/moyens/:moyenId/demander", async (req, res) => {
     if (existing[0].demandeStatus === "demandee" || existing[0].demandeStatus === "consommee") {
       return res.status(400).json({ error: "Une demande a déjà été initiée pour ce moyen" });
     }
+    if (Number(existing[0].montantConsomme) > 0) {
+      return res.status(400).json({ error: "Ce moyen a déjà été consommé et ne peut plus faire l'objet d'une nouvelle demande." });
+    }
 
     const [updated] = await db.update(moyensTable)
       .set({ demandeStatus: "demandee", demandeById, demandeAt: new Date() })

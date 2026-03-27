@@ -378,7 +378,7 @@ export default function PlanDetails() {
                           ) : <span className="text-muted-foreground text-xs">—</span>}
                         </td>
                         <td className="px-5 py-4 text-center">
-                          {m.demandeStatus === "consommee" ? (
+                          {m.demandeStatus === "consommee" || (Number(m.montantConsomme) > 0 && !m.demandeStatus) ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">
                               <CheckCheck className="w-3 h-3" /> Traitée
                             </span>
