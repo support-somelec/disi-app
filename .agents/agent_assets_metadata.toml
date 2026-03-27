@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "dW_VcmB0i3D68EfsKd5EV"
+uri = "file://Manuel_Utilisateur_SOMELEC.pdf"
+type = "pdf"
+title = "Manuel d'Utilisateur — SOMELEC Plans d'Action"
