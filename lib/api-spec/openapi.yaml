@@ -315,6 +315,36 @@ paths:
         "204":
           description: Deleted
 
+  /plans/{id}/moyens/{moyenId}/demander:
+    post:
+      operationId: demanderMoyen
+      tags: [plans]
+      summary: Initiate an execution request for a moyen (direction only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: moyenId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DemanderMoyenRequest"
+      responses:
+        "200":
+          description: Request submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Moyen"
+
   /plans/{id}/moyens/{moyenId}/consommer:
     post:
       operationId: consommerMoyen
@@ -538,6 +568,14 @@ components:
           type: number
         montantConsomme:
           type: number
+        demandeStatus:
+          type: string
+          enum: [demandee, consommee]
+        demandeById:
+          type: integer
+        demandeAt:
+          type: string
+          format: date-time
       required: [id, planId, categorie, description, budget, montantConsomme]
 
     Attachment:
@@ -698,6 +736,13 @@ components:
           items:
             $ref: "#/components/schemas/AnalyticsCategorieRow"
       required: [byDirection, byCategorie]
+
+    DemanderMoyenRequest:
+      type: object
+      properties:
+        demandeById:
+          type: integer
+      required: [demandeById]
 
     CreateUserRequest:
       type: object

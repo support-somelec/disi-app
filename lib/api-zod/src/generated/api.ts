@@ -167,6 +167,9 @@ export const GetPlansResponseItem = zod.object({
         unite: zod.string().optional(),
         quantite: zod.number().optional(),
         montantConsomme: zod.number(),
+        demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
+        demandeById: zod.number().optional(),
+        demandeAt: zod.date().optional(),
       }),
     )
     .optional(),
@@ -276,6 +279,9 @@ export const GetPlanResponse = zod.object({
         unite: zod.string().optional(),
         quantite: zod.number().optional(),
         montantConsomme: zod.number(),
+        demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
+        demandeById: zod.number().optional(),
+        demandeAt: zod.date().optional(),
       }),
     )
     .optional(),
@@ -356,6 +362,9 @@ export const UpdatePlanResponse = zod.object({
         unite: zod.string().optional(),
         quantite: zod.number().optional(),
         montantConsomme: zod.number(),
+        demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
+        demandeById: zod.number().optional(),
+        demandeAt: zod.date().optional(),
       }),
     )
     .optional(),
@@ -434,6 +443,9 @@ export const ValidatePlanResponse = zod.object({
         unite: zod.string().optional(),
         quantite: zod.number().optional(),
         montantConsomme: zod.number(),
+        demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
+        demandeById: zod.number().optional(),
+        demandeAt: zod.date().optional(),
       }),
     )
     .optional(),
@@ -511,6 +523,9 @@ export const CloturerPlanResponse = zod.object({
         unite: zod.string().optional(),
         quantite: zod.number().optional(),
         montantConsomme: zod.number(),
+        demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
+        demandeById: zod.number().optional(),
+        demandeAt: zod.date().optional(),
       }),
     )
     .optional(),
@@ -553,6 +568,9 @@ export const GetPlanMoyensResponseItem = zod.object({
   unite: zod.string().optional(),
   quantite: zod.number().optional(),
   montantConsomme: zod.number(),
+  demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
+  demandeById: zod.number().optional(),
+  demandeAt: zod.date().optional(),
 });
 export const GetPlanMoyensResponse = zod.array(GetPlanMoyensResponseItem);
 
@@ -587,6 +605,39 @@ export const DeleteMoyenParams = zod.object({
 });
 
 /**
+ * @summary Initiate an execution request for a moyen (direction only)
+ */
+export const DemanderMoyenParams = zod.object({
+  id: zod.coerce.number(),
+  moyenId: zod.coerce.number(),
+});
+
+export const DemanderMoyenBody = zod.object({
+  demandeById: zod.number(),
+});
+
+export const DemanderMoyenResponse = zod.object({
+  id: zod.number(),
+  planId: zod.number(),
+  categorie: zod.enum([
+    "materiel",
+    "carburant",
+    "logement",
+    "logistique",
+    "prime",
+    "indemnite_journaliere",
+  ]),
+  description: zod.string(),
+  budget: zod.number(),
+  unite: zod.string().optional(),
+  quantite: zod.number().optional(),
+  montantConsomme: zod.number(),
+  demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
+  demandeById: zod.number().optional(),
+  demandeAt: zod.date().optional(),
+});
+
+/**
  * @summary Record consumption for a moyen
  */
 export const ConsommerMoyenParams = zod.object({
@@ -615,6 +666,9 @@ export const ConsommerMoyenResponse = zod.object({
   unite: zod.string().optional(),
   quantite: zod.number().optional(),
   montantConsomme: zod.number(),
+  demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
+  demandeById: zod.number().optional(),
+  demandeAt: zod.date().optional(),
 });
 
 /**

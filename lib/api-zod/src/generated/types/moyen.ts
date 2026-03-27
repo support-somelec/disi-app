@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MoyenCategorie } from "./moyenCategorie";
+import type { MoyenDemandeStatus } from "./moyenDemandeStatus";
 
 export interface Moyen {
   id: number;
@@ -16,4 +17,7 @@ export interface Moyen {
   unite?: string;
   quantite?: number;
   montantConsomme: number;
+  demandeStatus?: MoyenDemandeStatus;
+  demandeById?: number;
+  demandeAt?: Date;
 }

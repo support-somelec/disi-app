@@ -3,7 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetPlan, useGetPlanMoyens, useGetPlanAttachments,
-  useValidatePlan, useConsommerMoyen, useCloturerPlan, useAddAttachment
+  useValidatePlan, useConsommerMoyen, useCloturerPlan, useAddAttachment, useDemanderMoyen
 } from "@workspace/api-client-react";
 import type { Moyen } from "@workspace/api-client-react";
 import { useAuth, CATEGORY_ROLE, ROLE_LABELS } from "@/lib/auth-context";
@@ -15,7 +15,7 @@ import {
   Calendar, Building, Clock, CheckCircle2, FileText, Activity,
   AlertCircle, FileDigit, Download, ShieldCheck, TrendingDown, Fuel,
   Package, Home, DollarSign, BadgeDollarSign, Loader2, ChevronRight,
-  Lock, FilePlus, Trash2, UploadCloud
+  Lock, FilePlus, Trash2, UploadCloud, PlayCircle, Hourglass, CheckCheck, Send
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -78,12 +78,14 @@ export default function PlanDetails() {
   const consommerMutation = useConsommerMoyen();
   const cloturerMutation = useCloturerPlan();
   const addAttachmentMutation = useAddAttachment();
+  const demanderMutation = useDemanderMoyen();
 
   const invalidatePlans = () => queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
 
   const [commentaire, setCommentaire] = useState("");
   const [consommationValues, setConsommationValues] = useState<Record<number, string>>({});
   const [savingMoyen, setSavingMoyen] = useState<number | null>(null);
+  const [demandingMoyen, setDemandingMoyen] = useState<number | null>(null);
   const [dechargeFiles, setDechargeFiles] = useState<Record<number, { file: File; base64: string } | null>>({});
 
   // Closure state
@@ -175,17 +177,35 @@ export default function PlanDetails() {
     }
   };
 
+  const handleDemander = async (moyen: Moyen) => {
+    if (!currentUser) return;
+    setDemandingMoyen(moyen.id);
+    try {
+      await demanderMutation.mutateAsync({ id, moyenId: moyen.id, data: { demandeById: currentUser.id } });
+      await Promise.all([refetchMoyens(), refetchPlan(), invalidatePlans()]);
+    } catch (e) {
+      console.error("Demande failed:", e);
+    } finally {
+      setDemandingMoyen(null);
+    }
+  };
+
   const canValidateCT  = currentUser?.role === "controle_technique" && plan.statut === "en_attente_ct";
   const canValidateDGA = currentUser?.role === "dga"                && plan.statut === "en_attente_dga";
   const canValidateDG  = currentUser?.role === "directeur_general"  && plan.statut === "en_attente_dg";
   const canCloturer    = plan.statut === "ouvert" && (plan.createdById === currentUser?.id || (currentUser?.role === "direction" && currentUser?.directionId === plan.directionId));
   const isDG = currentUser?.role === "directeur_general" || currentUser?.role === "dga";
 
+  const isOwnDirectionPlan = currentUser?.role === "direction" &&
+    (plan.createdById === currentUser?.id || currentUser?.directionId === plan.directionId);
+  const canDemanderExecution = isOwnDirectionPlan && plan.statut === "ouvert";
+
   const myRole = currentUser?.role ?? "";
   const myCategories = Object.entries(CATEGORY_ROLE).filter(([, role]) => role === myRole).map(([cat]) => cat);
   const isFunctionalRole = myCategories.length > 0;
-  const myMoyens = isFunctionalRole ? moyens.filter(m => myCategories.includes(m.categorie)) : [];
-  const canSaisirConsommation = isFunctionalRole && ["ouvert", "approuve"].includes(plan.statut) && myMoyens.length > 0;
+  const myMoyensAll = isFunctionalRole ? moyens.filter(m => myCategories.includes(m.categorie)) : [];
+  const myMoyens = myMoyensAll.filter(m => m.demandeStatus === "demandee");
+  const canSaisirConsommation = isFunctionalRole && plan.statut === "ouvert" && myMoyens.length > 0;
 
   return (
     <div className="space-y-6 animate-in fade-in pb-20">
@@ -304,18 +324,20 @@ export default function PlanDetails() {
                     <th className="px-5 py-3">Qté</th>
                     <th className="px-5 py-3 text-right">Budget</th>
                     <th className="px-5 py-3 text-right">Consommé</th>
+                    <th className="px-5 py-3 text-center">Exécution</th>
                     <th className="px-5 py-3 text-center">Décharge</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
                   {moyens.length === 0 ? (
-                    <tr><td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">Aucun moyen défini.</td></tr>
+                    <tr><td colSpan={7} className="px-5 py-8 text-center text-muted-foreground">Aucun moyen défini.</td></tr>
                   ) : moyens.map((m) => {
                     const cat = CATEGORIE_LABELS[m.categorie] ?? { label: m.categorie, icon: Activity, color: "text-gray-600 bg-gray-50" };
                     const Icon = cat.icon;
                     const consomme = Number(m.montantConsomme ?? 0);
                     const over = consomme > Number(m.budget) && Number(m.budget) > 0;
                     const moyenDecharge = attachments.find(a => a.moyenId === m.id);
+                    const isDemanderLoading = demandingMoyen === m.id;
                     return (
                       <tr key={m.id} className={cn("hover:bg-muted/10", over ? "bg-destructive/5" : "")}>
                         <td className="px-5 py-4">
@@ -333,6 +355,30 @@ export default function PlanDetails() {
                               <ProgressBar value={consomme} max={Number(m.budget)} className="mt-1 w-20 ml-auto" />
                             </div>
                           ) : <span className="text-muted-foreground text-xs">—</span>}
+                        </td>
+                        <td className="px-5 py-4 text-center">
+                          {m.demandeStatus === "consommee" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">
+                              <CheckCheck className="w-3 h-3" /> Traitée
+                            </span>
+                          ) : m.demandeStatus === "demandee" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-medium">
+                              <Hourglass className="w-3 h-3" /> En attente
+                            </span>
+                          ) : canDemanderExecution ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs gap-1 px-2"
+                              disabled={isDemanderLoading}
+                              onClick={() => handleDemander(m)}
+                            >
+                              {isDemanderLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                              Demander
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
                         </td>
                         <td className="px-5 py-4 text-center">
                           {moyenDecharge ? (
@@ -491,6 +537,22 @@ export default function PlanDetails() {
                 >
                   <Lock className="w-4 h-4 mr-2" /> Clôturer le Plan
                 </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Specialist waiting panel — has categories but no pending demands */}
+          {isFunctionalRole && plan.statut === "ouvert" && myMoyensAll.length > 0 && myMoyens.length === 0 && (
+            <Card className="border-blue-200 bg-blue-50/50">
+              <CardContent className="p-5 flex items-start gap-3">
+                <Hourglass className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-blue-800">En attente d'une demande d'exécution</p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    Vous avez {myMoyensAll.length} moyen(s) dans ce plan ({myCategories.map(c => CATEGORIE_LABELS[c]?.label).join(", ")}).
+                    La direction doit d'abord initier une demande d'exécution pour chaque moyen avant que vous puissiez saisir la consommation.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           )}

@@ -25,6 +25,7 @@ import type {
   CreateMoyenRequest,
   CreatePlanRequest,
   CreateUserRequest,
+  DemanderMoyenRequest,
   Direction,
   GetPlansParams,
   HealthStatus,
@@ -1292,6 +1293,94 @@ export const useDeleteMoyen = <
   TContext
 > => {
   return useMutation(getDeleteMoyenMutationOptions(options));
+};
+
+/**
+ * @summary Initiate an execution request for a moyen (direction only)
+ */
+export const getDemanderMoyenUrl = (id: number, moyenId: number) => {
+  return `/api/plans/${id}/moyens/${moyenId}/demander`;
+};
+
+export const demanderMoyen = async (
+  id: number,
+  moyenId: number,
+  demanderMoyenRequest: DemanderMoyenRequest,
+  options?: RequestInit,
+): Promise<Moyen> => {
+  return customFetch<Moyen>(getDemanderMoyenUrl(id, moyenId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(demanderMoyenRequest),
+  });
+};
+
+export const getDemanderMoyenMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof demanderMoyen>>,
+    TError,
+    { id: number; moyenId: number; data: BodyType<DemanderMoyenRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof demanderMoyen>>,
+  TError,
+  { id: number; moyenId: number; data: BodyType<DemanderMoyenRequest> },
+  TContext
+> => {
+  const mutationKey = ["demanderMoyen"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof demanderMoyen>>,
+    { id: number; moyenId: number; data: BodyType<DemanderMoyenRequest> }
+  > = (props) => {
+    const { id, moyenId, data } = props ?? {};
+
+    return demanderMoyen(id, moyenId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DemanderMoyenMutationResult = NonNullable<
+  Awaited<ReturnType<typeof demanderMoyen>>
+>;
+export type DemanderMoyenMutationBody = BodyType<DemanderMoyenRequest>;
+export type DemanderMoyenMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Initiate an execution request for a moyen (direction only)
+ */
+export const useDemanderMoyen = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof demanderMoyen>>,
+    TError,
+    { id: number; moyenId: number; data: BodyType<DemanderMoyenRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof demanderMoyen>>,
+  TError,
+  { id: number; moyenId: number; data: BodyType<DemanderMoyenRequest> },
+  TContext
+> => {
+  return useMutation(getDemanderMoyenMutationOptions(options));
 };
 
 /**

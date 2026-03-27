@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable } from "@workspace/db/schema";
-import { eq, and, SQL, sql } from "drizzle-orm";
+import { eq, and, SQL, sql, inArray } from "drizzle-orm";
 import {
   CreatePlanBody,
   UpdatePlanBody,
@@ -11,8 +11,39 @@ import {
   ConsommerMoyenBody,
   CloturerPlanBody,
 } from "@workspace/api-zod";
+import { z } from "zod/v4";
+import {
+  sendMail,
+  mailPlanCreated,
+  mailPlanValidated,
+  mailPlanOpened,
+  mailPlanRejected,
+  mailDemandeExecution,
+  mailConsommationSaisie,
+} from "../mailer";
 
 const router: IRouter = Router();
+
+const CATEGORY_ROLE: Record<string, string> = {
+  carburant: "dmg",
+  materiel: "da",
+  prime: "controle_financier",
+  logement: "direction_financiere",
+  indemnite_journaliere: "direction_financiere",
+  logistique: "direction_financiere",
+};
+
+async function getUserEmailsByRole(roles: string[]): Promise<string[]> {
+  const users = await db.select({ email: usersTable.email })
+    .from(usersTable)
+    .where(inArray(usersTable.role, roles));
+  return users.map(u => u.email);
+}
+
+async function getUserEmailById(userId: number): Promise<string | null> {
+  const rows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, userId));
+  return rows[0]?.email ?? null;
+}
 
 async function generateReference(directionId: number, createdAt: Date): Promise<string> {
   const dir = await db.select({ code: directionsTable.code, id: directionsTable.id })
@@ -26,6 +57,18 @@ async function generateReference(directionId: number, createdAt: Date): Promise<
     .where(sql`reference LIKE ${prefix + "%"}`);
   const seq = (Number(count[0]?.n ?? 0) + 1).toString().padStart(3, "0");
   return `${prefix}${seq}`;
+}
+
+function mapMoyen(m: typeof moyensTable.$inferSelect) {
+  return {
+    ...m,
+    budget: Number(m.budget),
+    quantite: m.quantite ? Number(m.quantite) : null,
+    montantConsomme: Number(m.montantConsomme),
+    demandeStatus: m.demandeStatus ?? null,
+    demandeById: m.demandeById ?? null,
+    demandeAt: m.demandeAt ?? null,
+  };
 }
 
 async function getPlanWithDetails(planId: number) {
@@ -77,12 +120,7 @@ async function getPlanWithDetails(planId: number) {
     ...plan,
     budgetTotal,
     montantConsomme,
-    moyens: moyens.map(m => ({
-      ...m,
-      budget: Number(m.budget),
-      quantite: m.quantite ? Number(m.quantite) : null,
-      montantConsomme: Number(m.montantConsomme),
-    })),
+    moyens: moyens.map(mapMoyen),
     attachments,
   };
 }
@@ -275,6 +313,40 @@ router.post("/plans/:id/validate", async (req, res) => {
 
     await db.update(plansTable).set({ statut: newStatut, commentaireRejet, updatedAt: new Date() }).where(eq(plansTable.id, id));
     const plan = await getPlanWithDetails(id);
+
+    // Send notifications (fire-and-forget)
+    if (plan && newStatut !== current.statut) {
+      setImmediate(async () => {
+        try {
+          if (newStatut === "en_attente_ct") {
+            const emails = await getUserEmailsByRole(["controle_technique"]);
+            const { subject, html } = mailPlanCreated(plan);
+            await sendMail({ to: emails, subject, html });
+          } else if (newStatut === "en_attente_dga") {
+            const emails = await getUserEmailsByRole(["dga"]);
+            const { subject, html } = mailPlanValidated(plan, "dga");
+            await sendMail({ to: emails, subject, html });
+          } else if (newStatut === "en_attente_dg") {
+            const emails = await getUserEmailsByRole(["directeur_general"]);
+            const { subject, html } = mailPlanValidated(plan, "directeur_general");
+            await sendMail({ to: emails, subject, html });
+          } else if (newStatut === "ouvert") {
+            const creatorEmail = plan.createdById ? await getUserEmailById(plan.createdById) : null;
+            if (creatorEmail) {
+              const { subject, html } = mailPlanOpened(plan);
+              await sendMail({ to: [creatorEmail], subject, html });
+            }
+          } else if (newStatut === "rejete") {
+            const creatorEmail = plan.createdById ? await getUserEmailById(plan.createdById) : null;
+            if (creatorEmail) {
+              const { subject, html } = mailPlanRejected(plan);
+              await sendMail({ to: [creatorEmail], subject, html });
+            }
+          }
+        } catch (e) { console.error("[notify]", String(e)); }
+      });
+    }
+
     res.json(plan);
   } catch (err) {
     console.error(String(err));
@@ -311,12 +383,7 @@ router.get("/plans/:id/moyens", async (req, res) => {
   try {
     const planId = Number(req.params.id);
     const moyens = await db.select().from(moyensTable).where(eq(moyensTable.planId, planId));
-    res.json(moyens.map(m => ({
-      ...m,
-      budget: Number(m.budget),
-      quantite: m.quantite ? Number(m.quantite) : null,
-      montantConsomme: Number(m.montantConsomme),
-    })));
+    res.json(moyens.map(mapMoyen));
   } catch (err) {
     console.error(String(err));
     res.status(500).json({ error: "Internal server error" });
@@ -337,12 +404,57 @@ router.post("/plans/:id/moyens", async (req, res) => {
       quantite: body.quantite !== undefined ? String(body.quantite) : null,
       montantConsomme: "0",
     }).returning();
-    res.status(201).json({
-      ...moyen,
-      budget: Number(moyen.budget),
-      quantite: moyen.quantite ? Number(moyen.quantite) : null,
-      montantConsomme: Number(moyen.montantConsomme),
-    });
+    res.status(201).json(mapMoyen(moyen));
+  } catch (err) {
+    console.error(String(err));
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// POST /plans/:id/moyens/:moyenId/demander
+const DemanderBody = z.object({ demandeById: z.number().int() });
+
+router.post("/plans/:id/moyens/:moyenId/demander", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const { demandeById } = DemanderBody.parse(req.body);
+
+    const plan = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+    if (!plan.length) return res.status(404).json({ error: "Plan not found" });
+    if (plan[0].statut !== "ouvert") return res.status(400).json({ error: "Le plan doit être ouvert" });
+
+    const existing = await db.select().from(moyensTable)
+      .where(and(eq(moyensTable.id, moyenId), eq(moyensTable.planId, planId)));
+    if (!existing.length) return res.status(404).json({ error: "Moyen not found" });
+    if (existing[0].demandeStatus === "demandee" || existing[0].demandeStatus === "consommee") {
+      return res.status(400).json({ error: "Une demande a déjà été initiée pour ce moyen" });
+    }
+
+    const [updated] = await db.update(moyensTable)
+      .set({ demandeStatus: "demandee", demandeById, demandeAt: new Date() })
+      .where(eq(moyensTable.id, moyenId))
+      .returning();
+
+    // Notify specialist
+    const moyen = existing[0];
+    const specialistRole = CATEGORY_ROLE[moyen.categorie];
+    if (specialistRole) {
+      const planDetails = await getPlanWithDetails(planId);
+      setImmediate(async () => {
+        try {
+          const emails = await getUserEmailsByRole([specialistRole]);
+          const { subject, html } = mailDemandeExecution({
+            plan: planDetails!,
+            moyen: { description: moyen.description, categorie: moyen.categorie, budget: Number(moyen.budget) },
+            direction: planDetails?.directionNom ?? "",
+          });
+          await sendMail({ to: emails, subject, html });
+        } catch (e) { console.error("[notify]", String(e)); }
+      });
+    }
+
+    res.json(mapMoyen(updated));
   } catch (err) {
     console.error(String(err));
     res.status(400).json({ error: String(err) });
@@ -358,17 +470,33 @@ router.post("/plans/:id/moyens/:moyenId/consommer", async (req, res) => {
     const existing = await db.select().from(moyensTable)
       .where(and(eq(moyensTable.id, moyenId), eq(moyensTable.planId, planId)));
     if (!existing.length) return res.status(404).json({ error: "Moyen not found" });
+
+    const moyen = existing[0];
+    // Enforce that a demand was initiated first
+    if (moyen.demandeStatus !== "demandee") {
+      return res.status(400).json({ error: "Ce moyen n'a pas de demande d'exécution en cours. La direction doit d'abord initier une demande." });
+    }
+
     const [updated] = await db.update(moyensTable)
-      .set({ montantConsomme: String(body.montant) })
+      .set({ montantConsomme: String(body.montant), demandeStatus: "consommee" })
       .where(eq(moyensTable.id, moyenId))
       .returning();
     await db.update(plansTable).set({ updatedAt: new Date() }).where(eq(plansTable.id, planId));
-    res.json({
-      ...updated,
-      budget: Number(updated.budget),
-      quantite: updated.quantite ? Number(updated.quantite) : null,
-      montantConsomme: Number(updated.montantConsomme),
+
+    // Notify CF + DG
+    const planDetails = await getPlanWithDetails(planId);
+    setImmediate(async () => {
+      try {
+        const emails = await getUserEmailsByRole(["controle_financier", "directeur_general"]);
+        const { subject, html } = mailConsommationSaisie({
+          plan: planDetails!,
+          moyen: { description: moyen.description, categorie: moyen.categorie, montant: body.montant, budget: Number(moyen.budget) },
+        });
+        await sendMail({ to: emails, subject, html });
+      } catch (e) { console.error("[notify]", String(e)); }
     });
+
+    res.json(mapMoyen(updated));
   } catch (err) {
     console.error(String(err));
     res.status(400).json({ error: String(err) });
@@ -436,14 +564,10 @@ router.get("/plans/:id/attachments/:attachmentId/download", async (req, res) => 
     if (!rows.length) return res.status(404).json({ error: "Attachment not found" });
     const att = rows[0];
     if (!att.data) return res.status(404).json({ error: "No file data stored" });
-
-    // att.data is a base64 data URL like "data:application/pdf;base64,..."
     const match = att.data.match(/^data:(.+);base64,(.+)$/);
     if (!match) return res.status(400).json({ error: "Invalid file data format" });
-
     const mimeType = match[1];
     const buffer = Buffer.from(match[2], "base64");
-
     res.setHeader("Content-Type", mimeType);
     res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(att.nom)}"`);
     res.setHeader("Content-Length", buffer.length.toString());

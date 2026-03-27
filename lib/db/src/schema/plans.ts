@@ -30,6 +30,9 @@ export const moyensTable = pgTable("moyens", {
   unite: text("unite"),
   quantite: numeric("quantite", { precision: 10, scale: 2 }),
   montantConsomme: numeric("montant_consomme", { precision: 12, scale: 2 }).default("0").notNull(),
+  demandeStatus: text("demande_status"), // null | 'demandee' | 'consommee'
+  demandeById: integer("demande_by_id").references(() => usersTable.id),
+  demandeAt: timestamp("demande_at"),
 });
 
 export const attachmentsTable = pgTable("attachments", {

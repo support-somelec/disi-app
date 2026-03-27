@@ -64,6 +64,14 @@ export const MoyenCategorie = {
   indemnite_journaliere: "indemnite_journaliere",
 } as const;
 
+export type MoyenDemandeStatus =
+  (typeof MoyenDemandeStatus)[keyof typeof MoyenDemandeStatus];
+
+export const MoyenDemandeStatus = {
+  demandee: "demandee",
+  consommee: "consommee",
+} as const;
+
 export interface Moyen {
   id: number;
   planId: number;
@@ -73,6 +81,9 @@ export interface Moyen {
   unite?: string;
   quantite?: number;
   montantConsomme: number;
+  demandeStatus?: MoyenDemandeStatus;
+  demandeById?: number;
+  demandeAt?: string;
 }
 
 export interface Attachment {
@@ -197,6 +208,10 @@ export interface AnalyticsCategorieRow {
 export interface AnalyticsData {
   byDirection: AnalyticsDirectionRow[];
   byCategorie: AnalyticsCategorieRow[];
+}
+
+export interface DemanderMoyenRequest {
+  demandeById: number;
 }
 
 export type CreateUserRequestRole =
