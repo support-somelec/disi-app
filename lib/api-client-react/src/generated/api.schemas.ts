@@ -62,6 +62,7 @@ export const MoyenCategorie = {
   logistique: "logistique",
   prime: "prime",
   indemnite_journaliere: "indemnite_journaliere",
+  autres: "autres",
 } as const;
 
 export type MoyenDemandeStatus =
@@ -84,6 +85,7 @@ export interface Moyen {
   demandeStatus?: MoyenDemandeStatus;
   demandeById?: number;
   demandeAt?: string;
+  autresDirectionId?: number;
 }
 
 export interface Attachment {
@@ -166,6 +168,7 @@ export const CreateMoyenRequestCategorie = {
   logistique: "logistique",
   prime: "prime",
   indemnite_journaliere: "indemnite_journaliere",
+  autres: "autres",
 } as const;
 
 export interface CreateMoyenRequest {
@@ -174,6 +177,7 @@ export interface CreateMoyenRequest {
   budget: number;
   unite?: string;
   quantite?: number;
+  autresDirectionId?: number;
 }
 
 export interface ConsommerMoyenRequest {
@@ -226,6 +230,7 @@ export const CreateUserRequestRole = {
   da: "da",
   controle_financier: "controle_financier",
   direction_financiere: "direction_financiere",
+  rh: "rh",
   admin: "admin",
 } as const;
 
@@ -249,6 +254,7 @@ export const UpdateUserRequestRole = {
   da: "da",
   controle_financier: "controle_financier",
   direction_financiere: "direction_financiere",
+  rh: "rh",
   admin: "admin",
 } as const;
 
@@ -259,8 +265,59 @@ export interface UpdateUserRequest {
   directionId?: number;
 }
 
+export interface Employe {
+  id: number;
+  matricule: string;
+  nni?: string;
+  nom: string;
+  fonction?: string;
+}
+
+export interface CreateEmployeRequest {
+  matricule: string;
+  nni?: string;
+  nom: string;
+  fonction?: string;
+}
+
+export interface UpdateEmployeRequest {
+  matricule?: string;
+  nni?: string;
+  nom?: string;
+  fonction?: string;
+}
+
+export interface IndemniteBeneficiaire {
+  id: number;
+  moyenId: number;
+  employeId?: number;
+  nom: string;
+  matricule?: string;
+  nni?: string;
+  montant: number;
+}
+
+export type SetBeneficiairesRequestBeneficiairesItem = {
+  employeId?: number;
+  nom: string;
+  matricule?: string;
+  nni?: string;
+  montant: number;
+};
+
+export interface SetBeneficiairesRequest {
+  beneficiaires: SetBeneficiairesRequestBeneficiairesItem[];
+}
+
 export type GetPlansParams = {
   status?: string;
   directionId?: number;
   createdById?: number;
+};
+
+export type GetEmployesParams = {
+  /**
+   * Search by matricule, NNI or name
+   */
+  q?: string;
 };

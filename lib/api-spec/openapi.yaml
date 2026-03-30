@@ -11,6 +11,7 @@ tags:
   - name: plans
   - name: users
   - name: attachments
+  - name: employes
 
 paths:
   /healthz:
@@ -454,6 +455,155 @@ paths:
                 items:
                   $ref: "#/components/schemas/Direction"
 
+  /employes:
+    get:
+      operationId: getEmployes
+      tags: [employes]
+      summary: Search employees
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search by matricule, NNI or name
+      responses:
+        "200":
+          description: List of employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Employe"
+    post:
+      operationId: createEmploye
+      tags: [employes]
+      summary: Create an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEmployeRequest"
+      responses:
+        "201":
+          description: Employee created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employe"
+
+  /employes/{id}:
+    get:
+      operationId: getEmploye
+      tags: [employes]
+      summary: Get employee by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employe"
+    put:
+      operationId: updateEmploye
+      tags: [employes]
+      summary: Update employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEmployeRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employe"
+    delete:
+      operationId: deleteEmploye
+      tags: [employes]
+      summary: Delete employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /plans/{id}/moyens/{moyenId}/beneficiaires:
+    get:
+      operationId: getBeneficiaires
+      tags: [plans]
+      summary: Get beneficiaries for an indemnite moyen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: moyenId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of beneficiaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IndemniteBeneficiaire"
+    post:
+      operationId: setBeneficiaires
+      tags: [plans]
+      summary: Set (replace) beneficiaries for an indemnite moyen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: moyenId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetBeneficiairesRequest"
+      responses:
+        "200":
+          description: Beneficiaries set
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IndemniteBeneficiaire"
+
 components:
   schemas:
     HealthStatus:
@@ -557,7 +707,7 @@ components:
           type: integer
         categorie:
           type: string
-          enum: [materiel, carburant, logement, logistique, prime, indemnite_journaliere]
+          enum: [materiel, carburant, logement, logistique, prime, indemnite_journaliere, autres]
         description:
           type: string
         budget:
@@ -576,6 +726,8 @@ components:
         demandeAt:
           type: string
           format: date-time
+        autresDirectionId:
+          type: integer
       required: [id, planId, categorie, description, budget, montantConsomme]
 
     Attachment:
@@ -659,7 +811,7 @@ components:
       properties:
         categorie:
           type: string
-          enum: [materiel, carburant, logement, logistique, prime, indemnite_journaliere]
+          enum: [materiel, carburant, logement, logistique, prime, indemnite_journaliere, autres]
         description:
           type: string
         budget:
@@ -668,6 +820,8 @@ components:
           type: string
         quantite:
           type: number
+        autresDirectionId:
+          type: integer
       required: [categorie, description, budget]
 
     ConsommerMoyenRequest:
@@ -755,7 +909,7 @@ components:
           type: string
         role:
           type: string
-          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, admin]
+          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, rh, admin]
         directionId:
           type: integer
       required: [nom, prenom, email, role]
@@ -769,6 +923,86 @@ components:
           type: string
         role:
           type: string
-          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, admin]
+          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, rh, admin]
         directionId:
           type: integer
+
+    Employe:
+      type: object
+      properties:
+        id:
+          type: integer
+        matricule:
+          type: string
+        nni:
+          type: string
+        nom:
+          type: string
+        fonction:
+          type: string
+      required: [id, matricule, nom]
+
+    CreateEmployeRequest:
+      type: object
+      properties:
+        matricule:
+          type: string
+        nni:
+          type: string
+        nom:
+          type: string
+        fonction:
+          type: string
+      required: [matricule, nom]
+
+    UpdateEmployeRequest:
+      type: object
+      properties:
+        matricule:
+          type: string
+        nni:
+          type: string
+        nom:
+          type: string
+        fonction:
+          type: string
+
+    IndemniteBeneficiaire:
+      type: object
+      properties:
+        id:
+          type: integer
+        moyenId:
+          type: integer
+        employeId:
+          type: integer
+        nom:
+          type: string
+        matricule:
+          type: string
+        nni:
+          type: string
+        montant:
+          type: number
+      required: [id, moyenId, nom, montant]
+
+    SetBeneficiairesRequest:
+      type: object
+      properties:
+        beneficiaires:
+          type: array
+          items:
+            type: object
+            properties:
+              employeId:
+                type: integer
+              nom:
+                type: string
+              matricule:
+                type: string
+              nni:
+                type: string
+              montant:
+                type: number
+            required: [nom, montant]
+      required: [beneficiaires]

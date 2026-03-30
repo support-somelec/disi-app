@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { directionsTable, usersTable } from "@workspace/db/schema";
+import { directionsTable, usersTable, employesTable } from "@workspace/db/schema";
 import { sql, eq } from "drizzle-orm";
 
 const DIRECTIONS = [
@@ -27,6 +27,15 @@ const USERS = [
   { nom: "", prenom: "DA",  email: "da@somelec.mr",  role: "da",                 directionIdx: null },
   { nom: "", prenom: "CF",  email: "cf@somelec.mr",  role: "controle_financier", directionIdx: null },
   { nom: "", prenom: "DF",  email: "df@somelec.mr",  role: "direction_financiere", directionIdx: 3 },
+  { nom: "", prenom: "RH",  email: "rh@somelec.mr",  role: "rh", directionIdx: 4 },
+];
+
+const EMPLOYES_INIT = [
+  { matricule: "EMP001", nni: "1234567890", nom: "Ould Abdelaziz Mohamed", fonction: "Ingénieur Réseau" },
+  { matricule: "EMP002", nni: "0987654321", nom: "Diallo Fatoumata", fonction: "Technicien Électrique" },
+  { matricule: "EMP003", nni: "1122334455", nom: "Ba Ibrahima", fonction: "Agent Commercial" },
+  { matricule: "EMP004", nni: "5566778899", nom: "Ould Baba Ahmed", fonction: "Comptable" },
+  { matricule: "EMP005", nni: "9988776655", nom: "Mint Saleh Mariem", fonction: "Secrétaire de Direction" },
 ];
 
 export async function ensureAdminUser() {
@@ -61,6 +70,9 @@ export async function seedIfEmpty() {
 
     const insertedUsers = await db.insert(usersTable).values(userValues).onConflictDoNothing().returning();
     console.log(`[seed] Inserted ${insertedUsers.length} users.`);
+
+    await db.insert(employesTable).values(EMPLOYES_INIT).onConflictDoNothing();
+    console.log(`[seed] Inserted ${EMPLOYES_INIT.length} employees.`);
   } catch (err) {
     console.error("[seed] Error during seeding:", String(err));
   }

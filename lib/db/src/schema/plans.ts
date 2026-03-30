@@ -30,9 +30,10 @@ export const moyensTable = pgTable("moyens", {
   unite: text("unite"),
   quantite: numeric("quantite", { precision: 10, scale: 2 }),
   montantConsomme: numeric("montant_consomme", { precision: 12, scale: 2 }).default("0").notNull(),
-  demandeStatus: text("demande_status"), // null | 'demandee' | 'consommee'
+  demandeStatus: text("demande_status"),
   demandeById: integer("demande_by_id").references(() => usersTable.id),
   demandeAt: timestamp("demande_at"),
+  autresDirectionId: integer("autres_direction_id").references(() => directionsTable.id),
 });
 
 export const attachmentsTable = pgTable("attachments", {
@@ -46,6 +47,24 @@ export const attachmentsTable = pgTable("attachments", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const employesTable = pgTable("employes", {
+  id: serial("id").primaryKey(),
+  matricule: varchar("matricule", { length: 30 }).notNull().unique(),
+  nni: varchar("nni", { length: 20 }).unique(),
+  nom: varchar("nom", { length: 100 }).notNull(),
+  fonction: varchar("fonction", { length: 100 }),
+});
+
+export const beneficiairesMoyenTable = pgTable("beneficiaires_moyen", {
+  id: serial("id").primaryKey(),
+  moyenId: integer("moyen_id").notNull().references(() => moyensTable.id, { onDelete: "cascade" }),
+  employeId: integer("employe_id").references(() => employesTable.id, { onDelete: "set null" }),
+  nom: varchar("nom", { length: 100 }).notNull(),
+  matricule: varchar("matricule", { length: 30 }),
+  nni: varchar("nni", { length: 20 }),
+  montant: numeric("montant", { precision: 12, scale: 2 }).notNull(),
+});
+
 export const insertPlanSchema = createInsertSchema(plansTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPlan = z.infer<typeof insertPlanSchema>;
 export type Plan = typeof plansTable.$inferSelect;
@@ -57,3 +76,11 @@ export type Moyen = typeof moyensTable.$inferSelect;
 export const insertAttachmentSchema = createInsertSchema(attachmentsTable).omit({ id: true, createdAt: true });
 export type InsertAttachment = z.infer<typeof insertAttachmentSchema>;
 export type Attachment = typeof attachmentsTable.$inferSelect;
+
+export const insertEmployeSchema = createInsertSchema(employesTable).omit({ id: true });
+export type InsertEmploye = z.infer<typeof insertEmployeSchema>;
+export type Employe = typeof employesTable.$inferSelect;
+
+export const insertBeneficiaireSchema = createInsertSchema(beneficiairesMoyenTable).omit({ id: true });
+export type InsertBeneficiaire = z.infer<typeof insertBeneficiaireSchema>;
+export type BeneficiaireMoyen = typeof beneficiairesMoyenTable.$inferSelect;

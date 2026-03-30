@@ -27,3 +27,12 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+SMTP_HOST = "mail2.somelec.mr"
+SMTP_PORT = "587"
+SMTP_USER = "mission@somelec.mr"
+SMTP_PASS = "disi2022"
+EMAIL_FROM = "SOMELEC Plans d'Action <mission@somelec.mr>"

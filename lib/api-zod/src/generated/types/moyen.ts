@@ -20,4 +20,5 @@ export interface Moyen {
   demandeStatus?: MoyenDemandeStatus;
   demandeById?: number;
   demandeAt?: Date;
+  autresDirectionId?: number;
 }

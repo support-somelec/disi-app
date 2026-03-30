@@ -16,4 +16,5 @@ export const MoyenCategorie = {
   logistique: "logistique",
   prime: "prime",
   indemnite_journaliere: "indemnite_journaliere",
+  autres: "autres",
 } as const;

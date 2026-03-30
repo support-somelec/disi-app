@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable } from "@workspace/db/schema";
+import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable } from "@workspace/db/schema";
 import { eq, and, SQL, sql, inArray } from "drizzle-orm";
 import {
   CreatePlanBody,
@@ -19,6 +19,7 @@ import {
   mailPlanOpened,
   mailPlanRejected,
   mailDemandeExecution,
+  mailDemandeExecutionRH,
   mailConsommationSaisie,
 } from "../mailer";
 
@@ -31,6 +32,7 @@ const CATEGORY_ROLE: Record<string, string> = {
   logement: "direction_financiere",
   indemnite_journaliere: "direction_financiere",
   logistique: "direction_financiere",
+  autres: "direction_financiere",
 };
 
 async function getUserEmailsByRole(roles: string[]): Promise<string[]> {
@@ -403,6 +405,7 @@ router.post("/plans/:id/moyens", async (req, res) => {
       unite: body.unite,
       quantite: body.quantite !== undefined ? String(body.quantite) : null,
       montantConsomme: "0",
+      autresDirectionId: body.autresDirectionId ?? null,
     }).returning();
     res.status(201).json(mapMoyen(moyen));
   } catch (err) {
@@ -442,10 +445,11 @@ router.post("/plans/:id/moyens/:moyenId/demander", async (req, res) => {
     // Notify specialist
     const moyen = existing[0];
     const specialistRole = CATEGORY_ROLE[moyen.categorie];
-    if (specialistRole) {
-      const planDetails = await getPlanWithDetails(planId);
-      setImmediate(async () => {
-        try {
+    const planDetails = await getPlanWithDetails(planId);
+    setImmediate(async () => {
+      try {
+        // Notify specialist (direction financière or other role)
+        if (specialistRole) {
           const emails = await getUserEmailsByRole([specialistRole]);
           const { subject, html } = mailDemandeExecution({
             plan: planDetails!,
@@ -453,9 +457,29 @@ router.post("/plans/:id/moyens/:moyenId/demander", async (req, res) => {
             direction: planDetails?.directionNom ?? "",
           });
           await sendMail({ to: emails, subject, html });
-        } catch (e) { console.error("[notify]", String(e)); }
-      });
-    }
+        }
+        // For indemnite_journaliere — also notify RH with beneficiaire list
+        if (moyen.categorie === "indemnite_journaliere") {
+          const beneficiaires = await db.select().from(beneficiairesMoyenTable)
+            .where(eq(beneficiairesMoyenTable.moyenId, moyenId));
+          if (beneficiaires.length > 0) {
+            const rhEmails = await getUserEmailsByRole(["rh"]);
+            const { subject, html } = mailDemandeExecutionRH({
+              plan: planDetails!,
+              moyen: { description: moyen.description, budget: Number(moyen.budget) },
+              direction: planDetails?.directionNom ?? "",
+              beneficiaires: beneficiaires.map(b => ({
+                nom: b.nom,
+                matricule: b.matricule,
+                nni: b.nni,
+                montant: Number(b.montant),
+              })),
+            });
+            await sendMail({ to: rhEmails, subject, html });
+          }
+        }
+      } catch (e) { console.error("[notify]", String(e)); }
+    });
 
     res.json(mapMoyen(updated));
   } catch (err) {
@@ -599,6 +623,57 @@ router.delete("/plans/:id/attachments/:attachmentId", async (req, res) => {
   } catch (err) {
     console.error(String(err));
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /plans/:id/moyens/:moyenId/beneficiaires
+router.get("/plans/:id/moyens/:moyenId/beneficiaires", async (req, res) => {
+  try {
+    const moyenId = Number(req.params.moyenId);
+    const rows = await db.select().from(beneficiairesMoyenTable)
+      .where(eq(beneficiairesMoyenTable.moyenId, moyenId));
+    res.json(rows.map(b => ({ ...b, montant: Number(b.montant) })));
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /plans/:id/moyens/:moyenId/beneficiaires (replace all)
+const BeneficiairesBody = z.object({
+  beneficiaires: z.array(z.object({
+    employeId: z.number().int().optional(),
+    nom: z.string().min(1),
+    matricule: z.string().optional(),
+    nni: z.string().optional(),
+    montant: z.number().positive(),
+  })),
+});
+
+router.post("/plans/:id/moyens/:moyenId/beneficiaires", async (req, res) => {
+  try {
+    const moyenId = Number(req.params.moyenId);
+    const { beneficiaires } = BeneficiairesBody.parse(req.body);
+
+    await db.delete(beneficiairesMoyenTable).where(eq(beneficiairesMoyenTable.moyenId, moyenId));
+
+    if (beneficiaires.length > 0) {
+      await db.insert(beneficiairesMoyenTable).values(
+        beneficiaires.map(b => ({
+          moyenId,
+          employeId: b.employeId ?? null,
+          nom: b.nom,
+          matricule: b.matricule ?? null,
+          nni: b.nni ?? null,
+          montant: String(b.montant),
+        }))
+      );
+    }
+
+    const rows = await db.select().from(beneficiairesMoyenTable)
+      .where(eq(beneficiairesMoyenTable.moyenId, moyenId));
+    res.json(rows.map(b => ({ ...b, montant: Number(b.montant) })));
+  } catch (err) {
+    res.status(400).json({ error: String(err) });
   }
 });
 

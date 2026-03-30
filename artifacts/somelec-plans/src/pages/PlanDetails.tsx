@@ -3,7 +3,8 @@ import { useRoute, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetPlan, useGetPlanMoyens, useGetPlanAttachments,
-  useValidatePlan, useConsommerMoyen, useCloturerPlan, useAddAttachment, useDemanderMoyen
+  useValidatePlan, useConsommerMoyen, useCloturerPlan, useAddAttachment, useDemanderMoyen,
+  useGetDirections
 } from "@workspace/api-client-react";
 import type { Moyen } from "@workspace/api-client-react";
 import { useAuth, CATEGORY_ROLE, ROLE_LABELS } from "@/lib/auth-context";
@@ -31,6 +32,7 @@ const CATEGORIE_LABELS: Record<string, { label: string; icon: React.ElementType;
   logistique:           { label: "Logistique",           icon: Activity,       color: "text-teal-600 bg-teal-50" },
   prime:                { label: "Prime",                icon: DollarSign,     color: "text-green-600 bg-green-50" },
   indemnite_journaliere:{ label: "Indemnité journalière",icon: BadgeDollarSign,color: "text-amber-600 bg-amber-50" },
+  autres:               { label: "Autres",               icon: Activity,       color: "text-gray-600 bg-gray-100" },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "secondary"|"warning"|"info"|"success"|"destructive"|"default" }> = {
@@ -92,6 +94,24 @@ export default function PlanDetails() {
   const [demandingMoyen, setDemandingMoyen] = useState<number | null>(null);
   const [demandConfirm, setDemandConfirm] = useState<Moyen | null>(null);
   const [dechargeFiles, setDechargeFiles] = useState<Record<number, { file: File; base64: string } | null>>({});
+  const [beneficiairesMap, setBeneficiairesMap] = useState<Record<number, { id: number; nom: string; matricule: string | null; nni: string | null; montant: number }[]>>({});
+  const [expandedBenef, setExpandedBenef] = useState<Record<number, boolean>>({});
+  const { data: directions = [] } = useGetDirections();
+
+  const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
+
+  const toggleBeneficiaires = async (moyenId: number) => {
+    if (expandedBenef[moyenId]) {
+      setExpandedBenef(prev => ({ ...prev, [moyenId]: false }));
+      return;
+    }
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/beneficiaires`);
+      const data = await res.json();
+      setBeneficiairesMap(prev => ({ ...prev, [moyenId]: data }));
+    } catch { /* ignore */ }
+    setExpandedBenef(prev => ({ ...prev, [moyenId]: true }));
+  };
 
   // Closure state
   const [rapportCloture, setRapportCloture] = useState("");
@@ -366,7 +386,49 @@ export default function PlanDetails() {
                             <Icon className="w-3.5 h-3.5" /> {cat.label}
                           </span>
                         </td>
-                        <td className="px-5 py-4 text-muted-foreground">{m.description}</td>
+                        <td className="px-5 py-4">
+                          <div className="text-muted-foreground">{m.description}</div>
+                          {m.categorie === "autres" && (m as any).autresDirectionId && (
+                            <div className="text-xs text-blue-600 mt-0.5">
+                              Direction : {directions.find(d => d.id === (m as any).autresDirectionId)?.nom ?? `ID ${(m as any).autresDirectionId}`}
+                            </div>
+                          )}
+                          {m.categorie === "indemnite_journaliere" && (
+                            <button
+                              className="text-xs text-primary underline mt-0.5 hover:text-primary/70 transition-colors"
+                              onClick={() => toggleBeneficiaires(m.id)}
+                            >
+                              {expandedBenef[m.id] ? "Masquer" : "Voir"} bénéficiaires
+                              {beneficiairesMap[m.id] ? ` (${beneficiairesMap[m.id].length})` : ""}
+                            </button>
+                          )}
+                          {m.categorie === "indemnite_journaliere" && expandedBenef[m.id] && beneficiairesMap[m.id] && (
+                            <div className="mt-2 border rounded-lg overflow-hidden">
+                              <table className="w-full text-xs">
+                                <thead className="bg-muted/40">
+                                  <tr>
+                                    <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">NOM</th>
+                                    <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">MATRIC.</th>
+                                    <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">NNI</th>
+                                    <th className="px-2 py-1.5 text-right font-semibold text-muted-foreground">MONTANT</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                  {beneficiairesMap[m.id].length === 0 ? (
+                                    <tr><td colSpan={4} className="px-2 py-2 text-center text-muted-foreground">Aucun bénéficiaire.</td></tr>
+                                  ) : beneficiairesMap[m.id].map((b, bi) => (
+                                    <tr key={bi} className="bg-white">
+                                      <td className="px-2 py-1.5 font-medium">{b.nom}</td>
+                                      <td className="px-2 py-1.5 text-muted-foreground">{b.matricule ?? "—"}</td>
+                                      <td className="px-2 py-1.5 text-muted-foreground">{b.nni ?? "—"}</td>
+                                      <td className="px-2 py-1.5 text-right font-semibold text-primary">{b.montant.toLocaleString("fr-MR")} MRU</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </td>
                         <td className="px-5 py-4 text-muted-foreground">{m.quantite ? `${m.quantite} ${m.unite ?? ""}` : "-"}</td>
                         <td className="px-5 py-4 text-right font-semibold text-primary">{formatCurrency(Number(m.budget))}</td>
                         <td className="px-5 py-4 text-right">

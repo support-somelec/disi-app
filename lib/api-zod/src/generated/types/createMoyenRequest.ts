@@ -13,4 +13,5 @@ export interface CreateMoyenRequest {
   budget: number;
   unite?: string;
   quantite?: number;
+  autresDirectionId?: number;
 }

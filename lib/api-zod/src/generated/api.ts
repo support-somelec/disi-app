@@ -54,6 +54,7 @@ export const CreateUserBody = zod.object({
     "da",
     "controle_financier",
     "direction_financiere",
+    "rh",
     "admin",
   ]),
   directionId: zod.number().optional(),
@@ -79,6 +80,7 @@ export const UpdateUserBody = zod.object({
       "da",
       "controle_financier",
       "direction_financiere",
+      "rh",
       "admin",
     ])
     .optional(),
@@ -161,6 +163,7 @@ export const GetPlansResponseItem = zod.object({
           "logistique",
           "prime",
           "indemnite_journaliere",
+          "autres",
         ]),
         description: zod.string(),
         budget: zod.number(),
@@ -170,6 +173,7 @@ export const GetPlansResponseItem = zod.object({
         demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
         demandeById: zod.number().optional(),
         demandeAt: zod.date().optional(),
+        autresDirectionId: zod.number().optional(),
       }),
     )
     .optional(),
@@ -273,6 +277,7 @@ export const GetPlanResponse = zod.object({
           "logistique",
           "prime",
           "indemnite_journaliere",
+          "autres",
         ]),
         description: zod.string(),
         budget: zod.number(),
@@ -282,6 +287,7 @@ export const GetPlanResponse = zod.object({
         demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
         demandeById: zod.number().optional(),
         demandeAt: zod.date().optional(),
+        autresDirectionId: zod.number().optional(),
       }),
     )
     .optional(),
@@ -356,6 +362,7 @@ export const UpdatePlanResponse = zod.object({
           "logistique",
           "prime",
           "indemnite_journaliere",
+          "autres",
         ]),
         description: zod.string(),
         budget: zod.number(),
@@ -365,6 +372,7 @@ export const UpdatePlanResponse = zod.object({
         demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
         demandeById: zod.number().optional(),
         demandeAt: zod.date().optional(),
+        autresDirectionId: zod.number().optional(),
       }),
     )
     .optional(),
@@ -437,6 +445,7 @@ export const ValidatePlanResponse = zod.object({
           "logistique",
           "prime",
           "indemnite_journaliere",
+          "autres",
         ]),
         description: zod.string(),
         budget: zod.number(),
@@ -446,6 +455,7 @@ export const ValidatePlanResponse = zod.object({
         demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
         demandeById: zod.number().optional(),
         demandeAt: zod.date().optional(),
+        autresDirectionId: zod.number().optional(),
       }),
     )
     .optional(),
@@ -517,6 +527,7 @@ export const CloturerPlanResponse = zod.object({
           "logistique",
           "prime",
           "indemnite_journaliere",
+          "autres",
         ]),
         description: zod.string(),
         budget: zod.number(),
@@ -526,6 +537,7 @@ export const CloturerPlanResponse = zod.object({
         demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
         demandeById: zod.number().optional(),
         demandeAt: zod.date().optional(),
+        autresDirectionId: zod.number().optional(),
       }),
     )
     .optional(),
@@ -562,6 +574,7 @@ export const GetPlanMoyensResponseItem = zod.object({
     "logistique",
     "prime",
     "indemnite_journaliere",
+    "autres",
   ]),
   description: zod.string(),
   budget: zod.number(),
@@ -571,6 +584,7 @@ export const GetPlanMoyensResponseItem = zod.object({
   demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
   demandeById: zod.number().optional(),
   demandeAt: zod.date().optional(),
+  autresDirectionId: zod.number().optional(),
 });
 export const GetPlanMoyensResponse = zod.array(GetPlanMoyensResponseItem);
 
@@ -589,11 +603,13 @@ export const AddMoyenBody = zod.object({
     "logistique",
     "prime",
     "indemnite_journaliere",
+    "autres",
   ]),
   description: zod.string(),
   budget: zod.number(),
   unite: zod.string().optional(),
   quantite: zod.number().optional(),
+  autresDirectionId: zod.number().optional(),
 });
 
 /**
@@ -626,6 +642,7 @@ export const DemanderMoyenResponse = zod.object({
     "logistique",
     "prime",
     "indemnite_journaliere",
+    "autres",
   ]),
   description: zod.string(),
   budget: zod.number(),
@@ -635,6 +652,7 @@ export const DemanderMoyenResponse = zod.object({
   demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
   demandeById: zod.number().optional(),
   demandeAt: zod.date().optional(),
+  autresDirectionId: zod.number().optional(),
 });
 
 /**
@@ -660,6 +678,7 @@ export const ConsommerMoyenResponse = zod.object({
     "logistique",
     "prime",
     "indemnite_journaliere",
+    "autres",
   ]),
   description: zod.string(),
   budget: zod.number(),
@@ -669,6 +688,7 @@ export const ConsommerMoyenResponse = zod.object({
   demandeStatus: zod.enum(["demandee", "consommee"]).optional(),
   demandeById: zod.number().optional(),
   demandeAt: zod.date().optional(),
+  autresDirectionId: zod.number().optional(),
 });
 
 /**
@@ -724,3 +744,126 @@ export const GetDirectionsResponseItem = zod.object({
   code: zod.string(),
 });
 export const GetDirectionsResponse = zod.array(GetDirectionsResponseItem);
+
+/**
+ * @summary Search employees
+ */
+export const GetEmployesQueryParams = zod.object({
+  q: zod.coerce
+    .string()
+    .optional()
+    .describe("Search by matricule, NNI or name"),
+});
+
+export const GetEmployesResponseItem = zod.object({
+  id: zod.number(),
+  matricule: zod.string(),
+  nni: zod.string().optional(),
+  nom: zod.string(),
+  fonction: zod.string().optional(),
+});
+export const GetEmployesResponse = zod.array(GetEmployesResponseItem);
+
+/**
+ * @summary Create an employee
+ */
+export const CreateEmployeBody = zod.object({
+  matricule: zod.string(),
+  nni: zod.string().optional(),
+  nom: zod.string(),
+  fonction: zod.string().optional(),
+});
+
+/**
+ * @summary Get employee by ID
+ */
+export const GetEmployeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetEmployeResponse = zod.object({
+  id: zod.number(),
+  matricule: zod.string(),
+  nni: zod.string().optional(),
+  nom: zod.string(),
+  fonction: zod.string().optional(),
+});
+
+/**
+ * @summary Update employee
+ */
+export const UpdateEmployeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateEmployeBody = zod.object({
+  matricule: zod.string().optional(),
+  nni: zod.string().optional(),
+  nom: zod.string().optional(),
+  fonction: zod.string().optional(),
+});
+
+export const UpdateEmployeResponse = zod.object({
+  id: zod.number(),
+  matricule: zod.string(),
+  nni: zod.string().optional(),
+  nom: zod.string(),
+  fonction: zod.string().optional(),
+});
+
+/**
+ * @summary Delete employee
+ */
+export const DeleteEmployeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Get beneficiaries for an indemnite moyen
+ */
+export const GetBeneficiairesParams = zod.object({
+  id: zod.coerce.number(),
+  moyenId: zod.coerce.number(),
+});
+
+export const GetBeneficiairesResponseItem = zod.object({
+  id: zod.number(),
+  moyenId: zod.number(),
+  employeId: zod.number().optional(),
+  nom: zod.string(),
+  matricule: zod.string().optional(),
+  nni: zod.string().optional(),
+  montant: zod.number(),
+});
+export const GetBeneficiairesResponse = zod.array(GetBeneficiairesResponseItem);
+
+/**
+ * @summary Set (replace) beneficiaries for an indemnite moyen
+ */
+export const SetBeneficiairesParams = zod.object({
+  id: zod.coerce.number(),
+  moyenId: zod.coerce.number(),
+});
+
+export const SetBeneficiairesBody = zod.object({
+  beneficiaires: zod.array(
+    zod.object({
+      employeId: zod.number().optional(),
+      nom: zod.string(),
+      matricule: zod.string().optional(),
+      nni: zod.string().optional(),
+      montant: zod.number(),
+    }),
+  ),
+});
+
+export const SetBeneficiairesResponseItem = zod.object({
+  id: zod.number(),
+  moyenId: zod.number(),
+  employeId: zod.number().optional(),
+  nom: zod.string(),
+  matricule: zod.string().optional(),
+  nni: zod.string().optional(),
+  montant: zod.number(),
+});
+export const SetBeneficiairesResponse = zod.array(SetBeneficiairesResponseItem);

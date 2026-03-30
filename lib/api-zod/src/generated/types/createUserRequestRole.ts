@@ -18,5 +18,6 @@ export const CreateUserRequestRole = {
   da: "da",
   controle_financier: "controle_financier",
   direction_financiere: "direction_financiere",
+  rh: "rh",
   admin: "admin",
 } as const;
