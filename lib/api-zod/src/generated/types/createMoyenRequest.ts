@@ -14,4 +14,5 @@ export interface CreateMoyenRequest {
   unite?: string;
   quantite?: number;
   autresDirectionId?: number;
+  listeMaterielJson?: string;
 }

@@ -26,6 +26,13 @@ type Beneficiaire = {
   employeId?: number;
 };
 
+type ListeMaterielRow = {
+  item: string;
+  quantite: number;
+  prixUnitaire: number;
+  prixTotal: number;
+};
+
 type EmployeResult = {
   id: number;
   matricule: string;
@@ -67,7 +74,7 @@ export default function CreatePlan() {
     autresDirectionId: "",
   });
 
-  // Beneficiaires state (for indemnite_journaliere)
+  // Beneficiaires state (for indemnite_journaliere and prime)
   const [currentBeneficiaires, setCurrentBeneficiaires] = useState<Beneficiaire[]>([]);
   const [newBenef, setNewBenef] = useState({ nom: "", matricule: "", nni: "", montant: "" });
   const [employeeSearch, setEmployeeSearch] = useState("");
@@ -76,6 +83,47 @@ export default function CreatePlan() {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Liste matériel state (for materiel/outillage/accessoire)
+  const [listeMaterielRows, setListeMaterielRows] = useState<ListeMaterielRow[]>([]);
+  const [listeMaterielFile, setListeMaterielFile] = useState<{ file: File; base64: string } | null>(null);
+  const materielExcelRef = useRef<HTMLInputElement>(null);
+
+  const isMaterielCat = ["materiel", "outillage", "accessoire"].includes(currentMoyen.categorie);
+
+  const handleMaterielExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const wb = XLSX.read(evt.target?.result, { type: "binary" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" }) as Record<string, unknown>[];
+        const getField = (row: Record<string, unknown>, keys: string[]) => {
+          for (const k of keys) { if (row[k] !== undefined && row[k] !== "") return row[k]; }
+          return "";
+        };
+        const parsed: ListeMaterielRow[] = rows.map(row => ({
+          item: String(getField(row, ["ITEM", "item", "Item", "DÉSIGNATION", "Désignation", "designation"])),
+          quantite: Number(getField(row, ["QUANTITÉ", "Quantité", "QTE", "Qte", "quantite", "QUANTITE", "QTÉ"])) || 0,
+          prixUnitaire: Number(getField(row, ["PRIX UNITAIRE", "Prix Unitaire", "prix_unitaire", "PU", "P.U.", "PRIX_UNITAIRE"])) || 0,
+          prixTotal: Number(getField(row, ["PRIX TOTAL", "Prix Total", "prix_total", "TOTAL", "PT", "PRIX_TOTAL"])) || 0,
+        })).filter(r => r.item);
+        setListeMaterielRows(parsed);
+        // Store base64 for upload
+        const b64reader = new FileReader();
+        b64reader.onload = (ev2) => {
+          if (ev2.target?.result) setListeMaterielFile({ file, base64: ev2.target.result.toString() });
+        };
+        b64reader.readAsDataURL(file);
+      } catch {
+        alert("Erreur lors de la lecture du fichier Excel matériel.");
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = "";
+  };
 
   const searchEmployees = (q: string) => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -202,8 +250,27 @@ export default function CreatePlan() {
           quantite: currentMoyen.quantite ? parseInt(currentMoyen.quantite, 10) : undefined,
           unite: currentMoyen.unite || undefined,
           autresDirectionId: currentMoyen.autresDirectionId ? parseInt(currentMoyen.autresDirectionId, 10) : undefined,
+          listeMaterielJson: isMaterielCat && listeMaterielRows.length > 0 ? JSON.stringify(listeMaterielRows) : undefined,
         }
       });
+
+      // Save liste matériel Excel file as attachment for materiel/outillage/accessoire
+      if (isMaterielCat && listeMaterielFile) {
+        try {
+          await addAttachmentMutation.mutateAsync({
+            id: createdPlan.id,
+            data: {
+              nom: listeMaterielFile.file.name,
+              type: "liste_materiel",
+              taille: listeMaterielFile.file.size,
+              data: listeMaterielFile.base64,
+              moyenId: moyen.id,
+            }
+          });
+        } catch (err) {
+          console.error("Failed to save liste matériel file", err);
+        }
+      }
 
       // Save beneficiaires for indemnite_journaliere and prime
       if ((currentMoyen.categorie === "indemnite_journaliere" || currentMoyen.categorie === "prime") && currentBeneficiaires.length > 0) {
@@ -237,6 +304,8 @@ export default function CreatePlan() {
       setCurrentMoyen({ categorie: "materiel", description: "", budget: "", quantite: "", unite: "", autresDirectionId: "" });
       setCurrentBeneficiaires([]);
       setNewBenef({ nom: "", matricule: "", nni: "", montant: "" });
+      setListeMaterielRows([]);
+      setListeMaterielFile(null);
     } catch (err) {
       console.error("Failed to add moyen", err);
     }
@@ -382,9 +451,13 @@ export default function CreatePlan() {
                         onChange={e => {
                           setCurrentMoyen({ ...currentMoyen, categorie: e.target.value, autresDirectionId: "" });
                           setCurrentBeneficiaires([]);
+                          setListeMaterielRows([]);
+                          setListeMaterielFile(null);
                         }}
                       >
                         <option value="materiel">Matériel</option>
+                        <option value="outillage">Outillage</option>
+                        <option value="accessoire">Accessoire</option>
                         <option value="carburant">Carburant</option>
                         <option value="logement">Logement</option>
                         <option value="logistique">Logistique</option>
@@ -425,6 +498,66 @@ export default function CreatePlan() {
                       </div>
                     )}
                   </div>
+
+                  {/* Matériel / Outillage / Accessoire — Liste Excel */}
+                  {isMaterielCat && (
+                    <div className="mt-4 border-t pt-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-4 h-4 text-primary" />
+                        <h4 className="text-sm font-semibold text-foreground">Liste de matériel (Excel obligatoire)</h4>
+                        {listeMaterielRows.length > 0 && (
+                          <span className="ml-auto text-xs text-green-700 font-medium">{listeMaterielRows.length} article(s) chargé(s)</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Format requis : colonnes <strong>ITEM, QUANTITÉ, PRIX UNITAIRE, PRIX TOTAL</strong>
+                      </p>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => materielExcelRef.current?.click()} className="h-8 text-xs gap-1.5">
+                          <UploadCloud className="w-3.5 h-3.5" />
+                          {listeMaterielRows.length > 0 ? "Remplacer le fichier" : "Importer Excel"}
+                        </Button>
+                        {listeMaterielRows.length > 0 && (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => { setListeMaterielRows([]); setListeMaterielFile(null); }} className="h-8 text-xs text-destructive gap-1">
+                            <X className="w-3.5 h-3.5" /> Effacer
+                          </Button>
+                        )}
+                        <input ref={materielExcelRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleMaterielExcel} />
+                      </div>
+                      {listeMaterielRows.length > 0 && (
+                        <div className="border rounded-lg overflow-hidden">
+                          <table className="w-full text-xs">
+                            <thead className="bg-muted/40">
+                              <tr>
+                                <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">ITEM</th>
+                                <th className="px-2 py-1.5 text-center font-semibold text-muted-foreground">QTÉ</th>
+                                <th className="px-2 py-1.5 text-right font-semibold text-muted-foreground">P.U. (MRU)</th>
+                                <th className="px-2 py-1.5 text-right font-semibold text-muted-foreground">TOTAL (MRU)</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                              {listeMaterielRows.map((r, i) => (
+                                <tr key={i} className="bg-white">
+                                  <td className="px-2 py-1.5 font-medium">{r.item}</td>
+                                  <td className="px-2 py-1.5 text-center text-muted-foreground">{r.quantite}</td>
+                                  <td className="px-2 py-1.5 text-right text-muted-foreground">{r.prixUnitaire.toLocaleString("fr-MR")}</td>
+                                  <td className="px-2 py-1.5 text-right font-semibold text-primary">{r.prixTotal.toLocaleString("fr-MR")}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-muted/20">
+                                <td colSpan={3} className="px-2 py-1.5 font-semibold text-xs text-muted-foreground">TOTAL</td>
+                                <td className="px-2 py-1.5 text-right font-bold text-primary text-xs">
+                                  {listeMaterielRows.reduce((s, r) => s + r.prixTotal, 0).toLocaleString("fr-MR")} MRU
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Indemnité / Prime — Beneficiaires section */}
                   {(currentMoyen.categorie === "indemnite_journaliere" || currentMoyen.categorie === "prime") && (

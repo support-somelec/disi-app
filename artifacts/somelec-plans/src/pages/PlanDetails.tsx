@@ -27,6 +27,8 @@ import { cn } from "@/lib/utils";
 
 const CATEGORIE_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   materiel:             { label: "Matériel",             icon: Package,        color: "text-blue-600 bg-blue-50" },
+  outillage:            { label: "Outillage",            icon: Package,        color: "text-sky-600 bg-sky-50" },
+  accessoire:           { label: "Accessoire",           icon: Package,        color: "text-indigo-600 bg-indigo-50" },
   carburant:            { label: "Carburant",            icon: Fuel,           color: "text-orange-600 bg-orange-50" },
   logement:             { label: "Logement",             icon: Home,           color: "text-purple-600 bg-purple-50" },
   logistique:           { label: "Logistique",           icon: Activity,       color: "text-teal-600 bg-teal-50" },
@@ -382,7 +384,10 @@ export default function PlanDetails() {
                     const Icon = cat.icon;
                     const consomme = Number(m.montantConsomme ?? 0);
                     const over = consomme > Number(m.budget) && Number(m.budget) > 0;
-                    const moyenDecharge = attachments.find(a => a.moyenId === m.id);
+                    const moyenDecharge = attachments.find(a => a.moyenId === m.id && a.type !== "liste_materiel");
+                    const listeMaterielAtt = attachments.find(a => a.moyenId === m.id && a.type === "liste_materiel");
+                    const listeMaterielRows: Array<{ item: string; quantite: number; prixUnitaire: number; prixTotal: number }> =
+                      (m as any).listeMaterielJson ? JSON.parse((m as any).listeMaterielJson) : [];
                     const isDemanderLoading = demandingMoyen === m.id;
                     return (
                       <tr key={m.id} className={cn("hover:bg-muted/10", over ? "bg-destructive/5" : "")}>
@@ -406,6 +411,58 @@ export default function PlanDetails() {
                               {expandedBenef[m.id] ? "Masquer" : "Voir"} bénéficiaires
                               {beneficiairesMap[m.id] ? ` (${beneficiairesMap[m.id].length})` : ""}
                             </button>
+                          )}
+                          {/* Liste matériel for materiel/outillage/accessoire */}
+                          {["materiel","outillage","accessoire"].includes(m.categorie) && listeMaterielRows.length > 0 && (
+                            <div className="mt-2">
+                              <button
+                                className="text-xs text-primary underline hover:text-primary/70 transition-colors"
+                                onClick={() => setExpandedBenef(prev => ({ ...prev, [m.id]: !prev[m.id] }))}
+                              >
+                                {expandedBenef[m.id] ? "Masquer" : "Voir"} liste matériel ({listeMaterielRows.length} articles)
+                              </button>
+                              {listeMaterielAtt && (
+                                <a
+                                  href={`${BASE_URL}api/plans/${plan.id}/attachments/${listeMaterielAtt.id}/download`}
+                                  download={listeMaterielAtt.nom}
+                                  className="ml-3 text-xs text-green-700 underline hover:text-green-500"
+                                >
+                                  ↓ Télécharger Excel
+                                </a>
+                              )}
+                              {expandedBenef[m.id] && (
+                                <div className="mt-2 border rounded-lg overflow-hidden">
+                                  <table className="w-full text-xs">
+                                    <thead className="bg-muted/40">
+                                      <tr>
+                                        <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">ITEM</th>
+                                        <th className="px-2 py-1.5 text-center font-semibold text-muted-foreground">QTÉ</th>
+                                        <th className="px-2 py-1.5 text-right font-semibold text-muted-foreground">P.U.</th>
+                                        <th className="px-2 py-1.5 text-right font-semibold text-muted-foreground">TOTAL</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                      {listeMaterielRows.map((r, ri) => (
+                                        <tr key={ri} className="bg-white">
+                                          <td className="px-2 py-1.5 font-medium">{r.item}</td>
+                                          <td className="px-2 py-1.5 text-center text-muted-foreground">{r.quantite}</td>
+                                          <td className="px-2 py-1.5 text-right text-muted-foreground">{Number(r.prixUnitaire).toLocaleString("fr-MR")}</td>
+                                          <td className="px-2 py-1.5 text-right font-semibold text-primary">{Number(r.prixTotal).toLocaleString("fr-MR")} MRU</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr className="bg-muted/20">
+                                        <td colSpan={3} className="px-2 py-1.5 font-semibold text-xs text-muted-foreground">TOTAL</td>
+                                        <td className="px-2 py-1.5 text-right font-bold text-primary text-xs">
+                                          {listeMaterielRows.reduce((s,r) => s + Number(r.prixTotal), 0).toLocaleString("fr-MR")} MRU
+                                        </td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
                           )}
                           {(m.categorie === "indemnite_journaliere" || m.categorie === "prime") && expandedBenef[m.id] && beneficiairesMap[m.id] && (
                             <div className="mt-2 border rounded-lg overflow-hidden">

@@ -71,6 +71,7 @@ function mapMoyen(m: typeof moyensTable.$inferSelect) {
     demandeStatus: m.demandeStatus ?? null,
     demandeById: m.demandeById ?? null,
     demandeAt: m.demandeAt ?? null,
+    listeMaterielJson: m.listeMaterielJson ?? null,
   };
 }
 

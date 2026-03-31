@@ -11,6 +11,8 @@ export type CreateMoyenRequestCategorie =
 
 export const CreateMoyenRequestCategorie = {
   materiel: "materiel",
+  outillage: "outillage",
+  accessoire: "accessoire",
   carburant: "carburant",
   logement: "logement",
   logistique: "logistique",

@@ -21,4 +21,5 @@ export interface Moyen {
   demandeById?: number;
   demandeAt?: Date;
   autresDirectionId?: number;
+  listeMaterielJson?: string;
 }

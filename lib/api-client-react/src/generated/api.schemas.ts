@@ -57,6 +57,8 @@ export type MoyenCategorie =
 
 export const MoyenCategorie = {
   materiel: "materiel",
+  outillage: "outillage",
+  accessoire: "accessoire",
   carburant: "carburant",
   logement: "logement",
   logistique: "logistique",
@@ -86,6 +88,7 @@ export interface Moyen {
   demandeById?: number;
   demandeAt?: string;
   autresDirectionId?: number;
+  listeMaterielJson?: string;
 }
 
 export interface Attachment {
@@ -163,6 +166,8 @@ export type CreateMoyenRequestCategorie =
 
 export const CreateMoyenRequestCategorie = {
   materiel: "materiel",
+  outillage: "outillage",
+  accessoire: "accessoire",
   carburant: "carburant",
   logement: "logement",
   logistique: "logistique",
@@ -178,6 +183,7 @@ export interface CreateMoyenRequest {
   unite?: string;
   quantite?: number;
   autresDirectionId?: number;
+  listeMaterielJson?: string;
 }
 
 export interface ConsommerMoyenRequest {

@@ -3,6 +3,8 @@ export const ROLES_SEE_ALL = ["directeur_general", "dga", "controle_technique", 
 export const CATEGORY_ROLE: Record<string, string> = {
   carburant: "dmg",
   materiel: "da",
+  outillage: "da",
+  accessoire: "da",
   prime: "controle_financier",
   logement: "direction_financiere",
   indemnite_journaliere: "direction_financiere",

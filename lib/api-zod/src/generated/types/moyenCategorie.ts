@@ -11,6 +11,8 @@ export type MoyenCategorie =
 
 export const MoyenCategorie = {
   materiel: "materiel",
+  outillage: "outillage",
+  accessoire: "accessoire",
   carburant: "carburant",
   logement: "logement",
   logistique: "logistique",

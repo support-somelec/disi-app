@@ -158,6 +158,8 @@ export const GetPlansResponseItem = zod.object({
         planId: zod.number(),
         categorie: zod.enum([
           "materiel",
+          "outillage",
+          "accessoire",
           "carburant",
           "logement",
           "logistique",
@@ -174,6 +176,7 @@ export const GetPlansResponseItem = zod.object({
         demandeById: zod.number().optional(),
         demandeAt: zod.date().optional(),
         autresDirectionId: zod.number().optional(),
+        listeMaterielJson: zod.string().optional(),
       }),
     )
     .optional(),
@@ -272,6 +275,8 @@ export const GetPlanResponse = zod.object({
         planId: zod.number(),
         categorie: zod.enum([
           "materiel",
+          "outillage",
+          "accessoire",
           "carburant",
           "logement",
           "logistique",
@@ -288,6 +293,7 @@ export const GetPlanResponse = zod.object({
         demandeById: zod.number().optional(),
         demandeAt: zod.date().optional(),
         autresDirectionId: zod.number().optional(),
+        listeMaterielJson: zod.string().optional(),
       }),
     )
     .optional(),
@@ -357,6 +363,8 @@ export const UpdatePlanResponse = zod.object({
         planId: zod.number(),
         categorie: zod.enum([
           "materiel",
+          "outillage",
+          "accessoire",
           "carburant",
           "logement",
           "logistique",
@@ -373,6 +381,7 @@ export const UpdatePlanResponse = zod.object({
         demandeById: zod.number().optional(),
         demandeAt: zod.date().optional(),
         autresDirectionId: zod.number().optional(),
+        listeMaterielJson: zod.string().optional(),
       }),
     )
     .optional(),
@@ -440,6 +449,8 @@ export const ValidatePlanResponse = zod.object({
         planId: zod.number(),
         categorie: zod.enum([
           "materiel",
+          "outillage",
+          "accessoire",
           "carburant",
           "logement",
           "logistique",
@@ -456,6 +467,7 @@ export const ValidatePlanResponse = zod.object({
         demandeById: zod.number().optional(),
         demandeAt: zod.date().optional(),
         autresDirectionId: zod.number().optional(),
+        listeMaterielJson: zod.string().optional(),
       }),
     )
     .optional(),
@@ -522,6 +534,8 @@ export const CloturerPlanResponse = zod.object({
         planId: zod.number(),
         categorie: zod.enum([
           "materiel",
+          "outillage",
+          "accessoire",
           "carburant",
           "logement",
           "logistique",
@@ -538,6 +552,7 @@ export const CloturerPlanResponse = zod.object({
         demandeById: zod.number().optional(),
         demandeAt: zod.date().optional(),
         autresDirectionId: zod.number().optional(),
+        listeMaterielJson: zod.string().optional(),
       }),
     )
     .optional(),
@@ -569,6 +584,8 @@ export const GetPlanMoyensResponseItem = zod.object({
   planId: zod.number(),
   categorie: zod.enum([
     "materiel",
+    "outillage",
+    "accessoire",
     "carburant",
     "logement",
     "logistique",
@@ -585,6 +602,7 @@ export const GetPlanMoyensResponseItem = zod.object({
   demandeById: zod.number().optional(),
   demandeAt: zod.date().optional(),
   autresDirectionId: zod.number().optional(),
+  listeMaterielJson: zod.string().optional(),
 });
 export const GetPlanMoyensResponse = zod.array(GetPlanMoyensResponseItem);
 
@@ -598,6 +616,8 @@ export const AddMoyenParams = zod.object({
 export const AddMoyenBody = zod.object({
   categorie: zod.enum([
     "materiel",
+    "outillage",
+    "accessoire",
     "carburant",
     "logement",
     "logistique",
@@ -610,6 +630,7 @@ export const AddMoyenBody = zod.object({
   unite: zod.string().optional(),
   quantite: zod.number().optional(),
   autresDirectionId: zod.number().optional(),
+  listeMaterielJson: zod.string().optional(),
 });
 
 /**
@@ -637,6 +658,8 @@ export const DemanderMoyenResponse = zod.object({
   planId: zod.number(),
   categorie: zod.enum([
     "materiel",
+    "outillage",
+    "accessoire",
     "carburant",
     "logement",
     "logistique",
@@ -653,6 +676,7 @@ export const DemanderMoyenResponse = zod.object({
   demandeById: zod.number().optional(),
   demandeAt: zod.date().optional(),
   autresDirectionId: zod.number().optional(),
+  listeMaterielJson: zod.string().optional(),
 });
 
 /**
@@ -673,6 +697,8 @@ export const ConsommerMoyenResponse = zod.object({
   planId: zod.number(),
   categorie: zod.enum([
     "materiel",
+    "outillage",
+    "accessoire",
     "carburant",
     "logement",
     "logistique",
@@ -689,6 +715,7 @@ export const ConsommerMoyenResponse = zod.object({
   demandeById: zod.number().optional(),
   demandeAt: zod.date().optional(),
   autresDirectionId: zod.number().optional(),
+  listeMaterielJson: zod.string().optional(),
 });
 
 /**
