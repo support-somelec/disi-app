@@ -707,7 +707,7 @@ components:
           type: integer
         categorie:
           type: string
-          enum: [materiel, outillage, accessoire, carburant, logement, logistique, prime, indemnite_journaliere, autres]
+          enum: [materiel, outillage, accessoire, carburant, location, logement, logistique, prime, indemnite_journaliere, autres]
         description:
           type: string
         budget:
@@ -730,6 +730,10 @@ components:
           type: integer
         listeMaterielJson:
           type: string
+        locationVehiculeSimple:
+          type: integer
+        locationEngin:
+          type: integer
       required: [id, planId, categorie, description, budget, montantConsomme]
 
     Attachment:
@@ -813,7 +817,7 @@ components:
       properties:
         categorie:
           type: string
-          enum: [materiel, outillage, accessoire, carburant, logement, logistique, prime, indemnite_journaliere, autres]
+          enum: [materiel, outillage, accessoire, carburant, location, logement, logistique, prime, indemnite_journaliere, autres]
         description:
           type: string
         budget:
@@ -826,6 +830,10 @@ components:
           type: integer
         listeMaterielJson:
           type: string
+        locationVehiculeSimple:
+          type: integer
+        locationEngin:
+          type: integer
       required: [categorie, description, budget]
 
     ConsommerMoyenRequest:

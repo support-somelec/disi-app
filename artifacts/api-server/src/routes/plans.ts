@@ -28,7 +28,10 @@ const router: IRouter = Router();
 
 const CATEGORY_ROLE: Record<string, string> = {
   carburant: "dmg",
+  location: "dmg",
   materiel: "da",
+  outillage: "da",
+  accessoire: "da",
   prime: "controle_financier",
   logement: "direction_financiere",
   indemnite_journaliere: "direction_financiere",
@@ -72,6 +75,8 @@ function mapMoyen(m: typeof moyensTable.$inferSelect) {
     demandeById: m.demandeById ?? null,
     demandeAt: m.demandeAt ?? null,
     listeMaterielJson: m.listeMaterielJson ?? null,
+    locationVehiculeSimple: m.locationVehiculeSimple ?? null,
+    locationEngin: m.locationEngin ?? null,
   };
 }
 
@@ -408,6 +413,9 @@ router.post("/plans/:id/moyens", async (req, res) => {
       quantite: body.quantite !== undefined ? String(body.quantite) : null,
       montantConsomme: "0",
       autresDirectionId: body.autresDirectionId ?? null,
+      listeMaterielJson: (body as any).listeMaterielJson ?? null,
+      locationVehiculeSimple: (body as any).locationVehiculeSimple ?? null,
+      locationEngin: (body as any).locationEngin ?? null,
     }).returning();
     res.status(201).json(mapMoyen(moyen));
   } catch (err) {

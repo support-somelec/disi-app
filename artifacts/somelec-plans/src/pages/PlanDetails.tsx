@@ -16,7 +16,7 @@ import {
   Calendar, Building, Clock, CheckCircle2, FileText, Activity,
   AlertCircle, FileDigit, Download, ShieldCheck, TrendingDown, Fuel,
   Package, Home, DollarSign, BadgeDollarSign, Loader2, ChevronRight,
-  Lock, FilePlus, Trash2, UploadCloud, PlayCircle, Hourglass, CheckCheck, Send, TriangleAlert
+  Lock, FilePlus, Trash2, UploadCloud, PlayCircle, Hourglass, CheckCheck, Send, TriangleAlert, Car
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
@@ -30,6 +30,7 @@ const CATEGORIE_LABELS: Record<string, { label: string; icon: React.ElementType;
   outillage:            { label: "Outillage",            icon: Package,        color: "text-sky-600 bg-sky-50" },
   accessoire:           { label: "Accessoire",           icon: Package,        color: "text-indigo-600 bg-indigo-50" },
   carburant:            { label: "Carburant",            icon: Fuel,           color: "text-orange-600 bg-orange-50" },
+  location:             { label: "Location",             icon: Car,            color: "text-cyan-600 bg-cyan-50" },
   logement:             { label: "Logement",             icon: Home,           color: "text-purple-600 bg-purple-50" },
   logistique:           { label: "Logistique",           icon: Activity,       color: "text-teal-600 bg-teal-50" },
   prime:                { label: "Prime",                icon: DollarSign,     color: "text-green-600 bg-green-50" },
@@ -402,6 +403,20 @@ export default function PlanDetails() {
                           {m.categorie === "autres" && (m as any).autresDirectionId && (
                             <div className="text-xs text-blue-600 mt-0.5">
                               Direction : {directions.find(d => d.id === (m as any).autresDirectionId)?.nom ?? `ID ${(m as any).autresDirectionId}`}
+                            </div>
+                          )}
+                          {m.categorie === "location" && (
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {(m as any).locationVehiculeSimple > 0 && (
+                                <span className="inline-flex items-center gap-1 text-xs bg-sky-50 text-sky-700 border border-sky-200 rounded px-2 py-0.5 font-medium">
+                                  🚗 {(m as any).locationVehiculeSimple} véhicule(s) simple(s)
+                                </span>
+                              )}
+                              {(m as any).locationEngin > 0 && (
+                                <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-2 py-0.5 font-medium">
+                                  🚜 {(m as any).locationEngin} engin(s)
+                                </span>
+                              )}
                             </div>
                           )}
                           {(m.categorie === "indemnite_journaliere" || m.categorie === "prime") && (

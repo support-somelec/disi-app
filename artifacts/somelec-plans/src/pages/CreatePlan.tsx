@@ -73,6 +73,8 @@ export default function CreatePlan() {
     unite: "",
     autresDirectionId: "",
   });
+  const [locationVehiculeSimple, setLocationVehiculeSimple] = useState("");
+  const [locationEngin, setLocationEngin] = useState("");
 
   // Beneficiaires state (for indemnite_journaliere and prime)
   const [currentBeneficiaires, setCurrentBeneficiaires] = useState<Beneficiaire[]>([]);
@@ -251,6 +253,8 @@ export default function CreatePlan() {
           unite: currentMoyen.unite || undefined,
           autresDirectionId: currentMoyen.autresDirectionId ? parseInt(currentMoyen.autresDirectionId, 10) : undefined,
           listeMaterielJson: isMaterielCat && listeMaterielRows.length > 0 ? JSON.stringify(listeMaterielRows) : undefined,
+          locationVehiculeSimple: currentMoyen.categorie === "location" && locationVehiculeSimple ? parseInt(locationVehiculeSimple, 10) : undefined,
+          locationEngin: currentMoyen.categorie === "location" && locationEngin ? parseInt(locationEngin, 10) : undefined,
         }
       });
 
@@ -306,6 +310,8 @@ export default function CreatePlan() {
       setNewBenef({ nom: "", matricule: "", nni: "", montant: "" });
       setListeMaterielRows([]);
       setListeMaterielFile(null);
+      setLocationVehiculeSimple("");
+      setLocationEngin("");
     } catch (err) {
       console.error("Failed to add moyen", err);
     }
@@ -453,12 +459,15 @@ export default function CreatePlan() {
                           setCurrentBeneficiaires([]);
                           setListeMaterielRows([]);
                           setListeMaterielFile(null);
+                          setLocationVehiculeSimple("");
+                          setLocationEngin("");
                         }}
                       >
                         <option value="materiel">Matériel</option>
                         <option value="outillage">Outillage</option>
                         <option value="accessoire">Accessoire</option>
                         <option value="carburant">Carburant</option>
+                        <option value="location">Location</option>
                         <option value="logement">Logement</option>
                         <option value="logistique">Logistique</option>
                         <option value="prime">Prime</option>
@@ -498,6 +507,55 @@ export default function CreatePlan() {
                       </div>
                     )}
                   </div>
+
+                  {/* Location — Sélecteur de véhicules */}
+                  {currentMoyen.categorie === "location" && (
+                    <div className="mt-4 border-t pt-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🚗</span>
+                        <h4 className="text-sm font-semibold text-foreground">Type de véhicule</h4>
+                        <span className="ml-auto text-xs text-muted-foreground italic">Renseignez au moins un type</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Véhicule simple</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="Nb. véhicules"
+                              className="w-full h-9 rounded-lg border-2 border-border bg-white px-3 text-sm focus:border-primary focus:outline-none"
+                              value={locationVehiculeSimple}
+                              onChange={e => setLocationVehiculeSimple(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Engin</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="Nb. engins"
+                              className="w-full h-9 rounded-lg border-2 border-border bg-white px-3 text-sm focus:border-primary focus:outline-none"
+                              value={locationEngin}
+                              onChange={e => setLocationEngin(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      {(locationVehiculeSimple || locationEngin) && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-xs text-blue-800 space-y-0.5">
+                          {locationVehiculeSimple && parseInt(locationVehiculeSimple) > 0 && (
+                            <p>🚗 <strong>{locationVehiculeSimple}</strong> véhicule(s) simple(s)</p>
+                          )}
+                          {locationEngin && parseInt(locationEngin) > 0 && (
+                            <p>🚜 <strong>{locationEngin}</strong> engin(s)</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Matériel / Outillage / Accessoire — Liste Excel */}
                   {isMaterielCat && (

@@ -35,6 +35,8 @@ export const moyensTable = pgTable("moyens", {
   demandeAt: timestamp("demande_at"),
   autresDirectionId: integer("autres_direction_id").references(() => directionsTable.id),
   listeMaterielJson: text("liste_materiel_json"),
+  locationVehiculeSimple: integer("location_vehicule_simple"),
+  locationEngin: integer("location_engin"),
 });
 
 export const attachmentsTable = pgTable("attachments", {

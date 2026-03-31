@@ -15,4 +15,6 @@ export interface CreateMoyenRequest {
   quantite?: number;
   autresDirectionId?: number;
   listeMaterielJson?: string;
+  locationVehiculeSimple?: number;
+  locationEngin?: number;
 }

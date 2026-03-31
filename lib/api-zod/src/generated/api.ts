@@ -161,6 +161,7 @@ export const GetPlansResponseItem = zod.object({
           "outillage",
           "accessoire",
           "carburant",
+          "location",
           "logement",
           "logistique",
           "prime",
@@ -177,6 +178,8 @@ export const GetPlansResponseItem = zod.object({
         demandeAt: zod.date().optional(),
         autresDirectionId: zod.number().optional(),
         listeMaterielJson: zod.string().optional(),
+        locationVehiculeSimple: zod.number().optional(),
+        locationEngin: zod.number().optional(),
       }),
     )
     .optional(),
@@ -278,6 +281,7 @@ export const GetPlanResponse = zod.object({
           "outillage",
           "accessoire",
           "carburant",
+          "location",
           "logement",
           "logistique",
           "prime",
@@ -294,6 +298,8 @@ export const GetPlanResponse = zod.object({
         demandeAt: zod.date().optional(),
         autresDirectionId: zod.number().optional(),
         listeMaterielJson: zod.string().optional(),
+        locationVehiculeSimple: zod.number().optional(),
+        locationEngin: zod.number().optional(),
       }),
     )
     .optional(),
@@ -366,6 +372,7 @@ export const UpdatePlanResponse = zod.object({
           "outillage",
           "accessoire",
           "carburant",
+          "location",
           "logement",
           "logistique",
           "prime",
@@ -382,6 +389,8 @@ export const UpdatePlanResponse = zod.object({
         demandeAt: zod.date().optional(),
         autresDirectionId: zod.number().optional(),
         listeMaterielJson: zod.string().optional(),
+        locationVehiculeSimple: zod.number().optional(),
+        locationEngin: zod.number().optional(),
       }),
     )
     .optional(),
@@ -452,6 +461,7 @@ export const ValidatePlanResponse = zod.object({
           "outillage",
           "accessoire",
           "carburant",
+          "location",
           "logement",
           "logistique",
           "prime",
@@ -468,6 +478,8 @@ export const ValidatePlanResponse = zod.object({
         demandeAt: zod.date().optional(),
         autresDirectionId: zod.number().optional(),
         listeMaterielJson: zod.string().optional(),
+        locationVehiculeSimple: zod.number().optional(),
+        locationEngin: zod.number().optional(),
       }),
     )
     .optional(),
@@ -537,6 +549,7 @@ export const CloturerPlanResponse = zod.object({
           "outillage",
           "accessoire",
           "carburant",
+          "location",
           "logement",
           "logistique",
           "prime",
@@ -553,6 +566,8 @@ export const CloturerPlanResponse = zod.object({
         demandeAt: zod.date().optional(),
         autresDirectionId: zod.number().optional(),
         listeMaterielJson: zod.string().optional(),
+        locationVehiculeSimple: zod.number().optional(),
+        locationEngin: zod.number().optional(),
       }),
     )
     .optional(),
@@ -587,6 +602,7 @@ export const GetPlanMoyensResponseItem = zod.object({
     "outillage",
     "accessoire",
     "carburant",
+    "location",
     "logement",
     "logistique",
     "prime",
@@ -603,6 +619,8 @@ export const GetPlanMoyensResponseItem = zod.object({
   demandeAt: zod.date().optional(),
   autresDirectionId: zod.number().optional(),
   listeMaterielJson: zod.string().optional(),
+  locationVehiculeSimple: zod.number().optional(),
+  locationEngin: zod.number().optional(),
 });
 export const GetPlanMoyensResponse = zod.array(GetPlanMoyensResponseItem);
 
@@ -619,6 +637,7 @@ export const AddMoyenBody = zod.object({
     "outillage",
     "accessoire",
     "carburant",
+    "location",
     "logement",
     "logistique",
     "prime",
@@ -631,6 +650,8 @@ export const AddMoyenBody = zod.object({
   quantite: zod.number().optional(),
   autresDirectionId: zod.number().optional(),
   listeMaterielJson: zod.string().optional(),
+  locationVehiculeSimple: zod.number().optional(),
+  locationEngin: zod.number().optional(),
 });
 
 /**
@@ -661,6 +682,7 @@ export const DemanderMoyenResponse = zod.object({
     "outillage",
     "accessoire",
     "carburant",
+    "location",
     "logement",
     "logistique",
     "prime",
@@ -677,6 +699,8 @@ export const DemanderMoyenResponse = zod.object({
   demandeAt: zod.date().optional(),
   autresDirectionId: zod.number().optional(),
   listeMaterielJson: zod.string().optional(),
+  locationVehiculeSimple: zod.number().optional(),
+  locationEngin: zod.number().optional(),
 });
 
 /**
@@ -700,6 +724,7 @@ export const ConsommerMoyenResponse = zod.object({
     "outillage",
     "accessoire",
     "carburant",
+    "location",
     "logement",
     "logistique",
     "prime",
@@ -716,6 +741,8 @@ export const ConsommerMoyenResponse = zod.object({
   demandeAt: zod.date().optional(),
   autresDirectionId: zod.number().optional(),
   listeMaterielJson: zod.string().optional(),
+  locationVehiculeSimple: zod.number().optional(),
+  locationEngin: zod.number().optional(),
 });
 
 /**

@@ -14,6 +14,7 @@ export const CreateMoyenRequestCategorie = {
   outillage: "outillage",
   accessoire: "accessoire",
   carburant: "carburant",
+  location: "location",
   logement: "logement",
   logistique: "logistique",
   prime: "prime",

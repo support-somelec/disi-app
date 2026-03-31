@@ -22,4 +22,6 @@ export interface Moyen {
   demandeAt?: Date;
   autresDirectionId?: number;
   listeMaterielJson?: string;
+  locationVehiculeSimple?: number;
+  locationEngin?: number;
 }

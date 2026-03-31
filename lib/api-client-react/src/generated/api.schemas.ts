@@ -60,6 +60,7 @@ export const MoyenCategorie = {
   outillage: "outillage",
   accessoire: "accessoire",
   carburant: "carburant",
+  location: "location",
   logement: "logement",
   logistique: "logistique",
   prime: "prime",
@@ -89,6 +90,8 @@ export interface Moyen {
   demandeAt?: string;
   autresDirectionId?: number;
   listeMaterielJson?: string;
+  locationVehiculeSimple?: number;
+  locationEngin?: number;
 }
 
 export interface Attachment {
@@ -169,6 +172,7 @@ export const CreateMoyenRequestCategorie = {
   outillage: "outillage",
   accessoire: "accessoire",
   carburant: "carburant",
+  location: "location",
   logement: "logement",
   logistique: "logistique",
   prime: "prime",
@@ -184,6 +188,8 @@ export interface CreateMoyenRequest {
   quantite?: number;
   autresDirectionId?: number;
   listeMaterielJson?: string;
+  locationVehiculeSimple?: number;
+  locationEngin?: number;
 }
 
 export interface ConsommerMoyenRequest {
