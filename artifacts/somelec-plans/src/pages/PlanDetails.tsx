@@ -240,6 +240,10 @@ export default function PlanDetails() {
   const isOwnDirectionPlan = currentUser?.role === "direction" &&
     (plan.createdById === currentUser?.id || currentUser?.directionId === plan.directionId);
   const canDemanderExecution = isOwnDirectionPlan && plan.statut === "ouvert";
+  const canDemanderMoyen = (m: { categorie: string }) =>
+    m.categorie === "prime"
+      ? isOwnDirectionPlan && plan.statut === "cloture"
+      : canDemanderExecution;
 
   const myRole = currentUser?.role ?? "";
   const myCategories = Object.entries(CATEGORY_ROLE).filter(([, role]) => role === myRole).map(([cat]) => cat);
@@ -393,7 +397,7 @@ export default function PlanDetails() {
                               Direction : {directions.find(d => d.id === (m as any).autresDirectionId)?.nom ?? `ID ${(m as any).autresDirectionId}`}
                             </div>
                           )}
-                          {m.categorie === "indemnite_journaliere" && (
+                          {(m.categorie === "indemnite_journaliere" || m.categorie === "prime") && (
                             <button
                               className="text-xs text-primary underline mt-0.5 hover:text-primary/70 transition-colors"
                               onClick={() => toggleBeneficiaires(m.id)}
@@ -448,7 +452,7 @@ export default function PlanDetails() {
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-medium">
                               <Hourglass className="w-3 h-3" /> En attente
                             </span>
-                          ) : canDemanderExecution ? (
+                          ) : canDemanderMoyen(m) ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -459,6 +463,8 @@ export default function PlanDetails() {
                               {isDemanderLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                               Demander
                             </Button>
+                          ) : m.categorie === "prime" && isOwnDirectionPlan && plan.statut !== "cloture" ? (
+                            <span className="text-xs text-amber-600 italic">Après clôture</span>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
                           )}

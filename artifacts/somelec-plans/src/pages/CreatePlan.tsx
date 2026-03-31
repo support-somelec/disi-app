@@ -205,8 +205,8 @@ export default function CreatePlan() {
         }
       });
 
-      // Save beneficiaires for indemnite_journaliere
-      if (currentMoyen.categorie === "indemnite_journaliere" && currentBeneficiaires.length > 0) {
+      // Save beneficiaires for indemnite_journaliere and prime
+      if ((currentMoyen.categorie === "indemnite_journaliere" || currentMoyen.categorie === "prime") && currentBeneficiaires.length > 0) {
         try {
           await fetch(`${BASE_URL}api/plans/${createdPlan.id}/moyens/${moyen.id}/beneficiaires`, {
             method: "POST",
@@ -232,7 +232,7 @@ export default function CreatePlan() {
       setMoyens([...moyens, {
         ...currentMoyen,
         autresDirectionNom: autresDir?.nom,
-        nbBeneficiaires: currentMoyen.categorie === "indemnite_journaliere" ? currentBeneficiaires.filter(b => b.nom && b.montant).length : undefined,
+        nbBeneficiaires: (currentMoyen.categorie === "indemnite_journaliere" || currentMoyen.categorie === "prime") ? currentBeneficiaires.filter(b => b.nom && b.montant).length : undefined,
       }]);
       setCurrentMoyen({ categorie: "materiel", description: "", budget: "", quantite: "", unite: "", autresDirectionId: "" });
       setCurrentBeneficiaires([]);
@@ -426,8 +426,8 @@ export default function CreatePlan() {
                     )}
                   </div>
 
-                  {/* Indemnité — Beneficiaires section */}
-                  {currentMoyen.categorie === "indemnite_journaliere" && (
+                  {/* Indemnité / Prime — Beneficiaires section */}
+                  {(currentMoyen.categorie === "indemnite_journaliere" || currentMoyen.categorie === "prime") && (
                     <div className="mt-4 border-t pt-4 space-y-4">
                       <div className="flex items-center gap-2">
                         <Users className="w-4 h-4 text-primary" />

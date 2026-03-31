@@ -124,6 +124,54 @@ ${row("Budget prévu", `${opts.moyen.budget.toLocaleString("fr-MR")} MRU`)}
   return { subject, html: emailBase("Demande d'exécution en attente", "#f97316", body) };
 }
 
+export function mailDemandeExecutionBenef(opts: {
+  plan: { reference?: string | null; titre: string; directionNom?: string | null };
+  moyen: { description: string; budget: number };
+  direction: string;
+  role: string;
+  beneficiaires: Array<{ nom: string; matricule?: string | null; nni?: string | null; montant: number }>;
+}) {
+  const subject = `[${opts.role}] Demande de versement — ${opts.plan.reference ?? opts.plan.titre}`;
+  const rows = opts.beneficiaires.map(b =>
+    `<tr>
+      <td style="padding:6px 12px;font-size:13px;border-bottom:1px solid #e2e8f0">${b.nom}</td>
+      <td style="padding:6px 12px;font-size:13px;border-bottom:1px solid #e2e8f0;text-align:center">${b.matricule ?? "—"}</td>
+      <td style="padding:6px 12px;font-size:13px;border-bottom:1px solid #e2e8f0;text-align:center">${b.nni ?? "—"}</td>
+      <td style="padding:6px 12px;font-size:13px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600">${b.montant.toLocaleString("fr-MR")} MRU</td>
+    </tr>`
+  ).join("");
+  const total = opts.beneficiaires.reduce((s, b) => s + b.montant, 0);
+  const body = `
+<p style="margin:0 0 16px;color:#334155">
+  La direction <strong>${opts.direction}</strong> soumet une demande de versement pour les bénéficiaires ci-dessous.
+</p>
+<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:16px">
+  ${row("Plan", opts.plan.reference ?? opts.plan.titre)}
+  ${row("Description", opts.moyen.description)}
+  ${row("Budget prévu", `${opts.moyen.budget.toLocaleString("fr-MR")} MRU`)}
+</table>
+<p style="margin:0 0 8px;font-weight:600;color:#334155">Liste des bénéficiaires :</p>
+<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="padding:8px 12px;text-align:left;font-size:12px;color:#64748b;font-weight:600">NOM</th>
+      <th style="padding:8px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600">MATRICULE</th>
+      <th style="padding:8px 12px;text-align:center;font-size:12px;color:#64748b;font-weight:600">NNI</th>
+      <th style="padding:8px 12px;text-align:right;font-size:12px;color:#64748b;font-weight:600">MONTANT</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+  <tfoot>
+    <tr style="background:#f1f5f9">
+      <td colspan="3" style="padding:8px 12px;font-size:13px;font-weight:700;color:#334155">TOTAL</td>
+      <td style="padding:8px 12px;font-size:13px;font-weight:700;color:#0ea5e9;text-align:right">${total.toLocaleString("fr-MR")} MRU</td>
+    </tr>
+  </tfoot>
+</table>
+<p style="margin:20px 0 0;color:#64748b;font-size:13px">Merci de procéder au traitement de ces versements.</p>`;
+  return { subject, html: emailBase("Demande de versement", "#0ea5e9", body) };
+}
+
 export function mailDemandeExecutionRH(opts: {
   plan: { reference?: string | null; titre: string; directionNom?: string | null };
   moyen: { description: string; budget: number };

@@ -20,6 +20,7 @@ import {
   mailPlanRejected,
   mailDemandeExecution,
   mailDemandeExecutionRH,
+  mailDemandeExecutionBenef,
   mailConsommationSaisie,
 } from "../mailer";
 
@@ -425,11 +426,20 @@ router.post("/plans/:id/moyens/:moyenId/demander", async (req, res) => {
 
     const plan = await db.select().from(plansTable).where(eq(plansTable.id, planId));
     if (!plan.length) return res.status(404).json({ error: "Plan not found" });
-    if (plan[0].statut !== "ouvert") return res.status(400).json({ error: "Le plan doit être ouvert" });
 
     const existing = await db.select().from(moyensTable)
       .where(and(eq(moyensTable.id, moyenId), eq(moyensTable.planId, planId)));
     if (!existing.length) return res.status(404).json({ error: "Moyen not found" });
+
+    const isPrime = existing[0].categorie === "prime";
+    const requiredStatut = isPrime ? "cloture" : "ouvert";
+    if (plan[0].statut !== requiredStatut) {
+      return res.status(400).json({
+        error: isPrime
+          ? "La prime ne peut être demandée qu'après la clôture du plan"
+          : "Le plan doit être ouvert",
+      });
+    }
     if (existing[0].demandeStatus === "demandee" || existing[0].demandeStatus === "consommee") {
       return res.status(400).json({ error: "Une demande a déjà été initiée pour ce moyen" });
     }
@@ -457,6 +467,30 @@ router.post("/plans/:id/moyens/:moyenId/demander", async (req, res) => {
             direction: planDetails?.directionNom ?? "",
           });
           await sendMail({ to: emails, subject, html });
+        }
+        // For prime — notify CF with beneficiaire list and mark as treated
+        if (moyen.categorie === "prime") {
+          const beneficiaires = await db.select().from(beneficiairesMoyenTable)
+            .where(eq(beneficiairesMoyenTable.moyenId, moyenId));
+          if (beneficiaires.length > 0) {
+            const cfEmails = await getUserEmailsByRole(["controle_financier"]);
+            const { subject, html } = mailDemandeExecutionBenef({
+              plan: planDetails!,
+              moyen: { description: moyen.description, budget: Number(moyen.budget) },
+              direction: planDetails?.directionNom ?? "",
+              role: "CF",
+              beneficiaires: beneficiaires.map(b => ({
+                nom: b.nom,
+                matricule: b.matricule,
+                nni: b.nni,
+                montant: Number(b.montant),
+              })),
+            });
+            await sendMail({ to: cfEmails, subject, html });
+            await db.update(moyensTable)
+              .set({ demandeStatus: "consommee" })
+              .where(eq(moyensTable.id, moyenId));
+          }
         }
         // For indemnite_journaliere — also notify RH with beneficiaire list
         if (moyen.categorie === "indemnite_journaliere") {
