@@ -476,6 +476,10 @@ router.post("/plans/:id/moyens/:moyenId/demander", async (req, res) => {
               })),
             });
             await sendMail({ to: rhEmails, subject, html });
+            // Mark as treated when RH is notified
+            await db.update(moyensTable)
+              .set({ demandeStatus: "consommee" })
+              .where(eq(moyensTable.id, moyenId));
           }
         }
       } catch (e) { console.error("[notify]", String(e)); }
