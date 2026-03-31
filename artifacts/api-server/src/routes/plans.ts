@@ -468,29 +468,24 @@ router.post("/plans/:id/moyens/:moyenId/demander", async (req, res) => {
           });
           await sendMail({ to: emails, subject, html });
         }
-        // For prime — notify CF with beneficiaire list and mark as treated
+        // For prime — notify CF with beneficiaire list (stays "demandee" until CF validates)
         if (moyen.categorie === "prime") {
           const beneficiaires = await db.select().from(beneficiairesMoyenTable)
             .where(eq(beneficiairesMoyenTable.moyenId, moyenId));
-          if (beneficiaires.length > 0) {
-            const cfEmails = await getUserEmailsByRole(["controle_financier"]);
-            const { subject, html } = mailDemandeExecutionBenef({
-              plan: planDetails!,
-              moyen: { description: moyen.description, budget: Number(moyen.budget) },
-              direction: planDetails?.directionNom ?? "",
-              role: "CF",
-              beneficiaires: beneficiaires.map(b => ({
-                nom: b.nom,
-                matricule: b.matricule,
-                nni: b.nni,
-                montant: Number(b.montant),
-              })),
-            });
-            await sendMail({ to: cfEmails, subject, html });
-            await db.update(moyensTable)
-              .set({ demandeStatus: "consommee" })
-              .where(eq(moyensTable.id, moyenId));
-          }
+          const cfEmails = await getUserEmailsByRole(["controle_financier"]);
+          const { subject, html } = mailDemandeExecutionBenef({
+            plan: planDetails!,
+            moyen: { description: moyen.description, budget: Number(moyen.budget) },
+            direction: planDetails?.directionNom ?? "",
+            role: "CF",
+            beneficiaires: beneficiaires.map(b => ({
+              nom: b.nom,
+              matricule: b.matricule,
+              nni: b.nni,
+              montant: Number(b.montant),
+            })),
+          });
+          await sendMail({ to: cfEmails, subject, html });
         }
         // For indemnite_journaliere — also notify RH with beneficiaire list
         if (moyen.categorie === "indemnite_journaliere") {
@@ -566,6 +561,28 @@ router.post("/plans/:id/moyens/:moyenId/consommer", async (req, res) => {
           moyen: { description: moyen.description, categorie: moyen.categorie, montant: body.montant, budget: Number(moyen.budget) },
         });
         await sendMail({ to: emails, subject, html });
+
+        // For prime — after CF validates, notify RH with beneficiaire list
+        if (moyen.categorie === "prime") {
+          const beneficiaires = await db.select().from(beneficiairesMoyenTable)
+            .where(eq(beneficiairesMoyenTable.moyenId, moyenId));
+          if (beneficiaires.length > 0) {
+            const rhEmails = await getUserEmailsByRole(["rh"]);
+            const { subject: rhSubject, html: rhHtml } = mailDemandeExecutionBenef({
+              plan: planDetails!,
+              moyen: { description: moyen.description, budget: Number(moyen.budget) },
+              direction: planDetails?.directionNom ?? "",
+              role: "RH",
+              beneficiaires: beneficiaires.map(b => ({
+                nom: b.nom,
+                matricule: b.matricule,
+                nni: b.nni,
+                montant: Number(b.montant),
+              })),
+            });
+            await sendMail({ to: rhEmails, subject: rhSubject, html: rhHtml });
+          }
+        }
       } catch (e) { console.error("[notify]", String(e)); }
     });
 

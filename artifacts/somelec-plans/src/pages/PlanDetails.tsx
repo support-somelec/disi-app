@@ -249,8 +249,9 @@ export default function PlanDetails() {
   const myCategories = Object.entries(CATEGORY_ROLE).filter(([, role]) => role === myRole).map(([cat]) => cat);
   const isFunctionalRole = myCategories.length > 0;
   const myMoyensAll = isFunctionalRole ? moyens.filter(m => myCategories.includes(m.categorie)) : [];
-  const myMoyens = myMoyensAll.filter(m => m.demandeStatus === "demandee");
-  const canSaisirConsommation = isFunctionalRole && plan.statut === "ouvert" && myMoyens.length > 0;
+  const myMoyens = myMoyensAll.filter(m => m.demandeStatus === "demandee" &&
+    (m.categorie === "prime" ? plan.statut === "cloture" : plan.statut === "ouvert"));
+  const canSaisirConsommation = isFunctionalRole && myMoyens.length > 0;
 
   return (
     <div className="space-y-6 animate-in fade-in pb-20">
@@ -406,7 +407,7 @@ export default function PlanDetails() {
                               {beneficiairesMap[m.id] ? ` (${beneficiairesMap[m.id].length})` : ""}
                             </button>
                           )}
-                          {m.categorie === "indemnite_journaliere" && expandedBenef[m.id] && beneficiairesMap[m.id] && (
+                          {(m.categorie === "indemnite_journaliere" || m.categorie === "prime") && expandedBenef[m.id] && beneficiairesMap[m.id] && (
                             <div className="mt-2 border rounded-lg overflow-hidden">
                               <table className="w-full text-xs">
                                 <thead className="bg-muted/40">
