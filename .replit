@@ -31,8 +31,8 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-SMTP_HOST = "mail2.somelec.mr"
-SMTP_PORT = "587"
-SMTP_USER = "mission@somelec.mr"
-SMTP_PASS = "disi2022"
-EMAIL_FROM = "SOMELEC Plans d'Action <mission@somelec.mr>"
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = "465"
+SMTP_USER = "planaction2026@gmail.com"
+SMTP_PASS = "8631191844Sa+"
+EMAIL_FROM = "SOMELEC Plans d'Action <planaction2026@gmail.com>"
