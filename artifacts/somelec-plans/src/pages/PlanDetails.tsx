@@ -161,9 +161,10 @@ export default function PlanDetails() {
     const decharge = dechargeFiles[moyen.id];
     if (!decharge) return;
 
-    // Client-side budget check (except logistique)
+    // Client-side budget check (except logistique, materiel, outillage, accessoire)
+    const CATS_DEPASSEMENT_OK = ["logistique", "materiel", "outillage", "accessoire"];
     const budget = Number(moyen.budget);
-    if (moyen.categorie !== "logistique" && val > budget) {
+    if (!CATS_DEPASSEMENT_OK.includes(moyen.categorie ?? "") && val > budget) {
       setConsommeErrors(prev => ({
         ...prev,
         [moyen.id]: `Dépassement non autorisé : ${val.toLocaleString("fr-MR")} MRU saisi > ${budget.toLocaleString("fr-MR")} MRU prévu.`,
@@ -766,9 +767,9 @@ export default function PlanDetails() {
                           <span>{consommeErrors[m.id]}</span>
                         </div>
                       )}
-                      {m.categorie === "logistique" && (
+                      {["logistique", "materiel", "outillage", "accessoire"].includes(m.categorie ?? "") && (
                         <p className="text-[11px] text-blue-600 italic">
-                          ℹ️ Catégorie Logistique : un dépassement du budget est autorisé.
+                          ℹ️ Cette catégorie autorise le dépassement du budget prévu.
                         </p>
                       )}
                       {/* Décharge obligatoire */}
