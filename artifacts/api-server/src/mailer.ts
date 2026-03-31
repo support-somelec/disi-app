@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 
-const TEST_OVERRIDE = process.env["EMAIL_TEST_OVERRIDE"] ?? "babacherif@somelec.mr";
+const TEST_OVERRIDE = process.env["EMAIL_TEST_OVERRIDE"] ?? "mission@somelec.mr";
 const FROM = process.env["EMAIL_FROM"] ?? "SOMELEC Plans d'Action <noreply@somelec.mr>";
 
 function createTransport() {
