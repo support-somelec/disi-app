@@ -92,6 +92,27 @@ export const materielDemandesTable = pgTable("materiel_demandes", {
   dcgaiValidatedAt: timestamp("dcgai_validated_at"),
 });
 
+export const locationItemsTable = pgTable("location_items", {
+  id: serial("id").primaryKey(),
+  moyenId: integer("moyen_id").notNull().references(() => moyensTable.id, { onDelete: "cascade" }),
+  typeEngin: text("type_engin").notNull(),
+  nbJoursTotal: integer("nb_jours_total").notNull(),
+  nbJoursRestants: integer("nb_jours_restants").notNull(),
+});
+
+export const locationDemandesTable = pgTable("location_demandes", {
+  id: serial("id").primaryKey(),
+  moyenId: integer("moyen_id").notNull().references(() => moyensTable.id, { onDelete: "cascade" }),
+  planId: integer("plan_id").notNull().references(() => plansTable.id, { onDelete: "cascade" }),
+  createdById: integer("created_by_id").notNull().references(() => usersTable.id),
+  statut: text("statut").notNull().default("en_attente_dmg"),
+  itemsJson: text("items_json").notNull(),
+  montantTotal: numeric("montant_total", { precision: 12, scale: 2 }),
+  dmgValidatedById: integer("dmg_validated_by_id").references(() => usersTable.id),
+  dmgValidatedAt: timestamp("dmg_validated_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertPlanSchema = createInsertSchema(plansTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPlan = z.infer<typeof insertPlanSchema>;
 export type Plan = typeof plansTable.$inferSelect;

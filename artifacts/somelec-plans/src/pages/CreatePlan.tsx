@@ -31,6 +31,11 @@ type ListeMaterielRow = {
   quantite: number;
 };
 
+type LocationRow = {
+  typeEngin: string;
+  nbJours: number;
+};
+
 type EmployeResult = {
   id: number;
   matricule: string;
@@ -71,8 +76,7 @@ export default function CreatePlan() {
     unite: "",
     autresDirectionId: "",
   });
-  const [locationVehiculeSimple, setLocationVehiculeSimple] = useState("");
-  const [locationEngin, setLocationEngin] = useState("");
+  const [locationRows, setLocationRows] = useState<LocationRow[]>([]);
 
   // Beneficiaires state (for indemnite_journaliere and prime)
   const [currentBeneficiaires, setCurrentBeneficiaires] = useState<Beneficiaire[]>([]);
@@ -248,9 +252,11 @@ export default function CreatePlan() {
           quantite: currentMoyen.quantite ? parseInt(currentMoyen.quantite, 10) : undefined,
           unite: currentMoyen.unite || undefined,
           autresDirectionId: currentMoyen.autresDirectionId ? parseInt(currentMoyen.autresDirectionId, 10) : undefined,
-          listeMaterielJson: isMaterielCat && listeMaterielRows.length > 0 ? JSON.stringify(listeMaterielRows) : undefined,
-          locationVehiculeSimple: currentMoyen.categorie === "location" && locationVehiculeSimple ? parseInt(locationVehiculeSimple, 10) : undefined,
-          locationEngin: currentMoyen.categorie === "location" && locationEngin ? parseInt(locationEngin, 10) : undefined,
+          listeMaterielJson: isMaterielCat && listeMaterielRows.length > 0
+            ? JSON.stringify(listeMaterielRows)
+            : currentMoyen.categorie === "location" && locationRows.length > 0
+              ? JSON.stringify(locationRows)
+              : undefined,
         }
       });
 
@@ -306,8 +312,7 @@ export default function CreatePlan() {
       setNewBenef({ nom: "", matricule: "", nni: "", montant: "" });
       setListeMaterielRows([]);
       setListeMaterielFile(null);
-      setLocationVehiculeSimple("");
-      setLocationEngin("");
+      setLocationRows([]);
     } catch (err) {
       console.error("Failed to add moyen", err);
     }
@@ -455,15 +460,14 @@ export default function CreatePlan() {
                           setCurrentBeneficiaires([]);
                           setListeMaterielRows([]);
                           setListeMaterielFile(null);
-                          setLocationVehiculeSimple("");
-                          setLocationEngin("");
+                          setLocationRows([]);
                         }}
                       >
                         <option value="materiel">Matériel</option>
                         <option value="outillage">Outillage</option>
                         <option value="accessoire">Accessoire</option>
                         <option value="carburant">Carburant</option>
-                        <option value="location">Location</option>
+                        <option value="location">Location Véhicule</option>
                         <option value="logement">Logement</option>
                         <option value="logistique">Logistique</option>
                         <option value="prime">Prime</option>
@@ -504,50 +508,71 @@ export default function CreatePlan() {
                     )}
                   </div>
 
-                  {/* Location — Sélecteur de véhicules */}
+                  {/* Location Véhicule — Liste des engins */}
                   {currentMoyen.categorie === "location" && (
                     <div className="mt-4 border-t pt-4 space-y-3">
                       <div className="flex items-center gap-2">
                         <span className="text-base">🚗</span>
-                        <h4 className="text-sm font-semibold text-foreground">Type de véhicule</h4>
-                        <span className="ml-auto text-xs text-muted-foreground italic">Renseignez au moins un type</span>
+                        <h4 className="text-sm font-semibold text-foreground">Engins à louer</h4>
+                        <span className="ml-auto text-xs text-muted-foreground italic">Ajoutez chaque type d'engin avec sa durée</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Véhicule simple</label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min="0"
-                              placeholder="Nb. véhicules"
-                              className="w-full h-9 rounded-lg border-2 border-border bg-white px-3 text-sm focus:border-primary focus:outline-none"
-                              value={locationVehiculeSimple}
-                              onChange={e => setLocationVehiculeSimple(e.target.value)}
-                            />
-                          </div>
+
+                      {/* Rows list */}
+                      {locationRows.length > 0 && (
+                        <div className="border rounded-lg overflow-hidden">
+                          <table className="w-full text-xs">
+                            <thead className="bg-muted/40">
+                              <tr>
+                                <th className="px-3 py-1.5 text-left font-semibold text-muted-foreground">TYPE D'ENGIN</th>
+                                <th className="px-3 py-1.5 text-center font-semibold text-muted-foreground w-28">NB. JOURS</th>
+                                <th className="w-8"></th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                              {locationRows.map((row, idx) => (
+                                <tr key={idx} className="bg-white">
+                                  <td className="px-3 py-1">
+                                    <input
+                                      className="w-full h-7 rounded border border-border px-2 text-xs focus:outline-none focus:border-primary"
+                                      placeholder="Ex: Véhicule 4x4, Grue, Camion…"
+                                      value={row.typeEngin}
+                                      onChange={e => setLocationRows(prev => prev.map((r, i) => i === idx ? { ...r, typeEngin: e.target.value } : r))}
+                                    />
+                                  </td>
+                                  <td className="px-3 py-1">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      className="w-full h-7 rounded border border-border px-2 text-xs text-center focus:outline-none focus:border-primary"
+                                      value={row.nbJours}
+                                      onChange={e => setLocationRows(prev => prev.map((r, i) => i === idx ? { ...r, nbJours: parseInt(e.target.value) || 1 } : r))}
+                                    />
+                                  </td>
+                                  <td className="px-2 py-1">
+                                    <button type="button" onClick={() => setLocationRows(prev => prev.filter((_, i) => i !== idx))} className="text-muted-foreground hover:text-destructive">
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Engin</label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min="0"
-                              placeholder="Nb. engins"
-                              className="w-full h-9 rounded-lg border-2 border-border bg-white px-3 text-sm focus:border-primary focus:outline-none"
-                              value={locationEngin}
-                              onChange={e => setLocationEngin(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      {(locationVehiculeSimple || locationEngin) && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-xs text-blue-800 space-y-0.5">
-                          {locationVehiculeSimple && parseInt(locationVehiculeSimple) > 0 && (
-                            <p>🚗 <strong>{locationVehiculeSimple}</strong> véhicule(s) simple(s)</p>
-                          )}
-                          {locationEngin && parseInt(locationEngin) > 0 && (
-                            <p>🚜 <strong>{locationEngin}</strong> engin(s)</p>
-                          )}
+                      )}
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs gap-1.5"
+                        onClick={() => setLocationRows(prev => [...prev, { typeEngin: "", nbJours: 1 }])}
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Ajouter un engin
+                      </Button>
+
+                      {locationRows.length > 0 && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-xs text-blue-800">
+                          Total : <strong>{locationRows.length}</strong> type(s) — <strong>{locationRows.reduce((s, r) => s + (r.nbJours || 0), 0)}</strong> jour(s) au total
                         </div>
                       )}
                     </div>

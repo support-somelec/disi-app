@@ -30,7 +30,7 @@ const CATEGORIE_LABELS: Record<string, { label: string; icon: React.ElementType;
   outillage:            { label: "Outillage",            icon: Package,        color: "text-sky-600 bg-sky-50" },
   accessoire:           { label: "Accessoire",           icon: Package,        color: "text-indigo-600 bg-indigo-50" },
   carburant:            { label: "Carburant",            icon: Fuel,           color: "text-orange-600 bg-orange-50" },
-  location:             { label: "Location",             icon: Car,            color: "text-cyan-600 bg-cyan-50" },
+  location:             { label: "Location Véhicule",    icon: Car,            color: "text-cyan-600 bg-cyan-50" },
   logement:             { label: "Logement",             icon: Home,           color: "text-purple-600 bg-purple-50" },
   logistique:           { label: "Logistique",           icon: Activity,       color: "text-teal-600 bg-teal-50" },
   prime:                { label: "Prime",                icon: DollarSign,     color: "text-green-600 bg-green-50" },
@@ -116,6 +116,21 @@ export default function PlanDetails() {
   // DCGAI state
   const [dcgaiValidating, setDcgaiValidating] = useState<number | null>(null);
 
+  // Location véhicule workflow state
+  type LocItem = { id: number; typeEngin: string; nbJoursTotal: number; nbJoursRestants: number };
+  type LocDemande = { id: number; statut: string; items: Array<{ locationItemId: number; typeEngin: string; nbJoursDemandes: number; montant?: number }>; montantTotal: number | null; dmgValidatedAt: string | null; createdAt: string };
+  const [locationItemsMap, setLocationItemsMap] = useState<Record<number, LocItem[]>>({});
+  const [locationDemandesMap, setLocationDemandesMap] = useState<Record<number, LocDemande[]>>({});
+  const [expandedLocationMoyen, setExpandedLocationMoyen] = useState<Record<number, boolean>>({});
+  // Direction demande dialog
+  const [locationDemandeDialog, setLocationDemandeDialog] = useState<number | null>(null); // moyenId
+  const [locationJoursSels, setLocationJoursSels] = useState<Record<number, string>>({}); // itemId -> nbJours
+  const [locationDemLoading, setLocationDemLoading] = useState(false);
+  // DMG validation dialog
+  const [dmgValiderDialog, setDmgValiderDialog] = useState<{ moyenId: number; demandeId: number; items: Array<{ locationItemId: number; typeEngin: string; nbJoursDemandes: number }> } | null>(null);
+  const [dmgMontants, setDmgMontants] = useState<Record<number, string>>({});
+  const [dmgLoading, setDmgLoading] = useState(false);
+
   const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
   const toggleBeneficiaires = async (moyenId: number) => {
@@ -149,13 +164,30 @@ export default function PlanDetails() {
     } catch { /* ignore */ }
   };
 
-  // Auto-load materiel demandes for DA and DCGAI roles
+  const loadLocationData = async (moyenId: number) => {
+    try {
+      const [itemsRes, demandesRes] = await Promise.all([
+        fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/location-items`),
+        fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/location-demandes`),
+      ]);
+      const items = await itemsRes.json();
+      const demandes = await demandesRes.json();
+      setLocationItemsMap(prev => ({ ...prev, [moyenId]: items }));
+      setLocationDemandesMap(prev => ({ ...prev, [moyenId]: demandes }));
+    } catch { /* ignore */ }
+  };
+
+  // Auto-load materiel demandes for DA and DCGAI roles; location demandes for DMG
   useEffect(() => {
     if (!currentUser || !moyens.length) return;
     const role = currentUser.role;
     if (role === "da" || role === "dcgai") {
       const materielMoyenIds = moyens.filter(m => m.categorie === "materiel").map(m => m.id);
       materielMoyenIds.forEach(mid => loadMaterielData(mid));
+    }
+    if (role === "dmg") {
+      const locationMoyenIds = moyens.filter(m => m.categorie === "location").map(m => m.id);
+      locationMoyenIds.forEach(mid => loadLocationData(mid));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moyens.length, currentUser?.role]);
@@ -397,6 +429,57 @@ export default function PlanDetails() {
   const canSaisirConsommation = isFunctionalRole && myMoyens.length > 0;
   // Materiel moyens in this plan (for DA and DCGAI panels)
   const materielMoyens = moyens.filter(m => m.categorie === "materiel");
+  // Location moyens
+  const isDMG = myRole === "dmg";
+  const locationMoyens = moyens.filter(m => m.categorie === "location");
+
+  const handleDemanderLocation = async (moyenId: number) => {
+    if (!currentUser) return;
+    const selections = Object.entries(locationJoursSels)
+      .filter(([, jours]) => Number(jours) > 0)
+      .map(([itemIdStr, jours]) => {
+        const itemId = Number(itemIdStr);
+        const item = (locationItemsMap[moyenId] ?? []).find(i => i.id === itemId);
+        return { locationItemId: itemId, typeEngin: item?.typeEngin ?? "", nbJoursDemandes: Number(jours) };
+      })
+      .filter(s => s.typeEngin);
+    if (!selections.length) return;
+    setLocationDemLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/location-demandes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ createdById: currentUser.id, items: selections }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadLocationData(moyenId);
+      setLocationDemandeDialog(null);
+      setLocationJoursSels({});
+    } catch { alert("Erreur réseau"); }
+    finally { setLocationDemLoading(false); }
+  };
+
+  const handleDmgValider = async () => {
+    if (!dmgValiderDialog || !currentUser) return;
+    const { moyenId, demandeId, items } = dmgValiderDialog;
+    const itemsMontants = items.map(it => ({
+      ...it,
+      montant: Number(dmgMontants[it.locationItemId]) || 0,
+    }));
+    setDmgLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/location-demandes/${demandeId}/dmg-valider`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dmgUserId: currentUser.id, itemsMontants }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await Promise.all([loadLocationData(moyenId), refetchMoyens(), refetchPlan(), invalidatePlans()]);
+      setDmgValiderDialog(null);
+      setDmgMontants({});
+    } catch { alert("Erreur réseau"); }
+    finally { setDmgLoading(false); }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in pb-20">
@@ -547,20 +630,19 @@ export default function PlanDetails() {
                               Direction : {directions.find(d => d.id === (m as any).autresDirectionId)?.nom ?? `ID ${(m as any).autresDirectionId}`}
                             </div>
                           )}
-                          {m.categorie === "location" && (
-                            <div className="flex flex-wrap gap-2 mt-1">
-                              {(m as any).locationVehiculeSimple > 0 && (
-                                <span className="inline-flex items-center gap-1 text-xs bg-sky-50 text-sky-700 border border-sky-200 rounded px-2 py-0.5 font-medium">
-                                  🚗 {(m as any).locationVehiculeSimple} véhicule(s) simple(s)
-                                </span>
-                              )}
-                              {(m as any).locationEngin > 0 && (
-                                <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-2 py-0.5 font-medium">
-                                  🚜 {(m as any).locationEngin} engin(s)
-                                </span>
-                              )}
-                            </div>
-                          )}
+                          {m.categorie === "location" && (() => {
+                            const locItems: Array<{ typeEngin: string; nbJours: number }> =
+                              (m as any).listeMaterielJson ? JSON.parse((m as any).listeMaterielJson) : [];
+                            return locItems.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {locItems.map((it, li) => (
+                                  <span key={li} className="inline-flex items-center gap-1 text-xs bg-sky-50 text-sky-700 border border-sky-200 rounded px-2 py-0.5 font-medium">
+                                    🚗 {it.typeEngin} — {it.nbJours} j.
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null;
+                          })()}
                           {(m.categorie === "indemnite_journaliere" || m.categorie === "prime") && (
                             <button
                               className="text-xs text-primary underline mt-0.5 hover:text-primary/70 transition-colors"
@@ -665,6 +747,23 @@ export default function PlanDetails() {
                             ) : (
                               <span className="text-muted-foreground text-xs">—</span>
                             )
+                          ) : m.categorie === "location" ? (
+                            canDemanderExecution ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs gap-1 px-2 border-sky-300 text-sky-700 hover:bg-sky-50"
+                                onClick={async () => {
+                                  await loadLocationData(m.id);
+                                  setLocationJoursSels({});
+                                  setLocationDemandeDialog(m.id);
+                                }}
+                              >
+                                🚗 Dem. location
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )
                           ) : m.demandeStatus === "consommee" || (Number(m.montantConsomme) > 0 && !m.demandeStatus) ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">
                               <CheckCheck className="w-3 h-3" /> Traitée
@@ -750,6 +849,53 @@ export default function PlanDetails() {
                                           <Download className="w-3 h-3" /> Bon
                                         </Button>
                                       </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                      {/* Location demandes expandable sub-row */}
+                      {m.categorie === "location" && isOwnDirectionPlan && (
+                        <tr>
+                          <td colSpan={7} className="bg-sky-50/40 px-5 py-2">
+                            <button
+                              className="flex items-center gap-1.5 text-xs text-sky-700 hover:text-sky-900 font-medium"
+                              onClick={async () => {
+                                if (!expandedLocationMoyen[m.id]) await loadLocationData(m.id);
+                                setExpandedLocationMoyen(prev => ({ ...prev, [m.id]: !prev[m.id] }));
+                              }}
+                            >
+                              🚗
+                              {expandedLocationMoyen[m.id] ? "Masquer" : "Voir"} les demandes location
+                              {(locationDemandesMap[m.id] ?? []).length > 0 && (
+                                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-sky-200 text-sky-800 text-xs">{locationDemandesMap[m.id].length}</span>
+                              )}
+                            </button>
+                            {expandedLocationMoyen[m.id] && (
+                              <div className="mt-2 space-y-2">
+                                {(locationDemandesMap[m.id] ?? []).length === 0 ? (
+                                  <p className="text-xs text-muted-foreground py-1">Aucune demande location soumise.</p>
+                                ) : (locationDemandesMap[m.id] ?? []).map(dem => (
+                                  <div key={dem.id} className="border border-sky-200 rounded-lg bg-white p-3 text-xs space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-semibold text-sky-900">Demande #{dem.id}</span>
+                                      <span className={cn(
+                                        "px-2 py-0.5 rounded-full text-xs font-medium",
+                                        dem.statut === "validee" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"
+                                      )}>
+                                        {dem.statut === "validee" ? "Validée" : "Attente DMG"}
+                                      </span>
+                                    </div>
+                                    <ul className="list-disc list-inside text-muted-foreground space-y-0.5">
+                                      {dem.items.map((it, ii) => (
+                                        <li key={ii}>{it.typeEngin} — {it.nbJoursDemandes} jour(s){it.montant ? ` — ${it.montant.toLocaleString("fr-MR")} MRU` : ""}</li>
+                                      ))}
+                                    </ul>
+                                    {dem.statut === "validee" && dem.montantTotal && (
+                                      <div className="pt-1 font-semibold text-success">Total : {dem.montantTotal.toLocaleString("fr-MR")} MRU</div>
                                     )}
                                   </div>
                                 ))}
@@ -1020,8 +1166,66 @@ export default function PlanDetails() {
             </Card>
           )}
 
-          {/* Specialist waiting panel — has categories but no pending demands (exclude DA when only materiel moyens) */}
-          {isFunctionalRole && plan.statut === "ouvert" && myMoyensAll.length > 0 && myMoyens.length === 0 && !(isDA && myMoyensAll.every(m => m.categorie === "materiel")) && (
+          {/* DMG — Location demandes panel */}
+          {isDMG && plan.statut === "ouvert" && locationMoyens.length > 0 && (
+            <Card className="border-sky-200 bg-sky-50/40">
+              <CardHeader className="border-b border-sky-200/60 pb-4">
+                <CardTitle className="text-base flex items-center gap-2 text-sky-800 font-bold">
+                  🚗 Demandes Location Véhicule
+                </CardTitle>
+                <p className="text-xs text-sky-700 mt-1">Validez les demandes de location en saisissant le montant par engin.</p>
+              </CardHeader>
+              <CardContent className="p-5 space-y-4">
+                {locationMoyens.map(m => {
+                  const pendingDemandes = (locationDemandesMap[m.id] ?? []).filter(d => d.statut === "en_attente_dmg");
+                  const validatedDemandes = (locationDemandesMap[m.id] ?? []).filter(d => d.statut === "validee");
+                  return (
+                    <div key={m.id} className="space-y-2">
+                      <p className="text-xs font-semibold text-sky-800">{m.description}</p>
+                      {!locationDemandesMap[m.id] ? (
+                        <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => loadLocationData(m.id)}>
+                          <Loader2 className="w-3 h-3 mr-1" /> Charger
+                        </Button>
+                      ) : pendingDemandes.length === 0 && validatedDemandes.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">Aucune demande en attente.</p>
+                      ) : null}
+                      {pendingDemandes.map(dem => (
+                        <div key={dem.id} className="border border-sky-200 rounded-lg bg-white p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-sky-700">Demande #{dem.id}</span>
+                            <Button
+                              size="sm"
+                              className="h-6 text-xs gap-1 px-2 bg-sky-600 hover:bg-sky-700 text-white"
+                              onClick={() => {
+                                setDmgValiderDialog({ moyenId: m.id, demandeId: dem.id, items: dem.items });
+                                setDmgMontants({});
+                              }}
+                            >
+                              <CheckCircle2 className="w-3 h-3" /> Valider & Saisir montants
+                            </Button>
+                          </div>
+                          <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5">
+                            {dem.items.map((it, ii) => <li key={ii}>{it.typeEngin} — {it.nbJoursDemandes} jour(s)</li>)}
+                          </ul>
+                        </div>
+                      ))}
+                      {validatedDemandes.map(dem => (
+                        <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
+                          <span className="text-xs text-green-800 font-semibold">Demande #{dem.id} — {dem.montantTotal?.toLocaleString("fr-MR") ?? "—"} MRU</span>
+                          <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Validée</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Specialist waiting panel — has categories but no pending demands (exclude DA when only materiel moyens; exclude DMG when only location moyens) */}
+          {isFunctionalRole && plan.statut === "ouvert" && myMoyensAll.length > 0 && myMoyens.length === 0
+            && !(isDA && myMoyensAll.every(m => m.categorie === "materiel"))
+            && !(isDMG && myMoyensAll.every(m => m.categorie === "location")) && (
             <Card className="border-blue-200 bg-blue-50/50">
               <CardContent className="p-5 flex items-start gap-3">
                 <Hourglass className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
@@ -1280,6 +1484,100 @@ export default function PlanDetails() {
             >
               {daLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
               Générer le bon
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Direction: Demande location dialog ─── */}
+      <Dialog open={locationDemandeDialog !== null} onOpenChange={(open) => { if (!open) setLocationDemandeDialog(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">🚗 Demander une location de véhicule</DialogTitle>
+            <DialogDescription>Sélectionnez les engins et indiquez le nombre de jours souhaités (ne peut pas dépasser le disponible).</DialogDescription>
+          </DialogHeader>
+          {locationDemandeDialog !== null && (
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              {(locationItemsMap[locationDemandeDialog] ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Aucun engin disponible.</p>
+              ) : (locationItemsMap[locationDemandeDialog] ?? []).map(item => (
+                <div key={item.id} className="flex items-center gap-3 p-3 border rounded-lg bg-white">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">🚗 {item.typeEngin}</p>
+                    <p className="text-xs text-muted-foreground">Jours disponibles : <span className="font-semibold text-primary">{item.nbJoursRestants}</span> / {item.nbJoursTotal}</p>
+                  </div>
+                  <input
+                    type="number"
+                    min={0}
+                    max={item.nbJoursRestants}
+                    placeholder="0"
+                    value={locationJoursSels[item.id] ?? ""}
+                    onChange={e => setLocationJoursSels(prev => ({ ...prev, [item.id]: e.target.value }))}
+                    className="w-20 px-2 py-1.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 text-center"
+                  />
+                  <span className="text-xs text-muted-foreground">j.</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setLocationDemandeDialog(null)} disabled={locationDemLoading}>Annuler</Button>
+            <Button
+              className="bg-sky-600 hover:bg-sky-700 text-white"
+              disabled={locationDemLoading || !Object.values(locationJoursSels).some(j => Number(j) > 0)}
+              onClick={() => locationDemandeDialog !== null && handleDemanderLocation(locationDemandeDialog)}
+            >
+              {locationDemLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              Soumettre la demande
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── DMG: Valider demande location dialog ─── */}
+      <Dialog open={!!dmgValiderDialog} onOpenChange={(open) => { if (!open) { setDmgValiderDialog(null); setDmgMontants({}); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">🚗 Valider la demande — Saisir les montants</DialogTitle>
+            <DialogDescription>Indiquez le montant total de location pour chaque engin demandé.</DialogDescription>
+          </DialogHeader>
+          {dmgValiderDialog && (
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              {dmgValiderDialog.items.map((item, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 border rounded-lg bg-white">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">🚗 {item.typeEngin}</p>
+                    <p className="text-xs text-muted-foreground">Durée : <span className="font-semibold">{item.nbJoursDemandes} jour(s)</span></p>
+                  </div>
+                  <div className="text-right">
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="Montant MRU"
+                      value={dmgMontants[item.locationItemId] ?? ""}
+                      onChange={e => setDmgMontants(prev => ({ ...prev, [item.locationItemId]: e.target.value }))}
+                      className="w-28 px-2 py-1.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 text-right"
+                    />
+                    <p className="text-xs text-muted-foreground mt-0.5">MRU</p>
+                  </div>
+                </div>
+              ))}
+              <div className="bg-sky-50 rounded-lg p-3 text-sm font-semibold text-sky-800 flex justify-between">
+                <span>Total</span>
+                <span>{Object.values(dmgMontants).reduce((s, v) => s + (Number(v) || 0), 0).toLocaleString("fr-MR")} MRU</span>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setDmgValiderDialog(null); setDmgMontants({}); }} disabled={dmgLoading}>Annuler</Button>
+            <Button
+              className="bg-sky-600 hover:bg-sky-700 text-white"
+              disabled={dmgLoading}
+              onClick={handleDmgValider}
+            >
+              {dmgLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+              Valider & Déduire du budget
             </Button>
           </DialogFooter>
         </DialogContent>

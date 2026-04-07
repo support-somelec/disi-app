@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable, materielItemsTable, materielDemandesTable } from "@workspace/db/schema";
+import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable, materielItemsTable, materielDemandesTable, locationItemsTable, locationDemandesTable } from "@workspace/db/schema";
 import { eq, and, SQL, sql, inArray } from "drizzle-orm";
 import {
   CreatePlanBody,
@@ -420,6 +420,25 @@ router.post("/plans/:id/moyens", async (req, res) => {
       locationVehiculeSimple: (body as any).locationVehiculeSimple ?? null,
       locationEngin: (body as any).locationEngin ?? null,
     }).returning();
+
+    // Seed location_items when categorie is location
+    if (body.categorie === "location" && (body as any).listeMaterielJson) {
+      try {
+        const items: Array<{ typeEngin: string; nbJours: number }> = JSON.parse((body as any).listeMaterielJson);
+        if (items.length > 0) {
+          await db.insert(locationItemsTable).values(
+            items.map(i => ({
+              moyenId: moyen.id,
+              typeEngin: i.typeEngin,
+              nbJoursTotal: Number(i.nbJours) || 1,
+              nbJoursRestants: Number(i.nbJours) || 1,
+            }))
+          );
+        }
+      } catch (e) {
+        console.error("Failed to seed location_items", e);
+      }
+    }
 
     // Seed materiel_items when categorie is materiel
     if (body.categorie === "materiel" && (body as any).listeMaterielJson) {
@@ -951,6 +970,158 @@ router.post("/plans/:id/moyens/:moyenId/materiel-demandes/:demandeId/dcgai-valid
     } catch (e) { console.error("Mail error", e); }
 
     res.json(mapMaterielDemande(updated));
+  } catch (err) {
+    console.error(String(err));
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// ======================== LOCATION VÉHICULE WORKFLOW ========================
+
+function mapLocationDemande(d: typeof locationDemandesTable.$inferSelect) {
+  return {
+    ...d,
+    items: JSON.parse(d.itemsJson || "[]"),
+    montantTotal: d.montantTotal ? Number(d.montantTotal) : null,
+    dmgValidatedAt: d.dmgValidatedAt ?? null,
+  };
+}
+
+// GET /plans/:id/moyens/:moyenId/location-items
+router.get("/plans/:id/moyens/:moyenId/location-items", async (req, res) => {
+  try {
+    const moyenId = Number(req.params.moyenId);
+    const items = await db.select().from(locationItemsTable).where(eq(locationItemsTable.moyenId, moyenId));
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// GET /plans/:id/moyens/:moyenId/location-demandes
+router.get("/plans/:id/moyens/:moyenId/location-demandes", async (req, res) => {
+  try {
+    const moyenId = Number(req.params.moyenId);
+    const demandes = await db.select().from(locationDemandesTable).where(eq(locationDemandesTable.moyenId, moyenId));
+    res.json(demandes.map(mapLocationDemande));
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /plans/:id/moyens/:moyenId/location-demandes (direction creates request)
+router.post("/plans/:id/moyens/:moyenId/location-demandes", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const { createdById, items } = req.body as {
+      createdById: number;
+      items: Array<{ locationItemId: number; typeEngin: string; nbJoursDemandes: number }>;
+    };
+    if (!items?.length) return res.status(400).json({ error: "Aucun item sélectionné." });
+
+    // Validate against remaining days
+    for (const sel of items) {
+      const dbItem = await db.select().from(locationItemsTable).where(eq(locationItemsTable.id, sel.locationItemId));
+      if (!dbItem.length) return res.status(400).json({ error: `Item ${sel.locationItemId} introuvable.` });
+      if (sel.nbJoursDemandes > dbItem[0].nbJoursRestants) {
+        return res.status(400).json({ error: `Nombre de jours demandés (${sel.nbJoursDemandes}) dépasse le disponible (${dbItem[0].nbJoursRestants}) pour ${dbItem[0].typeEngin}.` });
+      }
+    }
+
+    // Deduct days from remaining
+    for (const sel of items) {
+      const dbItem = await db.select().from(locationItemsTable).where(eq(locationItemsTable.id, sel.locationItemId));
+      await db.update(locationItemsTable)
+        .set({ nbJoursRestants: dbItem[0].nbJoursRestants - sel.nbJoursDemandes })
+        .where(eq(locationItemsTable.id, sel.locationItemId));
+    }
+
+    const [demande] = await db.insert(locationDemandesTable).values({
+      planId,
+      moyenId,
+      createdById,
+      statut: "en_attente_dmg",
+      itemsJson: JSON.stringify(items),
+    }).returning();
+
+    // Notify DMG
+    try {
+      const plan = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+      const moyen = await db.select().from(moyensTable).where(eq(moyensTable.id, moyenId));
+      const dmgEmails = await getUserEmailsByRole(["dmg"]);
+      if (plan[0] && moyen[0] && dmgEmails.length > 0) {
+        await sendMail({
+          to: dmgEmails,
+          subject: `[SOMELEC] Nouvelle demande location véhicule — ${plan[0].reference ?? plan[0].id}`,
+          html: `<p>Une nouvelle demande de location véhicule a été soumise pour le plan <strong>${plan[0].titre}</strong> (réf. ${plan[0].reference ?? plan[0].id}).</p>
+          <p>Moyen : ${moyen[0].description}</p>
+          <p>Engins demandés : ${items.map(i => `${i.typeEngin} (${i.nbJoursDemandes} jour(s))`).join(", ")}</p>
+          <p>Veuillez vous connecter pour traiter cette demande.</p>`,
+        });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.status(201).json(mapLocationDemande(demande));
+  } catch (err) {
+    console.error(String(err));
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// POST /plans/:id/moyens/:moyenId/location-demandes/:demandeId/dmg-valider
+router.post("/plans/:id/moyens/:moyenId/location-demandes/:demandeId/dmg-valider", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const demandeId = Number(req.params.demandeId);
+    const { dmgUserId, itemsMontants } = req.body as {
+      dmgUserId: number;
+      itemsMontants: Array<{ locationItemId: number; typeEngin: string; nbJoursDemandes: number; montant: number }>;
+    };
+
+    const existing = await db.select().from(locationDemandesTable).where(eq(locationDemandesTable.id, demandeId));
+    if (!existing.length || existing[0].statut !== "en_attente_dmg") {
+      return res.status(400).json({ error: "Demande introuvable ou déjà traitée." });
+    }
+
+    const montantTotal = itemsMontants.reduce((s, i) => s + (Number(i.montant) || 0), 0);
+
+    // Deduct from moyen budget
+    const moyen = await db.select().from(moyensTable).where(eq(moyensTable.id, moyenId));
+    if (moyen.length) {
+      const current = Number(moyen[0].montantConsomme ?? 0);
+      await db.update(moyensTable)
+        .set({ montantConsomme: String(current + montantTotal) })
+        .where(eq(moyensTable.id, moyenId));
+    }
+
+    const [updated] = await db.update(locationDemandesTable)
+      .set({
+        statut: "validee",
+        itemsJson: JSON.stringify(itemsMontants),
+        montantTotal: String(montantTotal),
+        dmgValidatedById: dmgUserId,
+        dmgValidatedAt: new Date(),
+      })
+      .where(eq(locationDemandesTable.id, demandeId))
+      .returning();
+
+    // Notify direction
+    try {
+      const plan = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+      const dirEmail = plan[0] ? await getUserEmailById(plan[0].createdById) : null;
+      if (dirEmail && plan[0]) {
+        await sendMail({
+          to: dirEmail,
+          subject: `[SOMELEC] Demande location véhicule validée — ${plan[0].reference ?? plan[0].id}`,
+          html: `<p>Votre demande de location véhicule pour le plan <strong>${plan[0].titre}</strong> a été validée par la DMG.</p>
+          <p>Montant total : <strong>${montantTotal.toLocaleString("fr-MR")} MRU</strong></p>`,
+        });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.json(mapLocationDemande(updated));
   } catch (err) {
     console.error(String(err));
     res.status(400).json({ error: String(err) });
