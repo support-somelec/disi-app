@@ -113,6 +113,37 @@ export const locationDemandesTable = pgTable("location_demandes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const carburantDemandesTable = pgTable("carburant_demandes", {
+  id: serial("id").primaryKey(),
+  moyenId: integer("moyen_id").notNull().references(() => moyensTable.id, { onDelete: "cascade" }),
+  planId: integer("plan_id").notNull().references(() => plansTable.id, { onDelete: "cascade" }),
+  createdById: integer("created_by_id").notNull().references(() => usersTable.id),
+  montantDemande: numeric("montant_demande", { precision: 12, scale: 2 }).notNull(),
+  statut: text("statut").notNull().default("en_attente_cad"),
+  montantValide: numeric("montant_valide", { precision: 12, scale: 2 }),
+  cadValidatedById: integer("cad_validated_by_id").references(() => usersTable.id),
+  cadValidatedAt: timestamp("cad_validated_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const depenseDemandesTable = pgTable("depense_demandes", {
+  id: serial("id").primaryKey(),
+  moyenId: integer("moyen_id").notNull().references(() => moyensTable.id, { onDelete: "cascade" }),
+  planId: integer("plan_id").notNull().references(() => plansTable.id, { onDelete: "cascade" }),
+  createdById: integer("created_by_id").notNull().references(() => usersTable.id),
+  montantDemande: numeric("montant_demande", { precision: 12, scale: 2 }).notNull(),
+  nomBeneficiaire: text("nom_beneficiaire").notNull(),
+  matriculeBeneficiaire: text("matricule_beneficiaire"),
+  statut: text("statut").notNull().default("en_attente_dcgai"),
+  dcgaiValidatedById: integer("dcgai_validated_by_id").references(() => usersTable.id),
+  dcgaiValidatedAt: timestamp("dcgai_validated_at"),
+  dfcValidatedById: integer("dfc_validated_by_id").references(() => usersTable.id),
+  dfcValidatedAt: timestamp("dfc_validated_at"),
+  montantPaye: numeric("montant_paye", { precision: 12, scale: 2 }),
+  pieceReference: text("piece_reference"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertPlanSchema = createInsertSchema(plansTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPlan = z.infer<typeof insertPlanSchema>;
 export type Plan = typeof plansTable.$inferSelect;

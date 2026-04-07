@@ -29,6 +29,7 @@ const USERS = [
   { nom: "", prenom: "DF",  email: "df@somelec.mr",  role: "direction_financiere", directionIdx: 3 },
   { nom: "", prenom: "RH",    email: "rh@somelec.mr",    role: "rh",    directionIdx: 4 },
   { nom: "", prenom: "DCGAI", email: "dcgai@somelec.mr", role: "dcgai", directionIdx: null },
+  { nom: "", prenom: "CAD",   email: "cad@somelec.mr",   role: "cad",   directionIdx: null },
 ];
 
 const EMPLOYES_INIT = [

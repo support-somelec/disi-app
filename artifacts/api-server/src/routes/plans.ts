@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable, materielItemsTable, materielDemandesTable, locationItemsTable, locationDemandesTable } from "@workspace/db/schema";
+import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable, materielItemsTable, materielDemandesTable, locationItemsTable, locationDemandesTable, carburantDemandesTable, depenseDemandesTable } from "@workspace/db/schema";
 import { eq, and, SQL, sql, inArray } from "drizzle-orm";
 import {
   CreatePlanBody,
@@ -1152,6 +1152,249 @@ router.post("/plans/:id/moyens/:moyenId/location-demandes/:demandeId/dmg-valider
     console.error(String(err));
     res.status(400).json({ error: String(err) });
   }
+});
+
+// ─────────────────── CARBURANT WORKFLOW ───────────────────
+
+const mapCarburantDemande = (d: typeof carburantDemandesTable.$inferSelect) => ({
+  id: d.id, moyenId: d.moyenId, planId: d.planId, createdById: d.createdById,
+  montantDemande: Number(d.montantDemande), statut: d.statut,
+  montantValide: d.montantValide !== null ? Number(d.montantValide) : null,
+  cadValidatedById: d.cadValidatedById, cadValidatedAt: d.cadValidatedAt, createdAt: d.createdAt,
+});
+
+// GET /plans/:id/moyens/:moyenId/carburant-demandes
+router.get("/plans/:id/moyens/:moyenId/carburant-demandes", async (req, res) => {
+  try {
+    const moyenId = Number(req.params.moyenId);
+    const rows = await db.select().from(carburantDemandesTable).where(eq(carburantDemandesTable.moyenId, moyenId));
+    res.json(rows.map(mapCarburantDemande));
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/carburant-demandes
+router.post("/plans/:id/moyens/:moyenId/carburant-demandes", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const { createdById, montantDemande } = req.body as { createdById: number; montantDemande: number };
+    if (!montantDemande || montantDemande <= 0) return res.status(400).json({ error: "Montant invalide." });
+
+    const [demande] = await db.insert(carburantDemandesTable).values({
+      planId, moyenId, createdById, montantDemande: String(montantDemande), statut: "en_attente_cad",
+    }).returning();
+
+    try {
+      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+      const [moyen] = await db.select({ description: moyensTable.description }).from(moyensTable).where(eq(moyensTable.id, moyenId));
+      const cadEmails = await getUserEmailsByRole(["cad"]);
+      if (plan && moyen && cadEmails.length > 0) {
+        await sendMail({
+          to: cadEmails,
+          subject: `[SOMELEC] Demande carburant — ${plan.reference ?? plan.id}`,
+          html: `<p>Une demande de carburant de <strong>${Number(montantDemande).toLocaleString("fr-MR")} MRU</strong> a été soumise pour le plan <strong>${plan.titre}</strong>.<br>Moyen : ${moyen.description}<br>Connectez-vous pour valider.</p>`,
+        });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.status(201).json(mapCarburantDemande(demande));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/carburant-demandes/:demandeId/cad-valider
+router.post("/plans/:id/moyens/:moyenId/carburant-demandes/:demandeId/cad-valider", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const demandeId = Number(req.params.demandeId);
+    const { cadUserId, montantValide, decharge } = req.body as {
+      cadUserId: number;
+      montantValide: number;
+      decharge?: { nom: string; mimeType: string; taille: number; data: string };
+    };
+
+    const [existing] = await db.select().from(carburantDemandesTable).where(eq(carburantDemandesTable.id, demandeId));
+    if (!existing || existing.statut !== "en_attente_cad") return res.status(400).json({ error: "Demande introuvable ou déjà traitée." });
+
+    const [updated] = await db.update(carburantDemandesTable)
+      .set({ statut: "validee", montantValide: String(montantValide), cadValidatedById: cadUserId, cadValidatedAt: new Date() })
+      .where(eq(carburantDemandesTable.id, demandeId)).returning();
+
+    // Deduct from moyen budget
+    const [moyen] = await db.select().from(moyensTable).where(eq(moyensTable.id, moyenId));
+    if (moyen) {
+      await db.update(moyensTable)
+        .set({ montantConsomme: String(Number(moyen.montantConsomme ?? 0) + montantValide) })
+        .where(eq(moyensTable.id, moyenId));
+    }
+
+    if (decharge?.data) {
+      await db.insert(attachmentsTable).values({
+        planId, moyenId, nom: decharge.nom, type: "decharge_cad", taille: decharge.taille, data: decharge.data,
+      });
+    }
+
+    try {
+      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+      const dirEmail = plan ? await getUserEmailById(plan.createdById) : null;
+      if (dirEmail && plan) {
+        await sendMail({
+          to: dirEmail,
+          subject: `[SOMELEC] Demande carburant validée — ${plan.reference ?? plan.id}`,
+          html: `<p>Votre demande carburant pour le plan <strong>${plan.titre}</strong> a été validée.<br>Montant : <strong>${montantValide.toLocaleString("fr-MR")} MRU</strong></p>`,
+        });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.json(mapCarburantDemande(updated));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// ─────────────────── DÉPENSES WORKFLOW (prime/logement/logistique/indemnité/autres) ───────────────────
+
+const mapDepenseDemande = (d: typeof depenseDemandesTable.$inferSelect) => ({
+  id: d.id, moyenId: d.moyenId, planId: d.planId, createdById: d.createdById,
+  montantDemande: Number(d.montantDemande), nomBeneficiaire: d.nomBeneficiaire,
+  matriculeBeneficiaire: d.matriculeBeneficiaire, statut: d.statut,
+  dcgaiValidatedById: d.dcgaiValidatedById, dcgaiValidatedAt: d.dcgaiValidatedAt,
+  dfcValidatedById: d.dfcValidatedById, dfcValidatedAt: d.dfcValidatedAt,
+  montantPaye: d.montantPaye !== null ? Number(d.montantPaye) : null,
+  pieceReference: d.pieceReference, createdAt: d.createdAt,
+});
+
+// GET /plans/:id/moyens/:moyenId/depense-demandes
+router.get("/plans/:id/moyens/:moyenId/depense-demandes", async (req, res) => {
+  try {
+    const moyenId = Number(req.params.moyenId);
+    const rows = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.moyenId, moyenId));
+    res.json(rows.map(mapDepenseDemande));
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// GET /plans/:id/depense-demandes  (all pending for DCGAI/DFC)
+router.get("/plans/:id/depense-demandes-all", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const rows = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.planId, planId));
+    res.json(rows.map(mapDepenseDemande));
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes
+router.post("/plans/:id/moyens/:moyenId/depense-demandes", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const { createdById, montantDemande, nomBeneficiaire, matriculeBeneficiaire } = req.body as {
+      createdById: number; montantDemande: number; nomBeneficiaire: string; matriculeBeneficiaire?: string;
+    };
+    if (!montantDemande || montantDemande <= 0) return res.status(400).json({ error: "Montant invalide." });
+    if (!nomBeneficiaire?.trim()) return res.status(400).json({ error: "Nom du bénéficiaire requis." });
+
+    const [demande] = await db.insert(depenseDemandesTable).values({
+      planId, moyenId, createdById, montantDemande: String(montantDemande),
+      nomBeneficiaire, matriculeBeneficiaire: matriculeBeneficiaire ?? null, statut: "en_attente_dcgai",
+    }).returning();
+
+    try {
+      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+      const [moyen] = await db.select({ description: moyensTable.description, categorie: moyensTable.categorie }).from(moyensTable).where(eq(moyensTable.id, moyenId));
+      const dcgaiEmails = await getUserEmailsByRole(["dcgai"]);
+      if (plan && moyen && dcgaiEmails.length > 0) {
+        await sendMail({
+          to: dcgaiEmails,
+          subject: `[SOMELEC] Demande dépense ${moyen.categorie} — ${plan.reference ?? plan.id}`,
+          html: `<p>Nouvelle demande de dépense de <strong>${Number(montantDemande).toLocaleString("fr-MR")} MRU</strong> pour le plan <strong>${plan.titre}</strong>.<br>Catégorie : ${moyen.categorie} — Moyen : ${moyen.description}<br>Bénéficiaire : ${nomBeneficiaire}${matriculeBeneficiaire ? ` (${matriculeBeneficiaire})` : ""}</p>`,
+        });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.status(201).json(mapDepenseDemande(demande));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dcgai-valider
+router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dcgai-valider", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const demandeId = Number(req.params.demandeId);
+    const { dcgaiUserId } = req.body as { dcgaiUserId: number };
+
+    const [existing] = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.id, demandeId));
+    if (!existing || existing.statut !== "en_attente_dcgai") return res.status(400).json({ error: "Demande introuvable ou déjà traitée." });
+
+    const [updated] = await db.update(depenseDemandesTable)
+      .set({ statut: "en_attente_dfc", dcgaiValidatedById: dcgaiUserId, dcgaiValidatedAt: new Date() })
+      .where(eq(depenseDemandesTable.id, demandeId)).returning();
+
+    try {
+      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+      const [moyen] = await db.select({ description: moyensTable.description }).from(moyensTable).where(eq(moyensTable.id, moyenId));
+      const dfcEmails = await getUserEmailsByRole(["direction_financiere"]);
+      if (plan && moyen && dfcEmails.length > 0) {
+        await sendMail({
+          to: dfcEmails,
+          subject: `[SOMELEC] Dépense validée DCGAI — paiement à effectuer — ${plan.reference ?? plan.id}`,
+          html: `<p>Une dépense a été validée par le DCGAI pour le plan <strong>${plan.titre}</strong>.<br>Moyen : ${moyen.description}<br>Bénéficiaire : ${existing.nomBeneficiaire}${existing.matriculeBeneficiaire ? ` (${existing.matriculeBeneficiaire})` : ""}<br>Montant demandé : <strong>${Number(existing.montantDemande).toLocaleString("fr-MR")} MRU</strong><br>Connectez-vous pour effectuer le paiement.</p>`,
+        });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.json(mapDepenseDemande(updated));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dfc-payer
+router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dfc-payer", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const demandeId = Number(req.params.demandeId);
+    const { dfcUserId, montantPaye } = req.body as { dfcUserId: number; montantPaye: number };
+
+    const [existing] = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.id, demandeId));
+    if (!existing || existing.statut !== "en_attente_dfc") return res.status(400).json({ error: "Demande introuvable ou déjà traitée." });
+
+    const [plan] = await db.select({ reference: plansTable.reference, titre: plansTable.titre, id: plansTable.id, createdById: plansTable.createdById })
+      .from(plansTable).where(eq(plansTable.id, planId));
+    const planRef = plan?.reference ?? `PLAN-${planId}`;
+    const pieceReference = `PIECE-${planRef}-${String(demandeId).padStart(4, "0")}`;
+
+    const [updated] = await db.update(depenseDemandesTable)
+      .set({ statut: "payee", dfcValidatedById: dfcUserId, dfcValidatedAt: new Date(), montantPaye: String(montantPaye), pieceReference })
+      .where(eq(depenseDemandesTable.id, demandeId)).returning();
+
+    // Deduct from moyen budget
+    const [moyen] = await db.select().from(moyensTable).where(eq(moyensTable.id, moyenId));
+    if (moyen) {
+      await db.update(moyensTable)
+        .set({ montantConsomme: String(Number(moyen.montantConsomme ?? 0) + montantPaye) })
+        .where(eq(moyensTable.id, moyenId));
+    }
+
+    try {
+      const dirEmail = plan ? await getUserEmailById(plan.createdById) : null;
+      if (dirEmail && plan) {
+        await sendMail({
+          to: dirEmail,
+          subject: `[SOMELEC] Paiement effectué — ${pieceReference}`,
+          html: `<p>Le paiement pour le plan <strong>${plan.titre}</strong> a été effectué.<br>Bénéficiaire : ${existing.nomBeneficiaire}<br>Montant payé : <strong>${montantPaye.toLocaleString("fr-MR")} MRU</strong><br>Réf. pièce : <strong>${pieceReference}</strong></p>`,
+        });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.json(mapDepenseDemande(updated));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// GET /plans/:id/carburant-demandes-all  (all for CAD view)
+router.get("/plans/:id/carburant-demandes-all", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const rows = await db.select().from(carburantDemandesTable).where(eq(carburantDemandesTable.planId, planId));
+    res.json(rows.map(mapCarburantDemande));
+  } catch (err) { res.status(500).json({ error: String(err) }); }
 });
 
 export default router;

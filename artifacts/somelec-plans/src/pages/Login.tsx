@@ -143,6 +143,7 @@ export default function Login() {
                 { label: "CF", email: "cf@somelec.mr" },
                 { label: "DF", email: "df@somelec.mr" },
                 { label: "DCGAI", email: "dcgai@somelec.mr" },
+                { label: "CAD",   email: "cad@somelec.mr" },
               ].map(u => (
                 <button
                   key={u.email}

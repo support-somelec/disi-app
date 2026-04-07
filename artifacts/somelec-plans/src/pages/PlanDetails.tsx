@@ -134,6 +134,32 @@ export default function PlanDetails() {
   const [daDechargeFile, setDaDechargeFile] = useState<File | null>(null);
   const [dmgDechargeFile, setDmgDechargeFile] = useState<File | null>(null);
 
+  // ── Carburant workflow state ──
+  type CarburantDemande = { id: number; moyenId: number; statut: string; montantDemande: number; montantValide: number | null; createdAt: string };
+  const [carburantDemandesMap, setCarburantDemandesMap] = useState<Record<number, CarburantDemande[]>>({});
+  const [expandedCarburantMoyen, setExpandedCarburantMoyen] = useState<Record<number, boolean>>({});
+  const [carburantDemandeDialog, setCarburantDemandeDialog] = useState<number | null>(null);
+  const [carburantMontantInput, setCarburantMontantInput] = useState("");
+  const [carburantDemLoading, setCarburantDemLoading] = useState(false);
+  const [cadValiderDialog, setCadValiderDialog] = useState<{ moyenId: number; demandeId: number; montantDemande: number } | null>(null);
+  const [cadMontantInput, setCadMontantInput] = useState("");
+  const [cadDechargeFile, setCadDechargeFile] = useState<File | null>(null);
+  const [cadLoading, setCadLoading] = useState(false);
+
+  // ── Dépenses workflow state (prime/logement/logistique/indemnite/autres) ──
+  type DepenseDemande = { id: number; moyenId: number; statut: string; montantDemande: number; nomBeneficiaire: string; matriculeBeneficiaire?: string; montantPaye: number | null; pieceReference?: string; dcgaiValidatedAt?: string; dfcValidatedAt?: string; createdAt: string };
+  const [depenseDemandesMap, setDepenseDemandesMap] = useState<Record<number, DepenseDemande[]>>({});
+  const [expandedDepenseMoyen, setExpandedDepenseMoyen] = useState<Record<number, boolean>>({});
+  const [depenseDemandeDialog, setDepenseDemandeDialog] = useState<number | null>(null);
+  const [depenseMontantInput, setDepenseMontantInput] = useState("");
+  const [depenseNomBenef, setDepenseNomBenef] = useState("");
+  const [depenseMatricule, setDepenseMatricule] = useState("");
+  const [depenseDemLoading, setDepenseDemLoading] = useState(false);
+  const [dcgaiDepenseLoading, setDcgaiDepenseLoading] = useState<number | null>(null);
+  const [dfcPayerDialog, setDfcPayerDialog] = useState<{ moyenId: number; demandeId: number; demande: DepenseDemande } | null>(null);
+  const [dfcMontantInput, setDfcMontantInput] = useState("");
+  const [dfcLoading, setDfcLoading] = useState(false);
+
   const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
   const toBase64 = (file: File): Promise<string> =>
@@ -143,6 +169,150 @@ export default function PlanDetails() {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+
+  const DEPENSE_CATS = ["prime", "logement", "indemnite_journaliere", "logistique", "autres"];
+
+  const loadCarburantData = async (moyenId: number) => {
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/carburant-demandes`);
+      const data = await res.json();
+      setCarburantDemandesMap(prev => ({ ...prev, [moyenId]: data }));
+    } catch { /* ignore */ }
+  };
+
+  const handleDemanderCarburant = async (moyenId: number) => {
+    if (!currentUser) return;
+    const montant = Number(carburantMontantInput);
+    if (!montant || montant <= 0) { alert("Montant invalide."); return; }
+    setCarburantDemLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/carburant-demandes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ createdById: currentUser.id, montantDemande: montant }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadCarburantData(moyenId);
+      setCarburantDemandeDialog(null);
+      setCarburantMontantInput("");
+    } catch { alert("Erreur réseau"); }
+    finally { setCarburantDemLoading(false); }
+  };
+
+  const handleCadValider = async () => {
+    if (!cadValiderDialog || !currentUser) return;
+    const { moyenId, demandeId } = cadValiderDialog;
+    const montant = Number(cadMontantInput);
+    if (!montant || montant <= 0) { alert("Montant invalide."); return; }
+    setCadLoading(true);
+    try {
+      let decharge: { nom: string; mimeType: string; taille: number; data: string } | undefined;
+      if (cadDechargeFile) {
+        decharge = { nom: cadDechargeFile.name, mimeType: cadDechargeFile.type, taille: cadDechargeFile.size, data: await toBase64(cadDechargeFile) };
+      }
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/carburant-demandes/${demandeId}/cad-valider`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cadUserId: currentUser.id, montantValide: montant, decharge }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await Promise.all([loadCarburantData(moyenId), refetchMoyens()]);
+      setCadValiderDialog(null);
+      setCadMontantInput("");
+      setCadDechargeFile(null);
+    } catch { alert("Erreur réseau"); }
+    finally { setCadLoading(false); }
+  };
+
+  const loadDepenseData = async (moyenId: number) => {
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes`);
+      const data = await res.json();
+      setDepenseDemandesMap(prev => ({ ...prev, [moyenId]: data }));
+    } catch { /* ignore */ }
+  };
+
+  const handleDemanderDepense = async (moyenId: number) => {
+    if (!currentUser) return;
+    const montant = Number(depenseMontantInput);
+    if (!montant || montant <= 0) { alert("Montant invalide."); return; }
+    if (!depenseNomBenef.trim()) { alert("Veuillez saisir le nom du bénéficiaire."); return; }
+    setDepenseDemLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ createdById: currentUser.id, montantDemande: montant, nomBeneficiaire: depenseNomBenef.trim(), matriculeBeneficiaire: depenseMatricule.trim() || undefined }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadDepenseData(moyenId);
+      setDepenseDemandeDialog(null);
+      setDepenseMontantInput("");
+      setDepenseNomBenef("");
+      setDepenseMatricule("");
+    } catch { alert("Erreur réseau"); }
+    finally { setDepenseDemLoading(false); }
+  };
+
+  const handleDcgaiDepenseValider = async (moyenId: number, demandeId: number) => {
+    if (!currentUser) return;
+    setDcgaiDepenseLoading(demandeId);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes/${demandeId}/dcgai-valider`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dcgaiUserId: currentUser.id }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadDepenseData(moyenId);
+    } catch { alert("Erreur réseau"); }
+    finally { setDcgaiDepenseLoading(null); }
+  };
+
+  const handleDfcPayer = async () => {
+    if (!dfcPayerDialog || !currentUser) return;
+    const { moyenId, demandeId } = dfcPayerDialog;
+    const montant = Number(dfcMontantInput);
+    if (!montant || montant <= 0) { alert("Montant invalide."); return; }
+    setDfcLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes/${demandeId}/dfc-payer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dfcUserId: currentUser.id, montantPaye: montant }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      const updated = await res.json();
+      await Promise.all([loadDepenseData(moyenId), refetchMoyens()]);
+      downloadPiece(updated, plan.reference ?? `PLAN-${plan.id}`);
+      setDfcPayerDialog(null);
+      setDfcMontantInput("");
+    } catch { alert("Erreur réseau"); }
+    finally { setDfcLoading(false); }
+  };
+
+  const downloadPiece = (demande: DepenseDemande, planRef: string) => {
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Pièce de paiement ${demande.pieceReference ?? ""}</title>
+    <style>body{font-family:Arial,sans-serif;margin:40px;} .box{border:2px solid #333;border-radius:8px;padding:20px;max-width:600px;margin:auto;} h1{font-size:20px;text-align:center;} table{width:100%;border-collapse:collapse;margin-top:16px;} th,td{border:1px solid #ccc;padding:8px;font-size:13px;} th{background:#f0f0f0;text-align:left;} .footer{margin-top:30px;display:flex;justify-content:space-between;} .sign{border-top:1px solid #333;width:180px;text-align:center;padding-top:4px;font-size:12px;}</style>
+    </head><body><div class="box">
+    <h1>PIÈCE DE PAIEMENT</h1>
+    <p style="text-align:center;font-size:13px;color:#555;">Réf. : <strong>${demande.pieceReference ?? "—"}</strong> &nbsp;|&nbsp; Plan : <strong>${planRef}</strong></p>
+    <table>
+      <tr><th>Bénéficiaire</th><td>${demande.nomBeneficiaire}</td></tr>
+      ${demande.matriculeBeneficiaire ? `<tr><th>Matricule</th><td>${demande.matriculeBeneficiaire}</td></tr>` : ""}
+      <tr><th>Montant demandé</th><td>${demande.montantDemande.toLocaleString("fr-MR")} MRU</td></tr>
+      <tr><th>Montant payé</th><td><strong>${(demande.montantPaye ?? 0).toLocaleString("fr-MR")} MRU</strong></td></tr>
+      <tr><th>Date paiement</th><td>${new Date().toLocaleDateString("fr-MR")}</td></tr>
+    </table>
+    <div class="footer"><div class="sign">Directeur Financier</div><div class="sign">Bénéficiaire</div></div>
+    </div></body></html>`;
+    const blob = new Blob([html], { type: "text/html" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${demande.pieceReference ?? "piece"}.html`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   const toggleBeneficiaires = async (moyenId: number) => {
     if (expandedBenef[moyenId]) {
@@ -188,7 +358,7 @@ export default function PlanDetails() {
     } catch { /* ignore */ }
   };
 
-  // Auto-load materiel demandes for DA and DCGAI roles; location demandes for DMG
+  // Auto-load specialist data based on role
   useEffect(() => {
     if (!currentUser || !moyens.length) return;
     const role = currentUser.role;
@@ -199,6 +369,15 @@ export default function PlanDetails() {
     if (role === "dmg") {
       const locationMoyenIds = moyens.filter(m => m.categorie === "location").map(m => m.id);
       locationMoyenIds.forEach(mid => loadLocationData(mid));
+    }
+    if (role === "cad") {
+      const carburantIds = moyens.filter(m => m.categorie === "carburant").map(m => m.id);
+      carburantIds.forEach(mid => loadCarburantData(mid));
+    }
+    if (role === "dcgai" || role === "direction_financiere") {
+      const DCATS = ["prime", "logement", "indemnite_journaliere", "logistique", "autres"];
+      const depIds = moyens.filter(m => DCATS.includes(m.categorie)).map(m => m.id);
+      depIds.forEach(mid => loadDepenseData(mid));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moyens.length, currentUser?.role]);
@@ -453,6 +632,10 @@ export default function PlanDetails() {
   // Location moyens
   const isDMG = myRole === "dmg";
   const locationMoyens = moyens.filter(m => m.categorie === "location");
+  const isCAD = myRole === "cad";
+  const isDFC = myRole === "direction_financiere";
+  const carburantMoyens = moyens.filter(m => m.categorie === "carburant");
+  const depenseMoyens = moyens.filter(m => ["prime", "logement", "indemnite_journaliere", "logistique", "autres"].includes(m.categorie));
 
   const handleDemanderLocation = async (moyenId: number) => {
     if (!currentUser) return;
@@ -795,27 +978,26 @@ export default function PlanDetails() {
                             ) : (
                               <span className="text-muted-foreground text-xs">—</span>
                             )
-                          ) : m.demandeStatus === "consommee" || (Number(m.montantConsomme) > 0 && !m.demandeStatus) ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">
-                              <CheckCheck className="w-3 h-3" /> Traitée
-                            </span>
-                          ) : m.demandeStatus === "demandee" ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-medium">
-                              <Hourglass className="w-3 h-3" /> En attente
-                            </span>
-                          ) : canDemanderMoyen(m) ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs gap-1 px-2"
-                              disabled={isDemanderLoading}
-                              onClick={() => setDemandConfirm(m)}
-                            >
-                              {isDemanderLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                              Demander
-                            </Button>
-                          ) : m.categorie === "prime" && isOwnDirectionPlan && plan.statut !== "cloture" ? (
-                            <span className="text-xs text-amber-600 italic">Après clôture</span>
+                          ) : m.categorie === "carburant" ? (
+                            canDemanderExecution ? (
+                              <Button
+                                size="sm" variant="outline"
+                                className="h-7 text-xs gap-1 px-2 border-orange-300 text-orange-700 hover:bg-orange-50"
+                                onClick={() => { setCarburantMontantInput(""); setCarburantDemandeDialog(m.id); }}
+                              >
+                                <Fuel className="w-3 h-3" /> Dem. carburant
+                              </Button>
+                            ) : <span className="text-muted-foreground text-xs">—</span>
+                          ) : DEPENSE_CATS.includes(m.categorie) ? (
+                            canDemanderExecution ? (
+                              <Button
+                                size="sm" variant="outline"
+                                className="h-7 text-xs gap-1 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                                onClick={() => { setDepenseMontantInput(""); setDepenseNomBenef(""); setDepenseMatricule(""); setDepenseDemandeDialog(m.id); }}
+                              >
+                                <DollarSign className="w-3 h-3" /> Dem. dépense
+                              </Button>
+                            ) : <span className="text-muted-foreground text-xs">—</span>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
                           )}
@@ -928,6 +1110,86 @@ export default function PlanDetails() {
                                     {dem.statut === "validee" && dem.montantTotal && (
                                       <div className="pt-1 font-semibold text-success">Total : {dem.montantTotal.toLocaleString("fr-MR")} MRU</div>
                                     )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                      {/* Carburant demandes expandable sub-row */}
+                      {m.categorie === "carburant" && isOwnDirectionPlan && (
+                        <tr>
+                          <td colSpan={7} className="bg-orange-50/40 px-5 py-2">
+                            <button
+                              className="flex items-center gap-1.5 text-xs text-orange-700 hover:text-orange-900 font-medium"
+                              onClick={async () => {
+                                if (!expandedCarburantMoyen[m.id]) await loadCarburantData(m.id);
+                                setExpandedCarburantMoyen(prev => ({ ...prev, [m.id]: !prev[m.id] }));
+                              }}
+                            >
+                              <Fuel className="w-3 h-3" />
+                              {expandedCarburantMoyen[m.id] ? "Masquer" : "Voir"} les demandes carburant
+                              {(carburantDemandesMap[m.id] ?? []).length > 0 && (
+                                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-800 text-xs">{carburantDemandesMap[m.id].length}</span>
+                              )}
+                            </button>
+                            {expandedCarburantMoyen[m.id] && (
+                              <div className="mt-2 space-y-2">
+                                {(carburantDemandesMap[m.id] ?? []).length === 0 ? (
+                                  <p className="text-xs text-muted-foreground py-1">Aucune demande carburant soumise.</p>
+                                ) : (carburantDemandesMap[m.id] ?? []).map(dem => (
+                                  <div key={dem.id} className="border border-orange-200 rounded-lg bg-white p-3 text-xs space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-semibold text-orange-900">Demande #{dem.id}</span>
+                                      <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium",
+                                        dem.statut === "validee" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700")}>
+                                        {dem.statut === "validee" ? "Validée CAD" : "Attente CAD"}
+                                      </span>
+                                    </div>
+                                    <div className="text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-MR")} MRU</span></div>
+                                    {dem.montantValide !== null && <div className="text-success font-semibold">Montant validé : {dem.montantValide.toLocaleString("fr-MR")} MRU</div>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                      {/* Dépense demandes expandable sub-row */}
+                      {DEPENSE_CATS.includes(m.categorie) && isOwnDirectionPlan && (
+                        <tr>
+                          <td colSpan={7} className="bg-emerald-50/40 px-5 py-2">
+                            <button
+                              className="flex items-center gap-1.5 text-xs text-emerald-700 hover:text-emerald-900 font-medium"
+                              onClick={async () => {
+                                if (!expandedDepenseMoyen[m.id]) await loadDepenseData(m.id);
+                                setExpandedDepenseMoyen(prev => ({ ...prev, [m.id]: !prev[m.id] }));
+                              }}
+                            >
+                              <DollarSign className="w-3 h-3" />
+                              {expandedDepenseMoyen[m.id] ? "Masquer" : "Voir"} les demandes dépense
+                              {(depenseDemandesMap[m.id] ?? []).length > 0 && (
+                                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-emerald-200 text-emerald-800 text-xs">{depenseDemandesMap[m.id].length}</span>
+                              )}
+                            </button>
+                            {expandedDepenseMoyen[m.id] && (
+                              <div className="mt-2 space-y-2">
+                                {(depenseDemandesMap[m.id] ?? []).length === 0 ? (
+                                  <p className="text-xs text-muted-foreground py-1">Aucune demande dépense soumise.</p>
+                                ) : (depenseDemandesMap[m.id] ?? []).map(dem => (
+                                  <div key={dem.id} className="border border-emerald-200 rounded-lg bg-white p-3 text-xs space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-semibold text-emerald-900">Demande #{dem.id} — {dem.nomBeneficiaire}{dem.matriculeBeneficiaire ? ` (${dem.matriculeBeneficiaire})` : ""}</span>
+                                      <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium",
+                                        dem.statut === "payee" ? "bg-green-100 text-green-700" :
+                                        dem.statut === "en_attente_dfc" ? "bg-blue-100 text-blue-700" :
+                                        "bg-orange-100 text-orange-700")}>
+                                        {dem.statut === "payee" ? "Payée" : dem.statut === "en_attente_dfc" ? "Attente DFC" : "Attente DCGAI"}
+                                      </span>
+                                    </div>
+                                    <div className="text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-MR")} MRU</span></div>
+                                    {dem.statut === "payee" && <div className="text-success font-semibold">Montant payé : {(dem.montantPaye ?? 0).toLocaleString("fr-MR")} MRU — Réf : {dem.pieceReference}</div>}
                                   </div>
                                 ))}
                               </div>
@@ -1244,6 +1506,157 @@ export default function PlanDetails() {
                         <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
                           <span className="text-xs text-green-800 font-semibold">Demande #{dem.id} — {dem.montantTotal?.toLocaleString("fr-MR") ?? "—"} MRU</span>
                           <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Validée</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* CAD — Carburant demandes panel */}
+          {isCAD && plan.statut === "ouvert" && carburantMoyens.length > 0 && (
+            <Card className="border-orange-200 bg-orange-50/40">
+              <CardHeader className="border-b border-orange-200/60 pb-4">
+                <CardTitle className="text-base flex items-center gap-2 text-orange-800 font-bold">
+                  <Fuel className="w-4 h-4" /> Demandes Carburant à valider
+                </CardTitle>
+                <p className="text-xs text-orange-700 mt-1">Saisissez le montant accordé et joignez la décharge.</p>
+              </CardHeader>
+              <CardContent className="p-5 space-y-4">
+                {carburantMoyens.map(m => {
+                  const pending = (carburantDemandesMap[m.id] ?? []).filter(d => d.statut === "en_attente_cad");
+                  const validated = (carburantDemandesMap[m.id] ?? []).filter(d => d.statut === "validee");
+                  return (
+                    <div key={m.id} className="space-y-2">
+                      <p className="text-xs font-semibold text-orange-800">{m.description}</p>
+                      {!carburantDemandesMap[m.id] ? (
+                        <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => loadCarburantData(m.id)}>
+                          <Loader2 className="w-3 h-3 mr-1" /> Charger
+                        </Button>
+                      ) : pending.length === 0 && validated.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">Aucune demande en attente.</p>
+                      ) : null}
+                      {pending.map(dem => (
+                        <div key={dem.id} className="border border-orange-200 rounded-lg bg-white p-3 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-orange-700">Demande #{dem.id} — {dem.montantDemande.toLocaleString("fr-MR")} MRU</span>
+                            <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-orange-600 hover:bg-orange-700 text-white"
+                              onClick={() => { setCadValiderDialog({ moyenId: m.id, demandeId: dem.id, montantDemande: dem.montantDemande }); setCadMontantInput(""); setCadDechargeFile(null); }}>
+                              <CheckCircle2 className="w-3 h-3" /> Valider
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {validated.map(dem => (
+                        <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
+                          <span className="text-xs text-green-800 font-semibold">#{dem.id} — {dem.montantValide?.toLocaleString("fr-MR") ?? "—"} MRU validés</span>
+                          <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Validée</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* DCGAI — Dépenses à valider panel */}
+          {isDcgai && plan.statut === "ouvert" && depenseMoyens.length > 0 && (
+            <Card className="border-emerald-200 bg-emerald-50/40">
+              <CardHeader className="border-b border-emerald-200/60 pb-4">
+                <CardTitle className="text-base flex items-center gap-2 text-emerald-800 font-bold">
+                  <DollarSign className="w-4 h-4" /> Demandes Dépenses à valider (DCGAI)
+                </CardTitle>
+                <p className="text-xs text-emerald-700 mt-1">Validez les demandes de dépense avant envoi à la DFC pour paiement.</p>
+              </CardHeader>
+              <CardContent className="p-5 space-y-4">
+                {depenseMoyens.map(m => {
+                  const pending = (depenseDemandesMap[m.id] ?? []).filter(d => d.statut === "en_attente_dcgai");
+                  const rest = (depenseDemandesMap[m.id] ?? []).filter(d => d.statut !== "en_attente_dcgai");
+                  return (
+                    <div key={m.id} className="space-y-2">
+                      <p className="text-xs font-semibold text-emerald-800">{CATEGORIE_LABELS[m.categorie]?.label ?? m.categorie} — {m.description}</p>
+                      {!depenseDemandesMap[m.id] ? (
+                        <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => loadDepenseData(m.id)}>
+                          <Loader2 className="w-3 h-3 mr-1" /> Charger
+                        </Button>
+                      ) : pending.length === 0 && rest.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">Aucune demande.</p>
+                      ) : null}
+                      {pending.map(dem => (
+                        <div key={dem.id} className="border border-emerald-200 rounded-lg bg-white p-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs font-semibold text-emerald-900">{dem.nomBeneficiaire}{dem.matriculeBeneficiaire ? ` — ${dem.matriculeBeneficiaire}` : ""}</p>
+                              <p className="text-xs text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
+                            </div>
+                            <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                              disabled={dcgaiDepenseLoading === dem.id}
+                              onClick={() => handleDcgaiDepenseValider(m.id, dem.id)}>
+                              {dcgaiDepenseLoading === dem.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />} Valider
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {rest.map(dem => (
+                        <div key={dem.id} className="border rounded-lg bg-white/60 p-2 flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">{dem.nomBeneficiaire} — {dem.montantDemande.toLocaleString("fr-MR")} MRU</span>
+                          <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium",
+                            dem.statut === "payee" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700")}>
+                            {dem.statut === "payee" ? "Payée" : "En attente DFC"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* DFC — Paiements à effectuer panel */}
+          {isDFC && plan.statut === "ouvert" && depenseMoyens.length > 0 && (
+            <Card className="border-blue-200 bg-blue-50/40">
+              <CardHeader className="border-b border-blue-200/60 pb-4">
+                <CardTitle className="text-base flex items-center gap-2 text-blue-800 font-bold">
+                  <DollarSign className="w-4 h-4" /> Paiements à effectuer (DFC)
+                </CardTitle>
+                <p className="text-xs text-blue-700 mt-1">Saisissez le montant payé et générez la pièce de paiement.</p>
+              </CardHeader>
+              <CardContent className="p-5 space-y-4">
+                {depenseMoyens.map(m => {
+                  const pending = (depenseDemandesMap[m.id] ?? []).filter(d => d.statut === "en_attente_dfc");
+                  const paid = (depenseDemandesMap[m.id] ?? []).filter(d => d.statut === "payee");
+                  return (
+                    <div key={m.id} className="space-y-2">
+                      <p className="text-xs font-semibold text-blue-800">{CATEGORIE_LABELS[m.categorie]?.label ?? m.categorie} — {m.description}</p>
+                      {!depenseDemandesMap[m.id] ? (
+                        <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => loadDepenseData(m.id)}>
+                          <Loader2 className="w-3 h-3 mr-1" /> Charger
+                        </Button>
+                      ) : pending.length === 0 && paid.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">Aucun paiement en attente.</p>
+                      ) : null}
+                      {pending.map(dem => (
+                        <div key={dem.id} className="border border-blue-200 rounded-lg bg-white p-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs font-semibold text-blue-900">{dem.nomBeneficiaire}{dem.matriculeBeneficiaire ? ` — ${dem.matriculeBeneficiaire}` : ""}</p>
+                              <p className="text-xs text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
+                            </div>
+                            <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-blue-600 hover:bg-blue-700 text-white"
+                              onClick={() => { setDfcPayerDialog({ moyenId: m.id, demandeId: dem.id, demande: dem }); setDfcMontantInput(""); }}>
+                              <DollarSign className="w-3 h-3" /> Saisir paiement
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {paid.map(dem => (
+                        <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
+                          <span className="text-xs text-green-800 font-semibold">{dem.nomBeneficiaire} — {(dem.montantPaye ?? 0).toLocaleString("fr-MR")} MRU — {dem.pieceReference}</span>
+                          <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Payée</span>
                         </div>
                       ))}
                     </div>
@@ -1643,6 +2056,168 @@ export default function PlanDetails() {
             >
               {dmgLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
               Valider & Déduire du budget
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Direction: Demande carburant dialog ─── */}
+      <Dialog open={carburantDemandeDialog !== null} onOpenChange={(open) => { if (!open) { setCarburantDemandeDialog(null); setCarburantMontantInput(""); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Fuel className="w-5 h-5 text-orange-600" /> Demander du carburant</DialogTitle>
+            <DialogDescription>Indiquez le montant souhaité (partiel ou total du budget).</DialogDescription>
+          </DialogHeader>
+          {carburantDemandeDialog !== null && (() => {
+            const m = moyens.find(mo => mo.id === carburantDemandeDialog);
+            return m ? (
+              <div className="space-y-3">
+                <div className="rounded-xl border bg-muted/30 p-3 text-sm">
+                  <p className="font-semibold">{m.description}</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">Budget : {formatCurrency(Number(m.budget))} — Consommé : {formatCurrency(Number(m.montantConsomme ?? 0))}</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Montant demandé (MRU)</label>
+                  <input type="number" min={0} max={Number(m.budget)} step={0.01}
+                    placeholder="Saisir le montant" value={carburantMontantInput}
+                    onChange={e => setCarburantMontantInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                </div>
+              </div>
+            ) : null;
+          })()}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setCarburantDemandeDialog(null); setCarburantMontantInput(""); }} disabled={carburantDemLoading}>Annuler</Button>
+            <Button className="bg-orange-600 hover:bg-orange-700 text-white"
+              disabled={carburantDemLoading || !Number(carburantMontantInput) || Number(carburantMontantInput) <= 0}
+              onClick={() => carburantDemandeDialog !== null && handleDemanderCarburant(carburantDemandeDialog)}>
+              {carburantDemLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              Soumettre
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── CAD: Valider demande carburant dialog ─── */}
+      <Dialog open={!!cadValiderDialog} onOpenChange={(open) => { if (!open) { setCadValiderDialog(null); setCadMontantInput(""); setCadDechargeFile(null); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Fuel className="w-5 h-5 text-orange-600" /> Valider — Saisir le montant carburant</DialogTitle>
+            <DialogDescription>Indiquez le montant accordé et joignez la décharge si disponible.</DialogDescription>
+          </DialogHeader>
+          {cadValiderDialog && (
+            <div className="space-y-3">
+              <div className="rounded-xl border bg-orange-50 p-3 text-sm">
+                <p className="text-orange-700">Montant demandé : <span className="font-bold">{cadValiderDialog.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Montant validé (MRU)</label>
+                <input type="number" min={0} step={0.01} placeholder="Montant accordé"
+                  value={cadMontantInput} onChange={e => setCadMontantInput(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium flex items-center gap-1.5"><FileText className="w-4 h-4 text-orange-500" /> Décharge (facultatif)</label>
+                <label className={`flex items-center gap-3 cursor-pointer rounded-xl border-2 border-dashed px-4 py-3 transition-colors ${cadDechargeFile ? "border-orange-400 bg-orange-50" : "border-border hover:border-orange-300 bg-muted/30"}`}>
+                  <input type="file" className="hidden" onChange={e => setCadDechargeFile(e.target.files?.[0] ?? null)} />
+                  {cadDechargeFile ? <span className="text-sm text-orange-700 font-medium truncate flex-1">📎 {cadDechargeFile.name}</span>
+                    : <span className="text-sm text-muted-foreground">Cliquez pour joindre un fichier</span>}
+                  {cadDechargeFile && <button type="button" className="text-xs text-red-500 shrink-0" onClick={e => { e.preventDefault(); setCadDechargeFile(null); }}>✕</button>}
+                </label>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setCadValiderDialog(null); setCadMontantInput(""); setCadDechargeFile(null); }} disabled={cadLoading}>Annuler</Button>
+            <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={cadLoading || !Number(cadMontantInput)} onClick={handleCadValider}>
+              {cadLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+              Valider & Déduire du budget
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Direction: Demande dépense dialog ─── */}
+      <Dialog open={depenseDemandeDialog !== null} onOpenChange={(open) => { if (!open) { setDepenseDemandeDialog(null); setDepenseMontantInput(""); setDepenseNomBenef(""); setDepenseMatricule(""); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-emerald-600" /> Demande de dépense</DialogTitle>
+            <DialogDescription>Indiquez le montant et les informations du bénéficiaire.</DialogDescription>
+          </DialogHeader>
+          {depenseDemandeDialog !== null && (() => {
+            const m = moyens.find(mo => mo.id === depenseDemandeDialog);
+            return m ? (
+              <div className="space-y-3">
+                <div className="rounded-xl border bg-muted/30 p-3 text-sm">
+                  <p className="font-semibold">{m.description}</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">Budget : {formatCurrency(Number(m.budget))} — Consommé : {formatCurrency(Number(m.montantConsomme ?? 0))}</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Montant demandé (MRU)</label>
+                  <input type="number" min={0} step={0.01} placeholder="Montant" value={depenseMontantInput}
+                    onChange={e => setDepenseMontantInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Nom du bénéficiaire <span className="text-destructive">*</span></label>
+                  <input type="text" placeholder="Nom complet" value={depenseNomBenef}
+                    onChange={e => setDepenseNomBenef(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Matricule (facultatif)</label>
+                  <input type="text" placeholder="Matricule agent" value={depenseMatricule}
+                    onChange={e => setDepenseMatricule(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  />
+                </div>
+              </div>
+            ) : null;
+          })()}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setDepenseDemandeDialog(null); setDepenseMontantInput(""); setDepenseNomBenef(""); setDepenseMatricule(""); }} disabled={depenseDemLoading}>Annuler</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={depenseDemLoading || !Number(depenseMontantInput) || !depenseNomBenef.trim()}
+              onClick={() => depenseDemandeDialog !== null && handleDemanderDepense(depenseDemandeDialog)}>
+              {depenseDemLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              Envoyer au DCGAI
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── DFC: Saisir paiement dialog ─── */}
+      <Dialog open={!!dfcPayerDialog} onOpenChange={(open) => { if (!open) { setDfcPayerDialog(null); setDfcMontantInput(""); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-blue-600" /> Saisir le paiement</DialogTitle>
+            <DialogDescription>Indiquez le montant réellement payé. Une pièce de paiement sera générée automatiquement.</DialogDescription>
+          </DialogHeader>
+          {dfcPayerDialog && (
+            <div className="space-y-3">
+              <div className="rounded-xl border bg-blue-50 p-3 text-sm space-y-1">
+                <p className="font-semibold text-blue-900">{dfcPayerDialog.demande.nomBeneficiaire}</p>
+                {dfcPayerDialog.demande.matriculeBeneficiaire && <p className="text-xs text-muted-foreground">Matricule : {dfcPayerDialog.demande.matriculeBeneficiaire}</p>}
+                <p className="text-xs text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dfcPayerDialog.demande.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Montant payé (MRU)</label>
+                <input type="number" min={0} step={0.01} placeholder="Montant effectivement payé"
+                  value={dfcMontantInput} onChange={e => setDfcMontantInput(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setDfcPayerDialog(null); setDfcMontantInput(""); }} disabled={dfcLoading}>Annuler</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={dfcLoading || !Number(dfcMontantInput)} onClick={handleDfcPayer}>
+              {dfcLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
+              Enregistrer & Générer la pièce
             </Button>
           </DialogFooter>
         </DialogContent>

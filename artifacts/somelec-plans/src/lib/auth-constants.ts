@@ -1,17 +1,19 @@
-export const ROLES_SEE_ALL = ["directeur_general", "dga", "controle_technique", "dmg", "da", "controle_financier", "dcgai", "direction_financiere", "rh", "admin"];
+export const ROLES_SEE_ALL = ["directeur_general", "dga", "controle_technique", "dmg", "da", "controle_financier", "dcgai", "direction_financiere", "rh", "admin", "cad"];
 
 export const CATEGORY_ROLE: Record<string, string> = {
-  carburant: "dmg",
+  carburant: "cad",
   location: "dmg",
   materiel: "da",
   outillage: "da",
   accessoire: "da",
-  prime: "controle_financier",
-  logement: "direction_financiere",
-  indemnite_journaliere: "direction_financiere",
-  logistique: "direction_financiere",
-  autres: "direction_financiere",
+  prime: "dcgai",
+  logement: "dcgai",
+  indemnite_journaliere: "dcgai",
+  logistique: "dcgai",
+  autres: "dcgai",
 };
+
+export const DEPENSE_CATEGORIES = ["prime", "logement", "indemnite_journaliere", "logistique", "autres"];
 
 export const ROLE_LABELS: Record<string, string> = {
   direction: "Direction",
@@ -22,7 +24,8 @@ export const ROLE_LABELS: Record<string, string> = {
   da: "Direction des Approvisionnements",
   controle_financier: "Contrôle Financier",
   dcgai: "Direction Contrôle de Gestion & Audit Interne",
-  direction_financiere: "Direction Financière",
+  direction_financiere: "Direction Financière & Comptabilité",
+  cad: "Caisse et Approvisionnements & Distribution",
   rh: "Direction des Ressources Humaines",
   admin: "Administrateur",
 };
