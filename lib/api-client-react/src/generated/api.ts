@@ -22,6 +22,7 @@ import type {
   CloturerPlanRequest,
   ConsommerMoyenRequest,
   CreateAttachmentRequest,
+  CreateDirectionBody,
   CreateEmployeRequest,
   CreateMaterielDemandeRequest,
   CreateMoyenRequest,
@@ -1815,6 +1816,263 @@ export function useGetDirections<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Create a new direction (admin only)
+ */
+export const getCreateDirectionUrl = () => {
+  return `/api/directions`;
+};
+
+export const createDirection = async (
+  createDirectionBody: CreateDirectionBody,
+  options?: RequestInit,
+): Promise<Direction> => {
+  return customFetch<Direction>(getCreateDirectionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDirectionBody),
+  });
+};
+
+export const getCreateDirectionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDirection>>,
+    TError,
+    { data: BodyType<CreateDirectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDirection>>,
+  TError,
+  { data: BodyType<CreateDirectionBody> },
+  TContext
+> => {
+  const mutationKey = ["createDirection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDirection>>,
+    { data: BodyType<CreateDirectionBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createDirection(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateDirectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDirection>>
+>;
+export type CreateDirectionMutationBody = BodyType<CreateDirectionBody>;
+export type CreateDirectionMutationError = ErrorType<void>;
+
+/**
+ * @summary Create a new direction (admin only)
+ */
+export const useCreateDirection = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDirection>>,
+    TError,
+    { data: BodyType<CreateDirectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createDirection>>,
+  TError,
+  { data: BodyType<CreateDirectionBody> },
+  TContext
+> => {
+  return useMutation(getCreateDirectionMutationOptions(options));
+};
+
+/**
+ * @summary Update a direction (admin only)
+ */
+export const getUpdateDirectionUrl = (id: number) => {
+  return `/api/directions/${id}`;
+};
+
+export const updateDirection = async (
+  id: number,
+  createDirectionBody: CreateDirectionBody,
+  options?: RequestInit,
+): Promise<Direction> => {
+  return customFetch<Direction>(getUpdateDirectionUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createDirectionBody),
+  });
+};
+
+export const getUpdateDirectionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDirection>>,
+    TError,
+    { id: number; data: BodyType<CreateDirectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDirection>>,
+  TError,
+  { id: number; data: BodyType<CreateDirectionBody> },
+  TContext
+> => {
+  const mutationKey = ["updateDirection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDirection>>,
+    { id: number; data: BodyType<CreateDirectionBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateDirection(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateDirectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDirection>>
+>;
+export type UpdateDirectionMutationBody = BodyType<CreateDirectionBody>;
+export type UpdateDirectionMutationError = ErrorType<void>;
+
+/**
+ * @summary Update a direction (admin only)
+ */
+export const useUpdateDirection = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDirection>>,
+    TError,
+    { id: number; data: BodyType<CreateDirectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateDirection>>,
+  TError,
+  { id: number; data: BodyType<CreateDirectionBody> },
+  TContext
+> => {
+  return useMutation(getUpdateDirectionMutationOptions(options));
+};
+
+/**
+ * @summary Delete a direction (admin only)
+ */
+export const getDeleteDirectionUrl = (id: number) => {
+  return `/api/directions/${id}`;
+};
+
+export const deleteDirection = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteDirectionUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteDirectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDirection>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteDirection>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteDirection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteDirection>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteDirection(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteDirectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteDirection>>
+>;
+
+export type DeleteDirectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a direction (admin only)
+ */
+export const useDeleteDirection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteDirection>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteDirection>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteDirectionMutationOptions(options));
+};
 
 /**
  * @summary Search employees

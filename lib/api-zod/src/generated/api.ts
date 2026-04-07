@@ -804,6 +804,39 @@ export const GetDirectionsResponseItem = zod.object({
 export const GetDirectionsResponse = zod.array(GetDirectionsResponseItem);
 
 /**
+ * @summary Create a new direction (admin only)
+ */
+export const CreateDirectionBody = zod.object({
+  nom: zod.string(),
+  code: zod.string(),
+});
+
+/**
+ * @summary Update a direction (admin only)
+ */
+export const UpdateDirectionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateDirectionBody = zod.object({
+  nom: zod.string(),
+  code: zod.string(),
+});
+
+export const UpdateDirectionResponse = zod.object({
+  id: zod.number(),
+  nom: zod.string(),
+  code: zod.string(),
+});
+
+/**
+ * @summary Delete a direction (admin only)
+ */
+export const DeleteDirectionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary Search employees
  */
 export const GetEmployesQueryParams = zod.object({

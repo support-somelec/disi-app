@@ -14,6 +14,7 @@ export const CATEGORY_ROLE: Record<string, string> = {
 export const DEPENSE_CATEGORIES = ["prime", "logement", "indemnite_journaliere", "logistique", "autres"];
 
 export const ROLE_LABELS: Record<string, string> = {
+  en_attente: "En attente d'affectation",
   direction: "Direction",
   controle_technique: "Contrôle Technique",
   dga: "Directeur Général Adjoint",

@@ -15,6 +15,11 @@ export interface Direction {
   code: string;
 }
 
+export interface CreateDirectionBody {
+  nom: string;
+  code: string;
+}
+
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export const UserRole = {

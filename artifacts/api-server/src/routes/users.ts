@@ -49,7 +49,7 @@ const CreateUserBody = z.object({
   nom: z.string().default(""),
   prenom: z.string().min(1),
   email: z.string().email(),
-  role: z.string().min(1),
+  role: z.string().default("en_attente"),
   directionId: z.number().int().optional().nullable(),
 });
 

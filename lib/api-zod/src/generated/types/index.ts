@@ -13,6 +13,7 @@ export * from "./attachment";
 export * from "./cloturerPlanRequest";
 export * from "./consommerMoyenRequest";
 export * from "./createAttachmentRequest";
+export * from "./createDirectionBody";
 export * from "./createEmployeRequest";
 export * from "./createMaterielDemandeRequest";
 export * from "./createMaterielDemandeRequestItemsItem";

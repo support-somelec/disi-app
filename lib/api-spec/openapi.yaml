@@ -454,6 +454,65 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Direction"
+    post:
+      operationId: createDirection
+      tags: [users]
+      summary: Create a new direction (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDirectionBody"
+      responses:
+        "201":
+          description: Direction created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Direction"
+        "400":
+          description: Bad request
+
+  /directions/{id}:
+    put:
+      operationId: updateDirection
+      tags: [users]
+      summary: Update a direction (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDirectionBody"
+      responses:
+        "200":
+          description: Direction updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Direction"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteDirection
+      tags: [users]
+      summary: Delete a direction (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 
   /employes:
     get:
@@ -777,6 +836,15 @@ components:
         code:
           type: string
       required: [id, nom, code]
+
+    CreateDirectionBody:
+      type: object
+      properties:
+        nom:
+          type: string
+        code:
+          type: string
+      required: [nom, code]
 
     User:
       type: object
