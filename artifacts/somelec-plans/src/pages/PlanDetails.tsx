@@ -130,8 +130,19 @@ export default function PlanDetails() {
   const [dmgValiderDialog, setDmgValiderDialog] = useState<{ moyenId: number; demandeId: number; items: Array<{ locationItemId: number; typeEngin: string; nbJoursDemandes: number }> } | null>(null);
   const [dmgMontants, setDmgMontants] = useState<Record<number, string>>({});
   const [dmgLoading, setDmgLoading] = useState(false);
+  // Décharge files
+  const [daDechargeFile, setDaDechargeFile] = useState<File | null>(null);
+  const [dmgDechargeFile, setDmgDechargeFile] = useState<File | null>(null);
 
   const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
+
+  const toBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
   const toggleBeneficiaires = async (moyenId: number) => {
     if (expandedBenef[moyenId]) {
@@ -341,10 +352,19 @@ export default function PlanDetails() {
     }
     setDaLoading(true);
     try {
+      let decharge: { nom: string; mimeType: string; taille: number; data: string } | undefined;
+      if (daDechargeFile) {
+        decharge = {
+          nom: daDechargeFile.name,
+          mimeType: daDechargeFile.type,
+          taille: daDechargeFile.size,
+          data: await toBase64(daDechargeFile),
+        };
+      }
       const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/materiel-demandes/${demandeId}/da-soumettre`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ daUserId: currentUser.id, items: enriched }),
+        body: JSON.stringify({ daUserId: currentUser.id, items: enriched, decharge }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -353,6 +373,7 @@ export default function PlanDetails() {
       }
       setDaTraiterDialog(null);
       setDaPrices({});
+      setDaDechargeFile(null);
       await loadMaterielData(moyenId);
     } catch { alert("Erreur réseau."); } finally { setDaLoading(false); }
   };
@@ -468,15 +489,25 @@ export default function PlanDetails() {
     }));
     setDmgLoading(true);
     try {
+      let decharge: { nom: string; mimeType: string; taille: number; data: string } | undefined;
+      if (dmgDechargeFile) {
+        decharge = {
+          nom: dmgDechargeFile.name,
+          mimeType: dmgDechargeFile.type,
+          taille: dmgDechargeFile.size,
+          data: await toBase64(dmgDechargeFile),
+        };
+      }
       const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/location-demandes/${demandeId}/dmg-valider`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dmgUserId: currentUser.id, itemsMontants }),
+        body: JSON.stringify({ dmgUserId: currentUser.id, itemsMontants, decharge }),
       });
       if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
       await Promise.all([loadLocationData(moyenId), refetchMoyens(), refetchPlan(), invalidatePlans()]);
       setDmgValiderDialog(null);
       setDmgMontants({});
+      setDmgDechargeFile(null);
     } catch { alert("Erreur réseau"); }
     finally { setDmgLoading(false); }
   };
@@ -1436,7 +1467,7 @@ export default function PlanDetails() {
       </Dialog>
 
       {/* ─── DA: Traiter demande dialog ─── */}
-      <Dialog open={!!daTraiterDialog} onOpenChange={(open) => { if (!open) { setDaTraiterDialog(null); setDaPrices({}); } }}>
+      <Dialog open={!!daTraiterDialog} onOpenChange={(open) => { if (!open) { setDaTraiterDialog(null); setDaPrices({}); setDaDechargeFile(null); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><FileText className="w-5 h-5 text-indigo-600" /> Saisir les prix — Génération du bon</DialogTitle>
@@ -1475,8 +1506,25 @@ export default function PlanDetails() {
               )}
             </div>
           )}
+          {/* Décharge upload */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-indigo-500" /> Décharge (facultatif)
+            </label>
+            <label className={`flex items-center gap-3 cursor-pointer rounded-xl border-2 border-dashed px-4 py-3 transition-colors ${daDechargeFile ? "border-indigo-400 bg-indigo-50" : "border-border hover:border-indigo-300 bg-muted/30"}`}>
+              <input type="file" className="hidden" onChange={e => setDaDechargeFile(e.target.files?.[0] ?? null)} />
+              {daDechargeFile ? (
+                <span className="text-sm text-indigo-700 font-medium truncate flex-1">📎 {daDechargeFile.name}</span>
+              ) : (
+                <span className="text-sm text-muted-foreground">Cliquez pour joindre un fichier (PDF, image...)</span>
+              )}
+              {daDechargeFile && (
+                <button type="button" className="text-xs text-red-500 hover:text-red-700 shrink-0" onClick={e => { e.preventDefault(); setDaDechargeFile(null); }}>✕</button>
+              )}
+            </label>
+          </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => { setDaTraiterDialog(null); setDaPrices({}); }} disabled={daLoading}>Annuler</Button>
+            <Button variant="outline" onClick={() => { setDaTraiterDialog(null); setDaPrices({}); setDaDechargeFile(null); }} disabled={daLoading}>Annuler</Button>
             <Button
               className="bg-indigo-600 hover:bg-indigo-700 text-white"
               disabled={daLoading}
@@ -1535,7 +1583,7 @@ export default function PlanDetails() {
       </Dialog>
 
       {/* ─── DMG: Valider demande location dialog ─── */}
-      <Dialog open={!!dmgValiderDialog} onOpenChange={(open) => { if (!open) { setDmgValiderDialog(null); setDmgMontants({}); } }}>
+      <Dialog open={!!dmgValiderDialog} onOpenChange={(open) => { if (!open) { setDmgValiderDialog(null); setDmgMontants({}); setDmgDechargeFile(null); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">🚗 Valider la demande — Saisir les montants</DialogTitle>
@@ -1569,8 +1617,25 @@ export default function PlanDetails() {
               </div>
             </div>
           )}
+          {/* Décharge upload */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-sky-500" /> Décharge (facultatif)
+            </label>
+            <label className={`flex items-center gap-3 cursor-pointer rounded-xl border-2 border-dashed px-4 py-3 transition-colors ${dmgDechargeFile ? "border-sky-400 bg-sky-50" : "border-border hover:border-sky-300 bg-muted/30"}`}>
+              <input type="file" className="hidden" onChange={e => setDmgDechargeFile(e.target.files?.[0] ?? null)} />
+              {dmgDechargeFile ? (
+                <span className="text-sm text-sky-700 font-medium truncate flex-1">📎 {dmgDechargeFile.name}</span>
+              ) : (
+                <span className="text-sm text-muted-foreground">Cliquez pour joindre un fichier (PDF, image...)</span>
+              )}
+              {dmgDechargeFile && (
+                <button type="button" className="text-xs text-red-500 hover:text-red-700 shrink-0" onClick={e => { e.preventDefault(); setDmgDechargeFile(null); }}>✕</button>
+              )}
+            </label>
+          </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => { setDmgValiderDialog(null); setDmgMontants({}); }} disabled={dmgLoading}>Annuler</Button>
+            <Button variant="outline" onClick={() => { setDmgValiderDialog(null); setDmgMontants({}); setDmgDechargeFile(null); }} disabled={dmgLoading}>Annuler</Button>
             <Button
               className="bg-sky-600 hover:bg-sky-700 text-white"
               disabled={dmgLoading}

@@ -881,9 +881,10 @@ router.post("/plans/:id/moyens/:moyenId/materiel-demandes/:demandeId/da-soumettr
     const planId = Number(req.params.id);
     const moyenId = Number(req.params.moyenId);
     const demandeId = Number(req.params.demandeId);
-    const { daUserId, items } = req.body as {
+    const { daUserId, items, decharge } = req.body as {
       daUserId: number;
       items: Array<{ item: string; quantiteDemandee: number; montantUnitaire: number }>;
+      decharge?: { nom: string; mimeType: string; taille: number; data: string };
     };
 
     const [existing] = await db.select().from(materielDemandesTable).where(eq(materielDemandesTable.id, demandeId));
@@ -915,6 +916,18 @@ router.post("/plans/:id/moyens/:moyenId/materiel-demandes/:demandeId/da-soumettr
       })
       .where(eq(materielDemandesTable.id, demandeId))
       .returning();
+
+    // Save decharge file if provided
+    if (decharge?.data) {
+      await db.insert(attachmentsTable).values({
+        planId,
+        moyenId,
+        nom: decharge.nom,
+        type: "decharge_da",
+        taille: decharge.taille,
+        data: decharge.data,
+      });
+    }
 
     // Notify DCGAI
     try {
@@ -1075,9 +1088,10 @@ router.post("/plans/:id/moyens/:moyenId/location-demandes/:demandeId/dmg-valider
     const planId = Number(req.params.id);
     const moyenId = Number(req.params.moyenId);
     const demandeId = Number(req.params.demandeId);
-    const { dmgUserId, itemsMontants } = req.body as {
+    const { dmgUserId, itemsMontants, decharge } = req.body as {
       dmgUserId: number;
       itemsMontants: Array<{ locationItemId: number; typeEngin: string; nbJoursDemandes: number; montant: number }>;
+      decharge?: { nom: string; mimeType: string; taille: number; data: string };
     };
 
     const existing = await db.select().from(locationDemandesTable).where(eq(locationDemandesTable.id, demandeId));
@@ -1106,6 +1120,18 @@ router.post("/plans/:id/moyens/:moyenId/location-demandes/:demandeId/dmg-valider
       })
       .where(eq(locationDemandesTable.id, demandeId))
       .returning();
+
+    // Save decharge file if provided
+    if (decharge?.data) {
+      await db.insert(attachmentsTable).values({
+        planId,
+        moyenId,
+        nom: decharge.nom,
+        type: "decharge_dmg",
+        taille: decharge.taille,
+        data: decharge.data,
+      });
+    }
 
     // Notify direction
     try {
