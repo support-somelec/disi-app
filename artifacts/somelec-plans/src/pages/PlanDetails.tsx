@@ -136,6 +136,30 @@ export default function PlanDetails() {
   const [clotureFiles, setClotureFiles] = useState<Array<{ file: File; base64: string }>>([]);
   const [isClosing, setIsClosing] = useState(false);
 
+  const loadMaterielData = async (moyenId: number) => {
+    try {
+      const [itemsRes, demandesRes] = await Promise.all([
+        fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/materiel-items`),
+        fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/materiel-demandes`),
+      ]);
+      const items = await itemsRes.json();
+      const demandes = await demandesRes.json();
+      setMaterielItemsMap(prev => ({ ...prev, [moyenId]: items }));
+      setMaterielDemandesMap(prev => ({ ...prev, [moyenId]: demandes }));
+    } catch { /* ignore */ }
+  };
+
+  // Auto-load materiel demandes for DA and DCGAI roles
+  useEffect(() => {
+    if (!currentUser || !moyens.length) return;
+    const role = currentUser.role;
+    if (role === "da" || role === "dcgai") {
+      const materielMoyenIds = moyens.filter(m => m.categorie === "materiel").map(m => m.id);
+      materielMoyenIds.forEach(mid => loadMaterielData(mid));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moyens.length, currentUser?.role]);
+
   if (isLoading || !plan) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -236,30 +260,6 @@ export default function PlanDetails() {
       setIsClosing(false);
     }
   };
-
-  const loadMaterielData = async (moyenId: number) => {
-    try {
-      const [itemsRes, demandesRes] = await Promise.all([
-        fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/materiel-items`),
-        fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/materiel-demandes`),
-      ]);
-      const items = await itemsRes.json();
-      const demandes = await demandesRes.json();
-      setMaterielItemsMap(prev => ({ ...prev, [moyenId]: items }));
-      setMaterielDemandesMap(prev => ({ ...prev, [moyenId]: demandes }));
-    } catch { /* ignore */ }
-  };
-
-  // Auto-load materiel demandes for DA and DCGAI roles
-  useEffect(() => {
-    if (!currentUser || !moyens.length) return;
-    const role = currentUser.role;
-    if (role === "da" || role === "dcgai") {
-      const materielMoyenIds = moyens.filter(m => m.categorie === "materiel").map(m => m.id);
-      materielMoyenIds.forEach(mid => loadMaterielData(mid));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moyens.length, currentUser?.role]);
 
   const handleDemanderMateriel = async (moyenId: number) => {
     if (!currentUser) return;
