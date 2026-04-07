@@ -25,7 +25,9 @@ export const UserRole = {
   dmg: "dmg",
   da: "da",
   controle_financier: "controle_financier",
+  dcgai: "dcgai",
   direction_financiere: "direction_financiere",
+  rh: "rh",
   admin: "admin",
 } as const;
 
@@ -321,6 +323,66 @@ export interface SetBeneficiairesRequest {
   beneficiaires: SetBeneficiairesRequestBeneficiairesItem[];
 }
 
+export interface MaterielItem {
+  id: number;
+  moyenId: number;
+  item: string;
+  quantiteInitiale: number;
+  quantiteRestante: number;
+}
+
+export interface MaterielDemandeItem {
+  item: string;
+  quantiteDemandee: number;
+  montantUnitaire?: number;
+  montantTotal?: number;
+}
+
+export type MaterielDemandeStatut =
+  (typeof MaterielDemandeStatut)[keyof typeof MaterielDemandeStatut];
+
+export const MaterielDemandeStatut = {
+  en_attente_da: "en_attente_da",
+  en_attente_dcgai: "en_attente_dcgai",
+  validee: "validee",
+} as const;
+
+export interface MaterielDemande {
+  id: number;
+  moyenId: number;
+  planId: number;
+  createdById: number;
+  statut: MaterielDemandeStatut;
+  items: MaterielDemandeItem[];
+  montantTotal?: number;
+  bonNumber?: string;
+  createdAt: string;
+  daValidatedAt?: string;
+  dcgaiValidatedAt?: string;
+}
+
+export type CreateMaterielDemandeRequestItemsItem = {
+  materielItemId: number;
+  item: string;
+  quantiteDemandee: number;
+};
+
+export interface CreateMaterielDemandeRequest {
+  createdById: number;
+  items: CreateMaterielDemandeRequestItemsItem[];
+}
+
+export type DaSoumettreMaterielRequestItemsItem = {
+  item: string;
+  quantiteDemandee: number;
+  montantUnitaire: number;
+};
+
+export interface DaSoumettreMaterielRequest {
+  daUserId: number;
+  items: DaSoumettreMaterielRequestItemsItem[];
+}
+
 export type GetPlansParams = {
   status?: string;
   directionId?: number;
@@ -332,4 +394,8 @@ export type GetEmployesParams = {
    * Search by matricule, NNI or name
    */
   q?: string;
+};
+
+export type DcgaiValiderMaterielDemandeBody = {
+  dcgaiUserId: number;
 };

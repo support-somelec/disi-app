@@ -219,6 +219,65 @@ export function mailDemandeExecutionRH(opts: {
   return { subject, html: emailBase("Demande de versement d'indemnités", "#0ea5e9", body) };
 }
 
+export function mailMaterielDemande(opts: {
+  plan: { id: number; reference?: string | null; titre: string; directionNom?: string | null };
+  moyen: { description: string };
+  items: Array<{ item: string; quantiteDemandee: number }>;
+  demandeId: number;
+}) {
+  const itemsRows = opts.items.map(i => row(i.item, `${i.quantiteDemandee} unité(s)`)).join("\n");
+  const subject = `[MATÉRIEL] Nouvelle demande — ${opts.plan.reference ?? opts.plan.titre}`;
+  const body = `<p style="margin:0 0 16px;color:#334155">Une nouvelle demande de matériel est en attente de traitement.</p>
+<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+${row("Plan", `[${opts.plan.reference ?? "ID " + opts.plan.id}] ${opts.plan.titre}`)}
+${row("Direction", opts.plan.directionNom ?? "—")}
+${row("Catégorie", "Matériel")}
+${row("Description", opts.moyen.description)}
+</table>
+<p style="margin:16px 0 8px;font-size:13px;font-weight:600;color:#334155">Articles demandés :</p>
+<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+${itemsRows}
+</table>`;
+  return { subject, html: emailBase("Demande de matériel reçue", "#0ea5e9", body) };
+}
+
+export function mailBonSoumisDcgai(opts: {
+  plan: { id: number; reference?: string | null; titre: string; directionNom?: string | null };
+  moyen: { description: string };
+  bonNumber: string;
+  montantTotal: number;
+  demandeId: number;
+}) {
+  const subject = `[BON] Bon de consommation à valider — ${opts.bonNumber}`;
+  const body = `<p style="margin:0 0 16px;color:#334155">Un bon de consommation matériel est en attente de votre validation.</p>
+<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+${row("N° Bon", opts.bonNumber)}
+${row("Plan", `[${opts.plan.reference ?? "ID " + opts.plan.id}] ${opts.plan.titre}`)}
+${row("Direction", opts.plan.directionNom ?? "—")}
+${row("Catégorie", "Matériel")}
+${row("Description", opts.moyen.description)}
+${row("Montant total", `${opts.montantTotal.toLocaleString("fr-MR")} MRU`)}
+</table>`;
+  return { subject, html: emailBase("Bon de consommation à valider", "#f59e0b", body) };
+}
+
+export function mailBonValide(opts: {
+  plan: { id: number; reference?: string | null; titre: string };
+  moyen: { description: string };
+  bonNumber: string;
+  montantTotal: number;
+}) {
+  const subject = `[BON VALIDÉ] ${opts.bonNumber} — ${opts.plan.reference ?? opts.plan.titre}`;
+  const body = `<p style="margin:0 0 16px;color:#334155">Votre bon de consommation matériel a été validé par le DCGAI. Vous pouvez maintenant le télécharger depuis l'application.</p>
+<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+${row("N° Bon", opts.bonNumber)}
+${row("Plan", `[${opts.plan.reference ?? "ID " + opts.plan.id}] ${opts.plan.titre}`)}
+${row("Description", opts.moyen.description)}
+${row("Montant validé", `${opts.montantTotal.toLocaleString("fr-MR")} MRU`)}
+</table>`;
+  return { subject, html: emailBase("Bon de consommation validé ✓", "#10b981", body) };
+}
+
 export function mailConsommationSaisie(opts: {
   plan: { reference?: string | null; titre: string; directionNom?: string | null };
   moyen: { description: string; categorie: string; montant: number; budget: number };

@@ -29,8 +29,6 @@ type Beneficiaire = {
 type ListeMaterielRow = {
   item: string;
   quantite: number;
-  prixUnitaire: number;
-  prixTotal: number;
 };
 
 type EmployeResult = {
@@ -107,10 +105,8 @@ export default function CreatePlan() {
           return "";
         };
         const parsed: ListeMaterielRow[] = rows.map(row => ({
-          item: String(getField(row, ["ITEM", "item", "Item", "DÉSIGNATION", "Désignation", "designation"])),
-          quantite: Number(getField(row, ["QUANTITÉ", "Quantité", "QTE", "Qte", "quantite", "QUANTITE", "QTÉ"])) || 0,
-          prixUnitaire: Number(getField(row, ["PRIX UNITAIRE", "Prix Unitaire", "prix_unitaire", "PU", "P.U.", "PRIX_UNITAIRE"])) || 0,
-          prixTotal: Number(getField(row, ["PRIX TOTAL", "Prix Total", "prix_total", "TOTAL", "PT", "PRIX_TOTAL"])) || 0,
+          item: String(getField(row, ["ITEM", "item", "Item", "DÉSIGNATION", "Désignation", "designation", "ARTICLE", "Article"])),
+          quantite: Number(getField(row, ["QUANTITÉ", "Quantité", "QTE", "Qte", "quantite", "QUANTITE", "QTÉ", "QTE"])) || 0,
         })).filter(r => r.item);
         setListeMaterielRows(parsed);
         // Store base64 for upload
@@ -568,7 +564,7 @@ export default function CreatePlan() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Format requis : colonnes <strong>ITEM, QUANTITÉ, PRIX UNITAIRE, PRIX TOTAL</strong>
+                        Format requis : colonnes <strong>ITEM, QUANTITÉ</strong> — les prix seront saisis par la DA lors de la demande
                       </p>
                       <div className="flex gap-2">
                         <Button type="button" variant="outline" size="sm" onClick={() => materielExcelRef.current?.click()} className="h-8 text-xs gap-1.5">
@@ -587,30 +583,18 @@ export default function CreatePlan() {
                           <table className="w-full text-xs">
                             <thead className="bg-muted/40">
                               <tr>
-                                <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">ITEM</th>
-                                <th className="px-2 py-1.5 text-center font-semibold text-muted-foreground">QTÉ</th>
-                                <th className="px-2 py-1.5 text-right font-semibold text-muted-foreground">P.U. (MRU)</th>
-                                <th className="px-2 py-1.5 text-right font-semibold text-muted-foreground">TOTAL (MRU)</th>
+                                <th className="px-3 py-1.5 text-left font-semibold text-muted-foreground">ITEM / ARTICLE</th>
+                                <th className="px-3 py-1.5 text-center font-semibold text-muted-foreground">QUANTITÉ</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y">
                               {listeMaterielRows.map((r, i) => (
                                 <tr key={i} className="bg-white">
-                                  <td className="px-2 py-1.5 font-medium">{r.item}</td>
-                                  <td className="px-2 py-1.5 text-center text-muted-foreground">{r.quantite}</td>
-                                  <td className="px-2 py-1.5 text-right text-muted-foreground">{r.prixUnitaire.toLocaleString("fr-MR")}</td>
-                                  <td className="px-2 py-1.5 text-right font-semibold text-primary">{r.prixTotal.toLocaleString("fr-MR")}</td>
+                                  <td className="px-3 py-1.5 font-medium">{r.item}</td>
+                                  <td className="px-3 py-1.5 text-center text-muted-foreground font-semibold">{r.quantite}</td>
                                 </tr>
                               ))}
                             </tbody>
-                            <tfoot>
-                              <tr className="bg-muted/20">
-                                <td colSpan={3} className="px-2 py-1.5 font-semibold text-xs text-muted-foreground">TOTAL</td>
-                                <td className="px-2 py-1.5 text-right font-bold text-primary text-xs">
-                                  {listeMaterielRows.reduce((s, r) => s + r.prixTotal, 0).toLocaleString("fr-MR")} MRU
-                                </td>
-                              </tr>
-                            </tfoot>
                           </table>
                         </div>
                       )}

@@ -1,4 +1,4 @@
-export const ROLES_SEE_ALL = ["directeur_general", "dga", "controle_technique", "dmg", "da", "controle_financier", "direction_financiere", "rh", "admin"];
+export const ROLES_SEE_ALL = ["directeur_general", "dga", "controle_technique", "dmg", "da", "controle_financier", "dcgai", "direction_financiere", "rh", "admin"];
 
 export const CATEGORY_ROLE: Record<string, string> = {
   carburant: "dmg",
@@ -21,6 +21,7 @@ export const ROLE_LABELS: Record<string, string> = {
   dmg: "Direction Matériel & Garage",
   da: "Direction des Approvisionnements",
   controle_financier: "Contrôle Financier",
+  dcgai: "Direction Contrôle de Gestion & Audit Interne",
   direction_financiere: "Direction Financière",
   rh: "Direction des Ressources Humaines",
   admin: "Administrateur",

@@ -23,9 +23,12 @@ import type {
   ConsommerMoyenRequest,
   CreateAttachmentRequest,
   CreateEmployeRequest,
+  CreateMaterielDemandeRequest,
   CreateMoyenRequest,
   CreatePlanRequest,
   CreateUserRequest,
+  DaSoumettreMaterielRequest,
+  DcgaiValiderMaterielDemandeBody,
   DemanderMoyenRequest,
   Direction,
   Employe,
@@ -33,6 +36,8 @@ import type {
   GetPlansParams,
   HealthStatus,
   IndemniteBeneficiaire,
+  MaterielDemande,
+  MaterielItem,
   Moyen,
   Plan,
   SetBeneficiairesRequest,
@@ -2433,4 +2438,551 @@ export const useSetBeneficiaires = <
   TContext
 > => {
   return useMutation(getSetBeneficiairesMutationOptions(options));
+};
+
+/**
+ * @summary Get stock items for a materiel moyen
+ */
+export const getGetMaterielItemsUrl = (id: number, moyenId: number) => {
+  return `/api/plans/${id}/moyens/${moyenId}/materiel-items`;
+};
+
+export const getMaterielItems = async (
+  id: number,
+  moyenId: number,
+  options?: RequestInit,
+): Promise<MaterielItem[]> => {
+  return customFetch<MaterielItem[]>(getGetMaterielItemsUrl(id, moyenId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMaterielItemsQueryKey = (id: number, moyenId: number) => {
+  return [`/api/plans/${id}/moyens/${moyenId}/materiel-items`] as const;
+};
+
+export const getGetMaterielItemsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMaterielItems>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  moyenId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMaterielItems>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMaterielItemsQueryKey(id, moyenId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMaterielItems>>
+  > = ({ signal }) =>
+    getMaterielItems(id, moyenId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(id && moyenId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMaterielItems>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMaterielItemsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMaterielItems>>
+>;
+export type GetMaterielItemsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get stock items for a materiel moyen
+ */
+
+export function useGetMaterielItems<
+  TData = Awaited<ReturnType<typeof getMaterielItems>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  moyenId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMaterielItems>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMaterielItemsQueryOptions(id, moyenId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get materiel demandes for a moyen
+ */
+export const getGetMaterielDemandesUrl = (id: number, moyenId: number) => {
+  return `/api/plans/${id}/moyens/${moyenId}/materiel-demandes`;
+};
+
+export const getMaterielDemandes = async (
+  id: number,
+  moyenId: number,
+  options?: RequestInit,
+): Promise<MaterielDemande[]> => {
+  return customFetch<MaterielDemande[]>(
+    getGetMaterielDemandesUrl(id, moyenId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMaterielDemandesQueryKey = (id: number, moyenId: number) => {
+  return [`/api/plans/${id}/moyens/${moyenId}/materiel-demandes`] as const;
+};
+
+export const getGetMaterielDemandesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMaterielDemandes>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  moyenId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMaterielDemandes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMaterielDemandesQueryKey(id, moyenId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMaterielDemandes>>
+  > = ({ signal }) =>
+    getMaterielDemandes(id, moyenId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(id && moyenId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMaterielDemandes>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMaterielDemandesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMaterielDemandes>>
+>;
+export type GetMaterielDemandesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get materiel demandes for a moyen
+ */
+
+export function useGetMaterielDemandes<
+  TData = Awaited<ReturnType<typeof getMaterielDemandes>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  moyenId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMaterielDemandes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMaterielDemandesQueryOptions(id, moyenId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Direction creates a partial materiel request
+ */
+export const getCreateMaterielDemandeUrl = (id: number, moyenId: number) => {
+  return `/api/plans/${id}/moyens/${moyenId}/materiel-demandes`;
+};
+
+export const createMaterielDemande = async (
+  id: number,
+  moyenId: number,
+  createMaterielDemandeRequest: CreateMaterielDemandeRequest,
+  options?: RequestInit,
+): Promise<MaterielDemande> => {
+  return customFetch<MaterielDemande>(
+    getCreateMaterielDemandeUrl(id, moyenId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createMaterielDemandeRequest),
+    },
+  );
+};
+
+export const getCreateMaterielDemandeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createMaterielDemande>>,
+    TError,
+    {
+      id: number;
+      moyenId: number;
+      data: BodyType<CreateMaterielDemandeRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createMaterielDemande>>,
+  TError,
+  { id: number; moyenId: number; data: BodyType<CreateMaterielDemandeRequest> },
+  TContext
+> => {
+  const mutationKey = ["createMaterielDemande"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createMaterielDemande>>,
+    {
+      id: number;
+      moyenId: number;
+      data: BodyType<CreateMaterielDemandeRequest>;
+    }
+  > = (props) => {
+    const { id, moyenId, data } = props ?? {};
+
+    return createMaterielDemande(id, moyenId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateMaterielDemandeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createMaterielDemande>>
+>;
+export type CreateMaterielDemandeMutationBody =
+  BodyType<CreateMaterielDemandeRequest>;
+export type CreateMaterielDemandeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Direction creates a partial materiel request
+ */
+export const useCreateMaterielDemande = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createMaterielDemande>>,
+    TError,
+    {
+      id: number;
+      moyenId: number;
+      data: BodyType<CreateMaterielDemandeRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createMaterielDemande>>,
+  TError,
+  { id: number; moyenId: number; data: BodyType<CreateMaterielDemandeRequest> },
+  TContext
+> => {
+  return useMutation(getCreateMaterielDemandeMutationOptions(options));
+};
+
+/**
+ * @summary DA prices items and submits bon to DCGAI
+ */
+export const getDaSoumettreMaterielDemandeUrl = (
+  id: number,
+  moyenId: number,
+  demandeId: number,
+) => {
+  return `/api/plans/${id}/moyens/${moyenId}/materiel-demandes/${demandeId}/da-soumettre`;
+};
+
+export const daSoumettreMaterielDemande = async (
+  id: number,
+  moyenId: number,
+  demandeId: number,
+  daSoumettreMaterielRequest: DaSoumettreMaterielRequest,
+  options?: RequestInit,
+): Promise<MaterielDemande> => {
+  return customFetch<MaterielDemande>(
+    getDaSoumettreMaterielDemandeUrl(id, moyenId, demandeId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(daSoumettreMaterielRequest),
+    },
+  );
+};
+
+export const getDaSoumettreMaterielDemandeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof daSoumettreMaterielDemande>>,
+    TError,
+    {
+      id: number;
+      moyenId: number;
+      demandeId: number;
+      data: BodyType<DaSoumettreMaterielRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof daSoumettreMaterielDemande>>,
+  TError,
+  {
+    id: number;
+    moyenId: number;
+    demandeId: number;
+    data: BodyType<DaSoumettreMaterielRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["daSoumettreMaterielDemande"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof daSoumettreMaterielDemande>>,
+    {
+      id: number;
+      moyenId: number;
+      demandeId: number;
+      data: BodyType<DaSoumettreMaterielRequest>;
+    }
+  > = (props) => {
+    const { id, moyenId, demandeId, data } = props ?? {};
+
+    return daSoumettreMaterielDemande(
+      id,
+      moyenId,
+      demandeId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DaSoumettreMaterielDemandeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof daSoumettreMaterielDemande>>
+>;
+export type DaSoumettreMaterielDemandeMutationBody =
+  BodyType<DaSoumettreMaterielRequest>;
+export type DaSoumettreMaterielDemandeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary DA prices items and submits bon to DCGAI
+ */
+export const useDaSoumettreMaterielDemande = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof daSoumettreMaterielDemande>>,
+    TError,
+    {
+      id: number;
+      moyenId: number;
+      demandeId: number;
+      data: BodyType<DaSoumettreMaterielRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof daSoumettreMaterielDemande>>,
+  TError,
+  {
+    id: number;
+    moyenId: number;
+    demandeId: number;
+    data: BodyType<DaSoumettreMaterielRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getDaSoumettreMaterielDemandeMutationOptions(options));
+};
+
+/**
+ * @summary DCGAI validates the bon de consommation
+ */
+export const getDcgaiValiderMaterielDemandeUrl = (
+  id: number,
+  moyenId: number,
+  demandeId: number,
+) => {
+  return `/api/plans/${id}/moyens/${moyenId}/materiel-demandes/${demandeId}/dcgai-valider`;
+};
+
+export const dcgaiValiderMaterielDemande = async (
+  id: number,
+  moyenId: number,
+  demandeId: number,
+  dcgaiValiderMaterielDemandeBody: DcgaiValiderMaterielDemandeBody,
+  options?: RequestInit,
+): Promise<MaterielDemande> => {
+  return customFetch<MaterielDemande>(
+    getDcgaiValiderMaterielDemandeUrl(id, moyenId, demandeId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(dcgaiValiderMaterielDemandeBody),
+    },
+  );
+};
+
+export const getDcgaiValiderMaterielDemandeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dcgaiValiderMaterielDemande>>,
+    TError,
+    {
+      id: number;
+      moyenId: number;
+      demandeId: number;
+      data: BodyType<DcgaiValiderMaterielDemandeBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof dcgaiValiderMaterielDemande>>,
+  TError,
+  {
+    id: number;
+    moyenId: number;
+    demandeId: number;
+    data: BodyType<DcgaiValiderMaterielDemandeBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["dcgaiValiderMaterielDemande"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof dcgaiValiderMaterielDemande>>,
+    {
+      id: number;
+      moyenId: number;
+      demandeId: number;
+      data: BodyType<DcgaiValiderMaterielDemandeBody>;
+    }
+  > = (props) => {
+    const { id, moyenId, demandeId, data } = props ?? {};
+
+    return dcgaiValiderMaterielDemande(
+      id,
+      moyenId,
+      demandeId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DcgaiValiderMaterielDemandeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof dcgaiValiderMaterielDemande>>
+>;
+export type DcgaiValiderMaterielDemandeMutationBody =
+  BodyType<DcgaiValiderMaterielDemandeBody>;
+export type DcgaiValiderMaterielDemandeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary DCGAI validates the bon de consommation
+ */
+export const useDcgaiValiderMaterielDemande = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dcgaiValiderMaterielDemande>>,
+    TError,
+    {
+      id: number;
+      moyenId: number;
+      demandeId: number;
+      data: BodyType<DcgaiValiderMaterielDemandeBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof dcgaiValiderMaterielDemande>>,
+  TError,
+  {
+    id: number;
+    moyenId: number;
+    demandeId: number;
+    data: BodyType<DcgaiValiderMaterielDemandeBody>;
+  },
+  TContext
+> => {
+  return useMutation(getDcgaiValiderMaterielDemandeMutationOptions(options));
 };

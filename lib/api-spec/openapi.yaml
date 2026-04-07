@@ -604,6 +604,160 @@ paths:
                 items:
                   $ref: "#/components/schemas/IndemniteBeneficiaire"
 
+  /plans/{id}/moyens/{moyenId}/materiel-items:
+    get:
+      operationId: getMaterielItems
+      tags: [plans]
+      summary: Get stock items for a materiel moyen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: moyenId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of materiel items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MaterielItem"
+
+  /plans/{id}/moyens/{moyenId}/materiel-demandes:
+    get:
+      operationId: getMaterielDemandes
+      tags: [plans]
+      summary: Get materiel demandes for a moyen
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: moyenId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of demandes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MaterielDemande"
+    post:
+      operationId: createMaterielDemande
+      tags: [plans]
+      summary: Direction creates a partial materiel request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: moyenId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMaterielDemandeRequest"
+      responses:
+        "201":
+          description: Demande created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaterielDemande"
+
+  /plans/{id}/moyens/{moyenId}/materiel-demandes/{demandeId}/da-soumettre:
+    post:
+      operationId: daSoumettreMaterielDemande
+      tags: [plans]
+      summary: DA prices items and submits bon to DCGAI
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: moyenId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: demandeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DaSoumettreMaterielRequest"
+      responses:
+        "200":
+          description: Bon submitted to DCGAI
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaterielDemande"
+
+  /plans/{id}/moyens/{moyenId}/materiel-demandes/{demandeId}/dcgai-valider:
+    post:
+      operationId: dcgaiValiderMaterielDemande
+      tags: [plans]
+      summary: DCGAI validates the bon de consommation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: moyenId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: demandeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dcgaiUserId:
+                  type: integer
+              required: [dcgaiUserId]
+      responses:
+        "200":
+          description: Bon validated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaterielDemande"
+
 components:
   schemas:
     HealthStatus:
@@ -637,7 +791,7 @@ components:
           type: string
         role:
           type: string
-          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, admin]
+          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, dcgai, direction_financiere, rh, admin]
         directionId:
           type: integer
         directionNom:
@@ -1018,3 +1172,102 @@ components:
                 type: number
             required: [nom, montant]
       required: [beneficiaires]
+
+    MaterielItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        moyenId:
+          type: integer
+        item:
+          type: string
+        quantiteInitiale:
+          type: integer
+        quantiteRestante:
+          type: integer
+      required: [id, moyenId, item, quantiteInitiale, quantiteRestante]
+
+    MaterielDemandeItem:
+      type: object
+      properties:
+        item:
+          type: string
+        quantiteDemandee:
+          type: integer
+        montantUnitaire:
+          type: number
+        montantTotal:
+          type: number
+      required: [item, quantiteDemandee]
+
+    MaterielDemande:
+      type: object
+      properties:
+        id:
+          type: integer
+        moyenId:
+          type: integer
+        planId:
+          type: integer
+        createdById:
+          type: integer
+        statut:
+          type: string
+          enum: [en_attente_da, en_attente_dcgai, validee]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MaterielDemandeItem"
+        montantTotal:
+          type: number
+        bonNumber:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        daValidatedAt:
+          type: string
+          format: date-time
+        dcgaiValidatedAt:
+          type: string
+          format: date-time
+      required: [id, moyenId, planId, createdById, statut, items, createdAt]
+
+    CreateMaterielDemandeRequest:
+      type: object
+      properties:
+        createdById:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              materielItemId:
+                type: integer
+              item:
+                type: string
+              quantiteDemandee:
+                type: integer
+            required: [materielItemId, item, quantiteDemandee]
+      required: [createdById, items]
+
+    DaSoumettreMaterielRequest:
+      type: object
+      properties:
+        daUserId:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              item:
+                type: string
+              quantiteDemandee:
+                type: integer
+              montantUnitaire:
+                type: number
+            required: [item, quantiteDemandee, montantUnitaire]
+      required: [daUserId, items]

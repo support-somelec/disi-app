@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable } from "@workspace/db/schema";
+import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable, materielItemsTable, materielDemandesTable } from "@workspace/db/schema";
 import { eq, and, SQL, sql, inArray } from "drizzle-orm";
 import {
   CreatePlanBody,
@@ -22,6 +22,9 @@ import {
   mailDemandeExecutionRH,
   mailDemandeExecutionBenef,
   mailConsommationSaisie,
+  mailMaterielDemande,
+  mailBonSoumisDcgai,
+  mailBonValide,
 } from "../mailer";
 
 const router: IRouter = Router();
@@ -417,6 +420,26 @@ router.post("/plans/:id/moyens", async (req, res) => {
       locationVehiculeSimple: (body as any).locationVehiculeSimple ?? null,
       locationEngin: (body as any).locationEngin ?? null,
     }).returning();
+
+    // Seed materiel_items when categorie is materiel
+    if (body.categorie === "materiel" && (body as any).listeMaterielJson) {
+      try {
+        const items: Array<{ item: string; quantite: number }> = JSON.parse((body as any).listeMaterielJson);
+        if (items.length > 0) {
+          await db.insert(materielItemsTable).values(
+            items.map(i => ({
+              moyenId: moyen.id,
+              item: i.item,
+              quantiteInitiale: Number(i.quantite) || 0,
+              quantiteRestante: Number(i.quantite) || 0,
+            }))
+          );
+        }
+      } catch (e) {
+        console.error("Failed to seed materiel_items", e);
+      }
+    }
+
     res.status(201).json(mapMoyen(moyen));
   } catch (err) {
     console.error(String(err));
@@ -738,6 +761,198 @@ router.post("/plans/:id/moyens/:moyenId/beneficiaires", async (req, res) => {
       .where(eq(beneficiairesMoyenTable.moyenId, moyenId));
     res.json(rows.map(b => ({ ...b, montant: Number(b.montant) })));
   } catch (err) {
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// ======================== MATERIEL WORKFLOW ========================
+
+function mapMaterielDemande(d: typeof materielDemandesTable.$inferSelect) {
+  return {
+    ...d,
+    items: JSON.parse(d.itemsJson || "[]"),
+    montantTotal: d.montantTotal ? Number(d.montantTotal) : null,
+    daValidatedAt: d.daValidatedAt ?? null,
+    dcgaiValidatedAt: d.dcgaiValidatedAt ?? null,
+  };
+}
+
+// GET /plans/:id/moyens/:moyenId/materiel-items
+router.get("/plans/:id/moyens/:moyenId/materiel-items", async (req, res) => {
+  try {
+    const moyenId = Number(req.params.moyenId);
+    const items = await db.select().from(materielItemsTable).where(eq(materielItemsTable.moyenId, moyenId));
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// GET /plans/:id/moyens/:moyenId/materiel-demandes
+router.get("/plans/:id/moyens/:moyenId/materiel-demandes", async (req, res) => {
+  try {
+    const moyenId = Number(req.params.moyenId);
+    const demandes = await db.select().from(materielDemandesTable).where(eq(materielDemandesTable.moyenId, moyenId));
+    res.json(demandes.map(mapMaterielDemande));
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /plans/:id/moyens/:moyenId/materiel-demandes (direction creates request)
+router.post("/plans/:id/moyens/:moyenId/materiel-demandes", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const { createdById, items } = req.body as {
+      createdById: number;
+      items: Array<{ materielItemId: number; item: string; quantiteDemandee: number }>;
+    };
+
+    if (!items || items.length === 0) return res.status(400).json({ error: "Aucun article sélectionné." });
+
+    // Validate and deduct quantities
+    for (const reqItem of items) {
+      const [stockItem] = await db.select().from(materielItemsTable).where(eq(materielItemsTable.id, reqItem.materielItemId));
+      if (!stockItem) return res.status(400).json({ error: `Article introuvable: ${reqItem.item}` });
+      if (stockItem.quantiteRestante < reqItem.quantiteDemandee) {
+        return res.status(400).json({ error: `Stock insuffisant pour "${reqItem.item}": disponible ${stockItem.quantiteRestante}, demandé ${reqItem.quantiteDemandee}` });
+      }
+    }
+
+    // Deduct from stock
+    for (const reqItem of items) {
+      await db.update(materielItemsTable)
+        .set({ quantiteRestante: sql`quantite_restante - ${reqItem.quantiteDemandee}` })
+        .where(eq(materielItemsTable.id, reqItem.materielItemId));
+    }
+
+    const itemsJson = JSON.stringify(items.map(i => ({ item: i.item, quantiteDemandee: i.quantiteDemandee })));
+    const [demande] = await db.insert(materielDemandesTable).values({
+      moyenId,
+      planId,
+      createdById,
+      statut: "en_attente_da",
+      itemsJson,
+    }).returning();
+
+    // Notify DA
+    try {
+      const plan = await db.select({ id: plansTable.id, reference: plansTable.reference, titre: plansTable.titre })
+        .from(plansTable).where(eq(plansTable.id, planId));
+      const moyen = await db.select({ description: moyensTable.description }).from(moyensTable).where(eq(moyensTable.id, moyenId));
+      const daEmails = await getUserEmailsByRole(["da"]);
+      const planInfo = plan[0];
+      if (planInfo && moyen[0] && daEmails.length > 0) {
+        const mail = mailMaterielDemande({ plan: { id: planInfo.id, reference: planInfo.reference, titre: planInfo.titre }, moyen: moyen[0], items: items.map(i => ({ item: i.item, quantiteDemandee: i.quantiteDemandee })), demandeId: demande.id });
+        await sendMail({ to: daEmails, ...mail });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.status(201).json(mapMaterielDemande(demande));
+  } catch (err) {
+    console.error(String(err));
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// POST /plans/:id/moyens/:moyenId/materiel-demandes/:demandeId/da-soumettre
+router.post("/plans/:id/moyens/:moyenId/materiel-demandes/:demandeId/da-soumettre", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const demandeId = Number(req.params.demandeId);
+    const { daUserId, items } = req.body as {
+      daUserId: number;
+      items: Array<{ item: string; quantiteDemandee: number; montantUnitaire: number }>;
+    };
+
+    const [existing] = await db.select().from(materielDemandesTable).where(eq(materielDemandesTable.id, demandeId));
+    if (!existing || existing.statut !== "en_attente_da") return res.status(400).json({ error: "Demande introuvable ou déjà traitée." });
+
+    // Calculate total and build enriched items
+    const enrichedItems = items.map(i => ({
+      item: i.item,
+      quantiteDemandee: i.quantiteDemandee,
+      montantUnitaire: i.montantUnitaire,
+      montantTotal: i.montantUnitaire * i.quantiteDemandee,
+    }));
+    const montantTotal = enrichedItems.reduce((s, i) => s + i.montantTotal, 0);
+
+    // Generate bon number
+    const plan = await db.select({ reference: plansTable.reference, titre: plansTable.titre, id: plansTable.id })
+      .from(plansTable).where(eq(plansTable.id, planId));
+    const planRef = plan[0]?.reference ?? `PLAN-${planId}`;
+    const bonNumber = `BON-${planRef}-${String(demandeId).padStart(4, "0")}`;
+
+    const [updated] = await db.update(materielDemandesTable)
+      .set({
+        statut: "en_attente_dcgai",
+        itemsJson: JSON.stringify(enrichedItems),
+        montantTotal: String(montantTotal),
+        bonNumber,
+        daValidatedById: daUserId,
+        daValidatedAt: new Date(),
+      })
+      .where(eq(materielDemandesTable.id, demandeId))
+      .returning();
+
+    // Notify DCGAI
+    try {
+      const moyen = await db.select({ description: moyensTable.description }).from(moyensTable).where(eq(moyensTable.id, moyenId));
+      const dcgaiEmails = await getUserEmailsByRole(["dcgai"]);
+      if (plan[0] && moyen[0] && dcgaiEmails.length > 0) {
+        const mail = mailBonSoumisDcgai({ plan: { id: plan[0].id, reference: plan[0].reference, titre: plan[0].titre }, moyen: moyen[0], bonNumber, montantTotal, demandeId });
+        await sendMail({ to: dcgaiEmails, ...mail });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.json(mapMaterielDemande(updated));
+  } catch (err) {
+    console.error(String(err));
+    res.status(400).json({ error: String(err) });
+  }
+});
+
+// POST /plans/:id/moyens/:moyenId/materiel-demandes/:demandeId/dcgai-valider
+router.post("/plans/:id/moyens/:moyenId/materiel-demandes/:demandeId/dcgai-valider", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const demandeId = Number(req.params.demandeId);
+    const { dcgaiUserId } = req.body as { dcgaiUserId: number };
+
+    const [existing] = await db.select().from(materielDemandesTable).where(eq(materielDemandesTable.id, demandeId));
+    if (!existing || existing.statut !== "en_attente_dcgai") return res.status(400).json({ error: "Bon introuvable ou déjà validé." });
+
+    const montantTotal = Number(existing.montantTotal ?? 0);
+
+    const [updated] = await db.update(materielDemandesTable)
+      .set({ statut: "validee", dcgaiValidatedById: dcgaiUserId, dcgaiValidatedAt: new Date() })
+      .where(eq(materielDemandesTable.id, demandeId))
+      .returning();
+
+    // Deduct from moyen budget
+    await db.update(moyensTable)
+      .set({ montantConsomme: sql`COALESCE(montant_consomme::numeric, 0) + ${montantTotal}` })
+      .where(eq(moyensTable.id, moyenId));
+
+    // Notify direction (plan creator)
+    try {
+      const plan = await db.select({ id: plansTable.id, reference: plansTable.reference, titre: plansTable.titre, createdById: plansTable.createdById })
+        .from(plansTable).where(eq(plansTable.id, planId));
+      const moyen = await db.select({ description: moyensTable.description }).from(moyensTable).where(eq(moyensTable.id, moyenId));
+      if (plan[0] && moyen[0]) {
+        const dirEmail = await getUserEmailById(plan[0].createdById);
+        const bonNumber = existing.bonNumber ?? `BON-${demandeId}`;
+        const mail = mailBonValide({ plan: { id: plan[0].id, reference: plan[0].reference, titre: plan[0].titre }, moyen: moyen[0], bonNumber, montantTotal });
+        if (dirEmail) await sendMail({ to: dirEmail, ...mail });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.json(mapMaterielDemande(updated));
+  } catch (err) {
+    console.error(String(err));
     res.status(400).json({ error: String(err) });
   }
 });

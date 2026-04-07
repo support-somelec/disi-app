@@ -37,7 +37,8 @@ Gestion du cycle de vie des plans d'action avec circuit de validation :
 - `dga` : Valide les plans en attente DGA + accès Analyse
 - `directeur_general` : Valide les plans en attente DG + accès Analyse
 - `dmg` : Saisit la consommation pour les moyens carburant
-- `da` : Saisit la consommation pour les moyens matériel
+- `da` : Traite les demandes matériel (génère les bons de consommation)
+- `dcgai` : Valide les bons de consommation générés par la DA
 - `controle_financier` : Saisit la consommation pour les moyens prime
 - `direction_financiere` : Saisit la consommation pour logement/logistique/indemnite_journaliere
 
@@ -55,6 +56,11 @@ Gestion du cycle de vie des plans d'action avec circuit de validation :
 - Alertes dépassement budget (rouge) et délai (orange) sur le dashboard
 - Téléchargement des pièces jointes via /api/plans/:id/attachments/:id/download
 - Auto-seed au démarrage si la DB est vide (production)
+- **Workflow matériel** : Direction demande articles du stock → DA fixe prix & génère bon → DCGAI valide → budget déduit
+  - Stock géré dans `materiel_items` (quantiteRestante décrémentée à la demande)
+  - Bon de consommation HTML téléchargeable côté client
+  - Notifications email à chaque étape
+  - La liste matériel Excel n'accepte que les colonnes ITEM + QUANTITÉ (pas de prix)
 
 ## Structure
 
@@ -80,8 +86,11 @@ artifacts-monorepo/
 - `directions` : id, nom, code
 - `users` : id, nom, prenom, email, role, direction_id
 - `plans` : id, titre, description, date_debut, duree, direction_id, statut, created_by_id, commentaire_rejet, created_at, updated_at
-- `moyens` : id, plan_id, categorie, description, budget, unite, quantite
+- `moyens` : id, plan_id, categorie, description, budget, unite, quantite, montant_consomme, liste_materiel_json, location_vehicule_simple, location_engin
 - `attachments` : id, plan_id, moyen_id (nullable), nom, type, taille, data, created_at
+- `beneficiaires_moyen` : id, moyen_id, nom, matricule, nni, montant
+- `materiel_items` : id, moyen_id, item, quantite_initiale, quantite_restante (stock par moyen matériel)
+- `materiel_demandes` : id, moyen_id, plan_id, created_by_id, statut, items_json, montant_total, bon_number, da_validated_by_id, dcgai_validated_by_id, timestamps
 
 ## Key Commands
 

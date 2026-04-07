@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -100,6 +100,21 @@ export default function PlanDetails() {
   const [beneficiairesMap, setBeneficiairesMap] = useState<Record<number, { id: number; nom: string; matricule: string | null; nni: string | null; montant: number }[]>>({});
   const [expandedBenef, setExpandedBenef] = useState<Record<number, boolean>>({});
   const { data: directions = [] } = useGetDirections();
+
+  // Materiel workflow state
+  const [materielItemsMap, setMaterielItemsMap] = useState<Record<number, Array<{ id: number; item: string; quantiteInitiale: number; quantiteRestante: number }>>>({});
+  const [materielDemandesMap, setMaterielDemandesMap] = useState<Record<number, Array<{ id: number; statut: string; itemsJson: string; items: Array<{ item: string; quantiteDemandee: number; montantUnitaire?: number; montantTotal?: number }>; montantTotal: number | null; bonNumber: string | null; daValidatedAt: string | null; dcgaiValidatedAt: string | null; createdAt: string }>>>({});
+  const [expandedMaterielMoyen, setExpandedMaterielMoyen] = useState<Record<number, boolean>>({});
+  // Direction demande dialog
+  const [materielDemandeDialog, setMaterielDemandeDialog] = useState<number | null>(null); // moyenId
+  const [materielQtySels, setMaterielQtySels] = useState<Record<number, string>>({}); // itemId -> qty
+  const [materielLoading, setMaterielLoading] = useState(false);
+  // DA traiter dialog
+  const [daTraiterDialog, setDaTraiterDialog] = useState<{ moyenId: number; demandeId: number; items: Array<{ item: string; quantiteDemandee: number }> } | null>(null);
+  const [daPrices, setDaPrices] = useState<Record<number, string>>({});
+  const [daLoading, setDaLoading] = useState(false);
+  // DCGAI state
+  const [dcgaiValidating, setDcgaiValidating] = useState<number | null>(null);
 
   const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
@@ -222,6 +237,124 @@ export default function PlanDetails() {
     }
   };
 
+  const loadMaterielData = async (moyenId: number) => {
+    try {
+      const [itemsRes, demandesRes] = await Promise.all([
+        fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/materiel-items`),
+        fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/materiel-demandes`),
+      ]);
+      const items = await itemsRes.json();
+      const demandes = await demandesRes.json();
+      setMaterielItemsMap(prev => ({ ...prev, [moyenId]: items }));
+      setMaterielDemandesMap(prev => ({ ...prev, [moyenId]: demandes }));
+    } catch { /* ignore */ }
+  };
+
+  // Auto-load materiel demandes for DA and DCGAI roles
+  useEffect(() => {
+    if (!currentUser || !moyens.length) return;
+    const role = currentUser.role;
+    if (role === "da" || role === "dcgai") {
+      const materielMoyenIds = moyens.filter(m => m.categorie === "materiel").map(m => m.id);
+      materielMoyenIds.forEach(mid => loadMaterielData(mid));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moyens.length, currentUser?.role]);
+
+  const handleDemanderMateriel = async (moyenId: number) => {
+    if (!currentUser) return;
+    const selections = Object.entries(materielQtySels)
+      .filter(([, qty]) => Number(qty) > 0)
+      .map(([itemIdStr, qty]) => {
+        const itemId = Number(itemIdStr);
+        const stockItem = (materielItemsMap[moyenId] ?? []).find(i => i.id === itemId);
+        return stockItem ? { materielItemId: itemId, item: stockItem.item, quantiteDemandee: Number(qty) } : null;
+      })
+      .filter(Boolean) as Array<{ materielItemId: number; item: string; quantiteDemandee: number }>;
+
+    if (selections.length === 0) return;
+    setMaterielLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/materiel-demandes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ createdById: currentUser.id, items: selections }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error ?? "Erreur lors de la demande.");
+        return;
+      }
+      setMaterielDemandeDialog(null);
+      setMaterielQtySels({});
+      await loadMaterielData(moyenId);
+    } catch (e) {
+      alert("Erreur réseau.");
+    } finally {
+      setMaterielLoading(false);
+    }
+  };
+
+  const handleDATraiter = async () => {
+    if (!daTraiterDialog || !currentUser) return;
+    const { moyenId, demandeId, items } = daTraiterDialog;
+    const enriched = items.map((item, i) => ({
+      item: item.item,
+      quantiteDemandee: item.quantiteDemandee,
+      montantUnitaire: Number(daPrices[i] ?? 0),
+    }));
+    if (enriched.some(e => !e.montantUnitaire || e.montantUnitaire <= 0)) {
+      alert("Veuillez saisir le montant unitaire pour tous les articles.");
+      return;
+    }
+    setDaLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/materiel-demandes/${demandeId}/da-soumettre`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ daUserId: currentUser.id, items: enriched }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error ?? "Erreur.");
+        return;
+      }
+      setDaTraiterDialog(null);
+      setDaPrices({});
+      await loadMaterielData(moyenId);
+    } catch { alert("Erreur réseau."); } finally { setDaLoading(false); }
+  };
+
+  const handleDcgaiValider = async (moyenId: number, demandeId: number) => {
+    if (!currentUser) return;
+    setDcgaiValidating(demandeId);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/materiel-demandes/${demandeId}/dcgai-valider`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dcgaiUserId: currentUser.id }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur."); return; }
+      await Promise.all([loadMaterielData(moyenId), refetchMoyens()]);
+    } catch { alert("Erreur réseau."); } finally { setDcgaiValidating(null); }
+  };
+
+  const downloadBon = (demande: { bonNumber: string | null; items: Array<{ item: string; quantiteDemandee: number; montantUnitaire?: number; montantTotal?: number }>; montantTotal: number | null }, planRef: string) => {
+    const rows = demande.items.map(it => `<tr><td>${it.item}</td><td style="text-align:center">${it.quantiteDemandee}</td><td style="text-align:right">${it.montantUnitaire?.toLocaleString("fr-MR") ?? "—"} MRU</td><td style="text-align:right">${it.montantTotal?.toLocaleString("fr-MR") ?? "—"} MRU</td></tr>`).join("");
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Bon de consommation ${demande.bonNumber ?? ""}</title>
+    <style>body{font-family:Arial,sans-serif;margin:40px;} table{width:100%;border-collapse:collapse;margin-top:20px;} th,td{border:1px solid #ddd;padding:8px;} th{background:#f0f0f0;} .total{font-weight:bold;} h1{font-size:18px;} p{font-size:13px;color:#555;}</style>
+    </head><body><h1>Bon de Consommation Matériel</h1><p>Réf. Bon : <strong>${demande.bonNumber ?? "—"}</strong> — Plan : <strong>${planRef}</strong></p>
+    <table><thead><tr><th>Article</th><th>Quantité</th><th>P.U.</th><th>Total</th></tr></thead><tbody>${rows}</tbody>
+    <tfoot><tr class="total"><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right">${demande.montantTotal?.toLocaleString("fr-MR") ?? "—"} MRU</td></tr></tfoot></table>
+    <p style="margin-top:30px">Date : ${new Date().toLocaleDateString("fr-MR")}</p></body></html>`;
+    const blob = new Blob([html], { type: "text/html" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${demande.bonNumber ?? "bon"}.html`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   const handleDemander = async (moyen: Moyen) => {
     if (!currentUser) return;
     setDemandingMoyen(moyen.id);
@@ -250,12 +383,20 @@ export default function PlanDetails() {
       : canDemanderExecution;
 
   const myRole = currentUser?.role ?? "";
+  const isDcgai = myRole === "dcgai";
+  const isDA = myRole === "da";
   const myCategories = Object.entries(CATEGORY_ROLE).filter(([, role]) => role === myRole).map(([cat]) => cat);
   const isFunctionalRole = myCategories.length > 0;
   const myMoyensAll = isFunctionalRole ? moyens.filter(m => myCategories.includes(m.categorie)) : [];
-  const myMoyens = myMoyensAll.filter(m => m.demandeStatus === "demandee" &&
-    (m.categorie === "prime" ? plan.statut === "cloture" : plan.statut === "ouvert"));
+  // For DA: exclude materiel from normal saisir consommation (handled separately)
+  const myMoyens = myMoyensAll.filter(m =>
+    m.categorie !== "materiel" &&
+    m.demandeStatus === "demandee" &&
+    (m.categorie === "prime" ? plan.statut === "cloture" : plan.statut === "ouvert")
+  );
   const canSaisirConsommation = isFunctionalRole && myMoyens.length > 0;
+  // Materiel moyens in this plan (for DA and DCGAI panels)
+  const materielMoyens = moyens.filter(m => m.categorie === "materiel");
 
   return (
     <div className="space-y-6 animate-in fade-in pb-20">
@@ -388,11 +529,12 @@ export default function PlanDetails() {
                     const over = consomme > Number(m.budget) && Number(m.budget) > 0;
                     const moyenDecharge = attachments.find(a => a.moyenId === m.id && a.type !== "liste_materiel");
                     const listeMaterielAtt = attachments.find(a => a.moyenId === m.id && a.type === "liste_materiel");
-                    const listeMaterielRows: Array<{ item: string; quantite: number; prixUnitaire: number; prixTotal: number }> =
+                    const listeMaterielRows: Array<{ item: string; quantite: number }> =
                       (m as any).listeMaterielJson ? JSON.parse((m as any).listeMaterielJson) : [];
                     const isDemanderLoading = demandingMoyen === m.id;
                     return (
-                      <tr key={m.id} className={cn("hover:bg-muted/10", over ? "bg-destructive/5" : "")}>
+                      <React.Fragment key={m.id}>
+                      <tr className={cn("hover:bg-muted/10", over ? "bg-destructive/5" : "")}>
                         <td className="px-5 py-4">
                           <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium", cat.color)}>
                             <Icon className="w-3.5 h-3.5" /> {cat.label}
@@ -453,28 +595,16 @@ export default function PlanDetails() {
                                       <tr>
                                         <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">ITEM</th>
                                         <th className="px-2 py-1.5 text-center font-semibold text-muted-foreground">QTÉ</th>
-                                        <th className="px-2 py-1.5 text-right font-semibold text-muted-foreground">P.U.</th>
-                                        <th className="px-2 py-1.5 text-right font-semibold text-muted-foreground">TOTAL</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y">
                                       {listeMaterielRows.map((r, ri) => (
                                         <tr key={ri} className="bg-white">
                                           <td className="px-2 py-1.5 font-medium">{r.item}</td>
-                                          <td className="px-2 py-1.5 text-center text-muted-foreground">{r.quantite}</td>
-                                          <td className="px-2 py-1.5 text-right text-muted-foreground">{Number(r.prixUnitaire).toLocaleString("fr-MR")}</td>
-                                          <td className="px-2 py-1.5 text-right font-semibold text-primary">{Number(r.prixTotal).toLocaleString("fr-MR")} MRU</td>
+                                          <td className="px-2 py-1.5 text-center text-muted-foreground font-semibold">{r.quantite}</td>
                                         </tr>
                                       ))}
                                     </tbody>
-                                    <tfoot>
-                                      <tr className="bg-muted/20">
-                                        <td colSpan={3} className="px-2 py-1.5 font-semibold text-xs text-muted-foreground">TOTAL</td>
-                                        <td className="px-2 py-1.5 text-right font-bold text-primary text-xs">
-                                          {listeMaterielRows.reduce((s,r) => s + Number(r.prixTotal), 0).toLocaleString("fr-MR")} MRU
-                                        </td>
-                                      </tr>
-                                    </tfoot>
                                   </table>
                                 </div>
                               )}
@@ -518,7 +648,24 @@ export default function PlanDetails() {
                           ) : <span className="text-muted-foreground text-xs">—</span>}
                         </td>
                         <td className="px-5 py-4 text-center">
-                          {m.demandeStatus === "consommee" || (Number(m.montantConsomme) > 0 && !m.demandeStatus) ? (
+                          {m.categorie === "materiel" ? (
+                            canDemanderExecution ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs gap-1 px-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+                                onClick={async () => {
+                                  await loadMaterielData(m.id);
+                                  setMaterielQtySels({});
+                                  setMaterielDemandeDialog(m.id);
+                                }}
+                              >
+                                <Package className="w-3 h-3" /> Dem. matériel
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )
+                          ) : m.demandeStatus === "consommee" || (Number(m.montantConsomme) > 0 && !m.demandeStatus) ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">
                               <CheckCheck className="w-3 h-3" /> Traitée
                             </span>
@@ -555,6 +702,63 @@ export default function PlanDetails() {
                           )}
                         </td>
                       </tr>
+                      {/* Materiel demandes expandable sub-row */}
+                      {m.categorie === "materiel" && isOwnDirectionPlan && (
+                        <tr>
+                          <td colSpan={7} className="bg-blue-50/40 px-5 py-2">
+                            <button
+                              className="flex items-center gap-1.5 text-xs text-blue-700 hover:text-blue-900 font-medium"
+                              onClick={async () => {
+                                if (!expandedMaterielMoyen[m.id]) await loadMaterielData(m.id);
+                                setExpandedMaterielMoyen(prev => ({ ...prev, [m.id]: !prev[m.id] }));
+                              }}
+                            >
+                              <Package className="w-3 h-3" />
+                              {expandedMaterielMoyen[m.id] ? "Masquer" : "Voir"} les demandes matériel
+                              {(materielDemandesMap[m.id] ?? []).length > 0 && (
+                                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-200 text-blue-800 text-xs">{materielDemandesMap[m.id].length}</span>
+                              )}
+                            </button>
+                            {expandedMaterielMoyen[m.id] && (
+                              <div className="mt-2 space-y-2">
+                                {(materielDemandesMap[m.id] ?? []).length === 0 ? (
+                                  <p className="text-xs text-muted-foreground py-1">Aucune demande matériel soumise.</p>
+                                ) : (materielDemandesMap[m.id] ?? []).map(dem => (
+                                  <div key={dem.id} className="border border-blue-200 rounded-lg bg-white p-3 text-xs space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-semibold text-blue-900">
+                                        {dem.bonNumber ? `Bon : ${dem.bonNumber}` : `Demande #${dem.id}`}
+                                      </span>
+                                      <span className={cn(
+                                        "px-2 py-0.5 rounded-full text-xs font-medium",
+                                        dem.statut === "validee" ? "bg-green-100 text-green-700" :
+                                        dem.statut === "en_attente_dcgai" ? "bg-purple-100 text-purple-700" :
+                                        "bg-orange-100 text-orange-700"
+                                      )}>
+                                        {dem.statut === "validee" ? "Validé" : dem.statut === "en_attente_dcgai" ? "Attente DCGAI" : "Attente DA"}
+                                      </span>
+                                    </div>
+                                    <ul className="list-disc list-inside text-muted-foreground space-y-0.5">
+                                      {dem.items.map((it, ii) => (
+                                        <li key={ii}>{it.item} × {it.quantiteDemandee}{it.montantTotal ? ` — ${it.montantTotal.toLocaleString("fr-MR")} MRU` : ""}</li>
+                                      ))}
+                                    </ul>
+                                    {dem.statut === "validee" && dem.montantTotal && (
+                                      <div className="flex items-center justify-between pt-1">
+                                        <span className="font-semibold text-success">Total : {dem.montantTotal.toLocaleString("fr-MR")} MRU</span>
+                                        <Button size="sm" variant="outline" className="h-6 text-xs gap-1 px-2" onClick={() => downloadBon(dem, plan.reference ?? `PLAN-${plan.id}`)}>
+                                          <Download className="w-3 h-3" /> Bon
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -704,8 +908,120 @@ export default function PlanDetails() {
             </Card>
           )}
 
-          {/* Specialist waiting panel — has categories but no pending demands */}
-          {isFunctionalRole && plan.statut === "ouvert" && myMoyensAll.length > 0 && myMoyens.length === 0 && (
+          {/* DA — Materiel demandes panel */}
+          {isDA && plan.statut === "ouvert" && materielMoyens.length > 0 && (
+            <Card className="border-indigo-200 bg-indigo-50/40">
+              <CardHeader className="border-b border-indigo-200/60 pb-4">
+                <CardTitle className="text-base flex items-center gap-2 text-indigo-800 font-bold">
+                  <Package className="w-5 h-5" /> Bons de Consommation Matériel
+                </CardTitle>
+                <p className="text-xs text-indigo-700 mt-1">Traitez les demandes matériel de la direction en saisissant les prix unitaires.</p>
+              </CardHeader>
+              <CardContent className="p-5 space-y-4">
+                {materielMoyens.map(m => {
+                  const pendingDemandes = (materielDemandesMap[m.id] ?? []).filter(d => d.statut === "en_attente_da");
+                  return (
+                    <div key={m.id} className="space-y-2">
+                      <p className="text-xs font-semibold text-indigo-800">{m.description}</p>
+                      {pendingDemandes.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">Aucune demande en attente.</p>
+                      ) : pendingDemandes.map(dem => (
+                        <div key={dem.id} className="border border-indigo-200 rounded-lg bg-white p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-indigo-700">Demande #{dem.id}</span>
+                            <Button
+                              size="sm"
+                              className="h-6 text-xs gap-1 px-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                              onClick={() => {
+                                setDaTraiterDialog({ moyenId: m.id, demandeId: dem.id, items: dem.items });
+                                setDaPrices({});
+                              }}
+                            >
+                              <FileText className="w-3 h-3" /> Traiter
+                            </Button>
+                          </div>
+                          <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5">
+                            {dem.items.map((it, ii) => <li key={ii}>{it.item} × {it.quantiteDemandee}</li>)}
+                          </ul>
+                        </div>
+                      ))}
+                      {!materielDemandesMap[m.id] && (
+                        <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => loadMaterielData(m.id)}>
+                          <Loader2 className="w-3 h-3 mr-1" /> Charger les demandes
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* DCGAI — Bons validation panel */}
+          {isDcgai && materielMoyens.length > 0 && (
+            <Card className="border-purple-200 bg-purple-50/40">
+              <CardHeader className="border-b border-purple-200/60 pb-4">
+                <CardTitle className="text-base flex items-center gap-2 text-purple-800 font-bold">
+                  <ShieldCheck className="w-5 h-5" /> Validation Bons Matériel
+                </CardTitle>
+                <p className="text-xs text-purple-700 mt-1">Validez les bons de consommation générés par la DA.</p>
+              </CardHeader>
+              <CardContent className="p-5 space-y-4">
+                {materielMoyens.map(m => {
+                  const pendingBons = (materielDemandesMap[m.id] ?? []).filter(d => d.statut === "en_attente_dcgai");
+                  const validatedBons = (materielDemandesMap[m.id] ?? []).filter(d => d.statut === "validee");
+                  return (
+                    <div key={m.id} className="space-y-2">
+                      <p className="text-xs font-semibold text-purple-800">{m.description}</p>
+                      {!materielDemandesMap[m.id] ? (
+                        <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => loadMaterielData(m.id)}>
+                          <Loader2 className="w-3 h-3 mr-1" /> Charger
+                        </Button>
+                      ) : pendingBons.length === 0 && validatedBons.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">Aucun bon en attente.</p>
+                      ) : null}
+                      {pendingBons.map(dem => (
+                        <div key={dem.id} className="border border-purple-200 rounded-lg bg-white p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-purple-800">{dem.bonNumber ?? `BON-${dem.id}`}</span>
+                            <span className="text-xs font-bold text-primary">{dem.montantTotal?.toLocaleString("fr-MR") ?? "—"} MRU</span>
+                          </div>
+                          <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5">
+                            {dem.items.map((it, ii) => (
+                              <li key={ii}>{it.item} × {it.quantiteDemandee} — {it.montantUnitaire?.toLocaleString("fr-MR") ?? "—"} MRU/u</li>
+                            ))}
+                          </ul>
+                          <div className="flex gap-2 pt-1">
+                            <Button size="sm" variant="outline" className="h-6 text-xs gap-1 px-2" onClick={() => downloadBon(dem, plan.reference ?? `PLAN-${plan.id}`)}>
+                              <Download className="w-3 h-3" /> Bon
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="h-6 text-xs gap-1 px-2 bg-purple-700 hover:bg-purple-800 text-white"
+                              disabled={dcgaiValidating === dem.id}
+                              onClick={() => handleDcgaiValider(m.id, dem.id)}
+                            >
+                              {dcgaiValidating === dem.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                              Valider
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {validatedBons.map(dem => (
+                        <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
+                          <span className="text-xs text-green-800 font-semibold">{dem.bonNumber} — {dem.montantTotal?.toLocaleString("fr-MR") ?? "—"} MRU</span>
+                          <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Validé</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Specialist waiting panel — has categories but no pending demands (exclude DA when only materiel moyens) */}
+          {isFunctionalRole && plan.statut === "ouvert" && myMoyensAll.length > 0 && myMoyens.length === 0 && !(isDA && myMoyensAll.every(m => m.categorie === "materiel")) && (
             <Card className="border-blue-200 bg-blue-50/50">
               <CardContent className="p-5 flex items-start gap-3">
                 <Hourglass className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
@@ -870,6 +1186,104 @@ export default function PlanDetails() {
           )}
         </div>
       </div>
+
+      {/* ─── Direction: Demande matériel dialog ─── */}
+      <Dialog open={materielDemandeDialog !== null} onOpenChange={(open) => { if (!open) setMaterielDemandeDialog(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Package className="w-5 h-5 text-blue-600" /> Demander des articles du stock</DialogTitle>
+            <DialogDescription>Sélectionnez les articles et indiquez les quantités souhaitées.</DialogDescription>
+          </DialogHeader>
+          {materielDemandeDialog !== null && (
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              {(materielItemsMap[materielDemandeDialog] ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Aucun article disponible en stock.</p>
+              ) : (materielItemsMap[materielDemandeDialog] ?? []).map(item => (
+                <div key={item.id} className="flex items-center gap-3 p-3 border rounded-lg bg-white">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{item.item}</p>
+                    <p className="text-xs text-muted-foreground">Stock disponible : <span className="font-semibold text-primary">{item.quantiteRestante}</span></p>
+                  </div>
+                  <input
+                    type="number"
+                    min={0}
+                    max={item.quantiteRestante}
+                    placeholder="0"
+                    value={materielQtySels[item.id] ?? ""}
+                    onChange={e => setMaterielQtySels(prev => ({ ...prev, [item.id]: e.target.value }))}
+                    className="w-20 px-2 py-1.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 text-center"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setMaterielDemandeDialog(null)} disabled={materielLoading}>Annuler</Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={materielLoading || !Object.values(materielQtySels).some(q => Number(q) > 0)}
+              onClick={() => materielDemandeDialog !== null && handleDemanderMateriel(materielDemandeDialog)}
+            >
+              {materielLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              Soumettre la demande
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── DA: Traiter demande dialog ─── */}
+      <Dialog open={!!daTraiterDialog} onOpenChange={(open) => { if (!open) { setDaTraiterDialog(null); setDaPrices({}); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileText className="w-5 h-5 text-indigo-600" /> Saisir les prix — Génération du bon</DialogTitle>
+            <DialogDescription>Indiquez le montant unitaire pour chaque article afin de générer le bon de consommation.</DialogDescription>
+          </DialogHeader>
+          {daTraiterDialog && (
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              {daTraiterDialog.items.map((item, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 border rounded-lg bg-white">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{item.item}</p>
+                    <p className="text-xs text-muted-foreground">Quantité demandée : <span className="font-semibold">{item.quantiteDemandee}</span></p>
+                  </div>
+                  <div className="text-right">
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      placeholder="P.U. MRU"
+                      value={daPrices[i] ?? ""}
+                      onChange={e => setDaPrices(prev => ({ ...prev, [i]: e.target.value }))}
+                      className="w-28 px-2 py-1.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 text-right"
+                    />
+                    {daPrices[i] && Number(daPrices[i]) > 0 && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Total : <span className="font-semibold text-primary">{(Number(daPrices[i]) * item.quantiteDemandee).toLocaleString("fr-MR")} MRU</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {daTraiterDialog.items.every((_, i) => daPrices[i] && Number(daPrices[i]) > 0) && (
+                <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200 text-sm font-semibold text-indigo-800 text-right">
+                  TOTAL : {daTraiterDialog.items.reduce((s, item, i) => s + Number(daPrices[i] ?? 0) * item.quantiteDemandee, 0).toLocaleString("fr-MR")} MRU
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setDaTraiterDialog(null); setDaPrices({}); }} disabled={daLoading}>Annuler</Button>
+            <Button
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              disabled={daLoading}
+              onClick={handleDATraiter}
+            >
+              {daLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+              Générer le bon
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ─── Demande d'exécution — popup de confirmation ─── */}
       <Dialog open={!!demandConfirm} onOpenChange={(open) => { if (!open) setDemandConfirm(null); }}>

@@ -68,6 +68,30 @@ export const beneficiairesMoyenTable = pgTable("beneficiaires_moyen", {
   montant: numeric("montant", { precision: 12, scale: 2 }).notNull(),
 });
 
+export const materielItemsTable = pgTable("materiel_items", {
+  id: serial("id").primaryKey(),
+  moyenId: integer("moyen_id").notNull().references(() => moyensTable.id, { onDelete: "cascade" }),
+  item: text("item").notNull(),
+  quantiteInitiale: integer("quantite_initiale").notNull(),
+  quantiteRestante: integer("quantite_restante").notNull(),
+});
+
+export const materielDemandesTable = pgTable("materiel_demandes", {
+  id: serial("id").primaryKey(),
+  moyenId: integer("moyen_id").notNull().references(() => moyensTable.id, { onDelete: "cascade" }),
+  planId: integer("plan_id").notNull().references(() => plansTable.id, { onDelete: "cascade" }),
+  createdById: integer("created_by_id").notNull().references(() => usersTable.id),
+  statut: text("statut").notNull().default("en_attente_da"),
+  itemsJson: text("items_json").notNull(),
+  montantTotal: numeric("montant_total", { precision: 12, scale: 2 }),
+  bonNumber: text("bon_number"),
+  daValidatedById: integer("da_validated_by_id").references(() => usersTable.id),
+  dcgaiValidatedById: integer("dcgai_validated_by_id").references(() => usersTable.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  daValidatedAt: timestamp("da_validated_at"),
+  dcgaiValidatedAt: timestamp("dcgai_validated_at"),
+});
+
 export const insertPlanSchema = createInsertSchema(plansTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPlan = z.infer<typeof insertPlanSchema>;
 export type Plan = typeof plansTable.$inferSelect;

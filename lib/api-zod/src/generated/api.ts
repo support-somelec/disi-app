@@ -30,7 +30,9 @@ export const GetUsersResponseItem = zod.object({
     "dmg",
     "da",
     "controle_financier",
+    "dcgai",
     "direction_financiere",
+    "rh",
     "admin",
   ]),
   directionId: zod.number().optional(),
@@ -100,7 +102,9 @@ export const UpdateUserResponse = zod.object({
     "dmg",
     "da",
     "controle_financier",
+    "dcgai",
     "direction_financiere",
+    "rh",
     "admin",
   ]),
   directionId: zod.number().optional(),
@@ -921,3 +925,146 @@ export const SetBeneficiairesResponseItem = zod.object({
   montant: zod.number(),
 });
 export const SetBeneficiairesResponse = zod.array(SetBeneficiairesResponseItem);
+
+/**
+ * @summary Get stock items for a materiel moyen
+ */
+export const GetMaterielItemsParams = zod.object({
+  id: zod.coerce.number(),
+  moyenId: zod.coerce.number(),
+});
+
+export const GetMaterielItemsResponseItem = zod.object({
+  id: zod.number(),
+  moyenId: zod.number(),
+  item: zod.string(),
+  quantiteInitiale: zod.number(),
+  quantiteRestante: zod.number(),
+});
+export const GetMaterielItemsResponse = zod.array(GetMaterielItemsResponseItem);
+
+/**
+ * @summary Get materiel demandes for a moyen
+ */
+export const GetMaterielDemandesParams = zod.object({
+  id: zod.coerce.number(),
+  moyenId: zod.coerce.number(),
+});
+
+export const GetMaterielDemandesResponseItem = zod.object({
+  id: zod.number(),
+  moyenId: zod.number(),
+  planId: zod.number(),
+  createdById: zod.number(),
+  statut: zod.enum(["en_attente_da", "en_attente_dcgai", "validee"]),
+  items: zod.array(
+    zod.object({
+      item: zod.string(),
+      quantiteDemandee: zod.number(),
+      montantUnitaire: zod.number().optional(),
+      montantTotal: zod.number().optional(),
+    }),
+  ),
+  montantTotal: zod.number().optional(),
+  bonNumber: zod.string().optional(),
+  createdAt: zod.date(),
+  daValidatedAt: zod.date().optional(),
+  dcgaiValidatedAt: zod.date().optional(),
+});
+export const GetMaterielDemandesResponse = zod.array(
+  GetMaterielDemandesResponseItem,
+);
+
+/**
+ * @summary Direction creates a partial materiel request
+ */
+export const CreateMaterielDemandeParams = zod.object({
+  id: zod.coerce.number(),
+  moyenId: zod.coerce.number(),
+});
+
+export const CreateMaterielDemandeBody = zod.object({
+  createdById: zod.number(),
+  items: zod.array(
+    zod.object({
+      materielItemId: zod.number(),
+      item: zod.string(),
+      quantiteDemandee: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary DA prices items and submits bon to DCGAI
+ */
+export const DaSoumettreMaterielDemandeParams = zod.object({
+  id: zod.coerce.number(),
+  moyenId: zod.coerce.number(),
+  demandeId: zod.coerce.number(),
+});
+
+export const DaSoumettreMaterielDemandeBody = zod.object({
+  daUserId: zod.number(),
+  items: zod.array(
+    zod.object({
+      item: zod.string(),
+      quantiteDemandee: zod.number(),
+      montantUnitaire: zod.number(),
+    }),
+  ),
+});
+
+export const DaSoumettreMaterielDemandeResponse = zod.object({
+  id: zod.number(),
+  moyenId: zod.number(),
+  planId: zod.number(),
+  createdById: zod.number(),
+  statut: zod.enum(["en_attente_da", "en_attente_dcgai", "validee"]),
+  items: zod.array(
+    zod.object({
+      item: zod.string(),
+      quantiteDemandee: zod.number(),
+      montantUnitaire: zod.number().optional(),
+      montantTotal: zod.number().optional(),
+    }),
+  ),
+  montantTotal: zod.number().optional(),
+  bonNumber: zod.string().optional(),
+  createdAt: zod.date(),
+  daValidatedAt: zod.date().optional(),
+  dcgaiValidatedAt: zod.date().optional(),
+});
+
+/**
+ * @summary DCGAI validates the bon de consommation
+ */
+export const DcgaiValiderMaterielDemandeParams = zod.object({
+  id: zod.coerce.number(),
+  moyenId: zod.coerce.number(),
+  demandeId: zod.coerce.number(),
+});
+
+export const DcgaiValiderMaterielDemandeBody = zod.object({
+  dcgaiUserId: zod.number(),
+});
+
+export const DcgaiValiderMaterielDemandeResponse = zod.object({
+  id: zod.number(),
+  moyenId: zod.number(),
+  planId: zod.number(),
+  createdById: zod.number(),
+  statut: zod.enum(["en_attente_da", "en_attente_dcgai", "validee"]),
+  items: zod.array(
+    zod.object({
+      item: zod.string(),
+      quantiteDemandee: zod.number(),
+      montantUnitaire: zod.number().optional(),
+      montantTotal: zod.number().optional(),
+    }),
+  ),
+  montantTotal: zod.number().optional(),
+  bonNumber: zod.string().optional(),
+  createdAt: zod.date(),
+  daValidatedAt: zod.date().optional(),
+  dcgaiValidatedAt: zod.date().optional(),
+});
