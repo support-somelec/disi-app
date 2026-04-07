@@ -1,5 +1,5 @@
 import app from "./app";
-import { seedIfEmpty, ensureAdminUser } from "./seed";
+import { seedIfEmpty, ensureAdminUser, ensureAllUsers } from "./seed";
 
 const rawPort = process.env["PORT"];
 
@@ -17,6 +17,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 seedIfEmpty()
   .then(() => ensureAdminUser())
+  .then(() => ensureAllUsers())
   .then(() => {
     app.listen(port, () => {
       console.log(`Server listening on port ${port}`);

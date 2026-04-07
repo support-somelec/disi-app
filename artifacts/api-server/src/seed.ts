@@ -52,6 +52,29 @@ export async function ensureAdminUser() {
   }
 }
 
+// Accounts that must always exist regardless of when they were added
+const REQUIRED_USERS = [
+  { nom: "", prenom: "DCGAI", email: "dcgai@somelec.mr", role: "dcgai" },
+  { nom: "", prenom: "CAD",   email: "cad@somelec.mr",   role: "cad"   },
+  { nom: "", prenom: "DMG",   email: "dmg@somelec.mr",   role: "dmg"   },
+  { nom: "", prenom: "DA",    email: "da@somelec.mr",     role: "da"    },
+  { nom: "", prenom: "CF",    email: "cf@somelec.mr",     role: "controle_financier" },
+];
+
+export async function ensureAllUsers() {
+  try {
+    for (const user of REQUIRED_USERS) {
+      const existing = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, user.email));
+      if (existing.length === 0) {
+        await db.insert(usersTable).values({ nom: user.nom, prenom: user.prenom, email: user.email, role: user.role, directionId: null });
+        console.log(`[seed] Created missing user: ${user.email}`);
+      }
+    }
+  } catch (err) {
+    console.error("[seed] Error ensuring required users:", String(err));
+  }
+}
+
 export async function seedIfEmpty() {
   try {
     const existing = await db.select({ n: sql<number>`count(*)` }).from(directionsTable);
