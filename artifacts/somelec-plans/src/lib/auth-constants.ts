@@ -4,8 +4,6 @@ export const CATEGORY_ROLE: Record<string, string> = {
   carburant: "cad",
   location: "dmg",
   materiel: "da",
-  outillage: "da",
-  accessoire: "da",
   prime: "dcgai",
   logement: "dcgai",
   indemnite_journaliere: "dcgai",

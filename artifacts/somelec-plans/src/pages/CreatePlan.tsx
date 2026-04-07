@@ -88,12 +88,12 @@ export default function CreatePlan() {
   const excelInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Liste matériel state (for materiel/outillage/accessoire)
+  // Liste matériel state (for materiel)
   const [listeMaterielRows, setListeMaterielRows] = useState<ListeMaterielRow[]>([]);
   const [listeMaterielFile, setListeMaterielFile] = useState<{ file: File; base64: string } | null>(null);
   const materielExcelRef = useRef<HTMLInputElement>(null);
 
-  const isMaterielCat = ["materiel", "outillage", "accessoire"].includes(currentMoyen.categorie);
+  const isMaterielCat = currentMoyen.categorie === "materiel";
 
   const handleMaterielExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -260,7 +260,7 @@ export default function CreatePlan() {
         }
       });
 
-      // Save liste matériel Excel file as attachment for materiel/outillage/accessoire
+      // Save liste matériel Excel file as attachment for materiel
       if (isMaterielCat && listeMaterielFile) {
         try {
           await addAttachmentMutation.mutateAsync({
@@ -464,8 +464,6 @@ export default function CreatePlan() {
                         }}
                       >
                         <option value="materiel">Matériel</option>
-                        <option value="outillage">Outillage</option>
-                        <option value="accessoire">Accessoire</option>
                         <option value="carburant">Carburant</option>
                         <option value="location">Location Véhicule</option>
                         <option value="logement">Logement</option>

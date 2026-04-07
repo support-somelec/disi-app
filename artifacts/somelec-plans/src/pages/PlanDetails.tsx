@@ -27,8 +27,6 @@ import { cn } from "@/lib/utils";
 
 const CATEGORIE_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   materiel:             { label: "Matériel",             icon: Package,        color: "text-blue-600 bg-blue-50" },
-  outillage:            { label: "Outillage",            icon: Package,        color: "text-sky-600 bg-sky-50" },
-  accessoire:           { label: "Accessoire",           icon: Package,        color: "text-indigo-600 bg-indigo-50" },
   carburant:            { label: "Carburant",            icon: Fuel,           color: "text-orange-600 bg-orange-50" },
   location:             { label: "Location Véhicule",    icon: Car,            color: "text-cyan-600 bg-cyan-50" },
   logement:             { label: "Logement",             icon: Home,           color: "text-purple-600 bg-purple-50" },
@@ -293,25 +291,54 @@ export default function PlanDetails() {
 
   const downloadPiece = (demande: DepenseDemande, planRef: string) => {
     const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Pièce de paiement ${demande.pieceReference ?? ""}</title>
-    <style>body{font-family:Arial,sans-serif;margin:40px;} .box{border:2px solid #333;border-radius:8px;padding:20px;max-width:600px;margin:auto;} h1{font-size:20px;text-align:center;} table{width:100%;border-collapse:collapse;margin-top:16px;} th,td{border:1px solid #ccc;padding:8px;font-size:13px;} th{background:#f0f0f0;text-align:left;} .footer{margin-top:30px;display:flex;justify-content:space-between;} .sign{border-top:1px solid #333;width:180px;text-align:center;padding-top:4px;font-size:12px;}</style>
-    </head><body><div class="box">
-    <h1>PIÈCE DE PAIEMENT</h1>
-    <p style="text-align:center;font-size:13px;color:#555;">Réf. : <strong>${demande.pieceReference ?? "—"}</strong> &nbsp;|&nbsp; Plan : <strong>${planRef}</strong></p>
-    <table>
-      <tr><th>Bénéficiaire</th><td>${demande.nomBeneficiaire}</td></tr>
-      ${demande.matriculeBeneficiaire ? `<tr><th>Matricule</th><td>${demande.matriculeBeneficiaire}</td></tr>` : ""}
-      <tr><th>Montant demandé</th><td>${demande.montantDemande.toLocaleString("fr-MR")} MRU</td></tr>
-      <tr><th>Montant payé</th><td><strong>${(demande.montantPaye ?? 0).toLocaleString("fr-MR")} MRU</strong></td></tr>
-      <tr><th>Date paiement</th><td>${new Date().toLocaleDateString("fr-MR")}</td></tr>
-    </table>
-    <div class="footer"><div class="sign">Directeur Financier</div><div class="sign">Bénéficiaire</div></div>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:Arial,sans-serif;background:#fff;color:#111;}
+      .page{width:21cm;min-height:29.7cm;margin:auto;padding:2cm;display:flex;flex-direction:column;gap:24px;}
+      .header{text-align:center;border-bottom:3px double #333;padding-bottom:16px;}
+      .header h1{font-size:22px;text-transform:uppercase;letter-spacing:2px;}
+      .header .ref{font-size:13px;color:#555;margin-top:6px;}
+      .section-title{font-size:12px;font-weight:bold;text-transform:uppercase;color:#888;letter-spacing:1px;margin-bottom:6px;}
+      table{width:100%;border-collapse:collapse;}
+      th,td{border:1px solid #ccc;padding:9px 12px;font-size:13px;text-align:left;vertical-align:top;}
+      th{background:#f5f5f5;font-weight:600;width:40%;}
+      .amount{font-size:16px;font-weight:bold;color:#1a1a1a;}
+      .signatures{display:flex;justify-content:space-between;margin-top:48px;}
+      .sign-box{text-align:center;width:200px;}
+      .sign-box .line{border-top:1px solid #333;padding-top:8px;font-size:12px;color:#555;}
+      @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .no-print{display:none;}}
+    </style>
+    </head><body><div class="page">
+    <div class="header">
+      <div style="font-size:13px;font-weight:bold;color:#555;margin-bottom:4px;">SOMELEC — Direction Financière &amp; Comptabilité</div>
+      <h1>Pièce de Paiement</h1>
+      <div class="ref">Réf. : <strong>${demande.pieceReference ?? "—"}</strong> &nbsp;|&nbsp; Plan d'action : <strong>${planRef}</strong></div>
+    </div>
+    <div>
+      <div class="section-title">Informations du bénéficiaire</div>
+      <table>
+        <tr><th>Nom complet</th><td><strong>${demande.nomBeneficiaire}</strong></td></tr>
+        ${demande.matriculeBeneficiaire ? `<tr><th>Matricule</th><td>${demande.matriculeBeneficiaire}</td></tr>` : ""}
+      </table>
+    </div>
+    <div>
+      <div class="section-title">Détails du paiement</div>
+      <table>
+        <tr><th>Montant demandé</th><td>${demande.montantDemande.toLocaleString("fr-MR")} MRU</td></tr>
+        <tr><th>Montant payé</th><td class="amount">${(demande.montantPaye ?? 0).toLocaleString("fr-MR")} MRU</td></tr>
+        <tr><th>Date de paiement</th><td>${new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</td></tr>
+      </table>
+    </div>
+    <div class="signatures">
+      <div class="sign-box"><div class="line">Directeur Financier<br><em>Signature &amp; cachet</em></div></div>
+      <div class="sign-box"><div class="line">Bénéficiaire<br><em>Signature</em></div></div>
+    </div>
+    <div class="no-print" style="margin-top:32px;text-align:center;">
+      <button onclick="window.print()" style="padding:10px 28px;font-size:14px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ Imprimer / Enregistrer en PDF</button>
+    </div>
     </div></body></html>`;
-    const blob = new Blob([html], { type: "text/html" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${demande.pieceReference ?? "piece"}.html`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(() => win.print(), 500); }
   };
 
   const toggleBeneficiaires = async (moyenId: number) => {
@@ -423,8 +450,8 @@ export default function PlanDetails() {
     const decharge = dechargeFiles[moyen.id];
     if (!decharge) return;
 
-    // Client-side budget check (except logistique, materiel, outillage, accessoire)
-    const CATS_DEPASSEMENT_OK = ["logistique", "materiel", "outillage", "accessoire"];
+    // Client-side budget check (except logistique, materiel)
+    const CATS_DEPASSEMENT_OK = ["logistique", "materiel"];
     const budget = Number(moyen.budget);
     if (!CATS_DEPASSEMENT_OK.includes(moyen.categorie ?? "") && val > budget) {
       setConsommeErrors(prev => ({
@@ -572,19 +599,47 @@ export default function PlanDetails() {
   };
 
   const downloadBon = (demande: { bonNumber: string | null; items: Array<{ item: string; quantiteDemandee: number; montantUnitaire?: number; montantTotal?: number }>; montantTotal: number | null }, planRef: string) => {
-    const rows = demande.items.map(it => `<tr><td>${it.item}</td><td style="text-align:center">${it.quantiteDemandee}</td><td style="text-align:right">${it.montantUnitaire?.toLocaleString("fr-MR") ?? "—"} MRU</td><td style="text-align:right">${it.montantTotal?.toLocaleString("fr-MR") ?? "—"} MRU</td></tr>`).join("");
+    const rows = demande.items.map(it => `<tr><td>${it.item}</td><td style="text-align:center">${it.quantiteDemandee}</td><td style="text-align:right">${it.montantUnitaire?.toLocaleString("fr-FR") ?? "—"} MRU</td><td style="text-align:right">${it.montantTotal?.toLocaleString("fr-FR") ?? "—"} MRU</td></tr>`).join("");
     const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Bon de consommation ${demande.bonNumber ?? ""}</title>
-    <style>body{font-family:Arial,sans-serif;margin:40px;} table{width:100%;border-collapse:collapse;margin-top:20px;} th,td{border:1px solid #ddd;padding:8px;} th{background:#f0f0f0;} .total{font-weight:bold;} h1{font-size:18px;} p{font-size:13px;color:#555;}</style>
-    </head><body><h1>Bon de Consommation Matériel</h1><p>Réf. Bon : <strong>${demande.bonNumber ?? "—"}</strong> — Plan : <strong>${planRef}</strong></p>
-    <table><thead><tr><th>Article</th><th>Quantité</th><th>P.U.</th><th>Total</th></tr></thead><tbody>${rows}</tbody>
-    <tfoot><tr class="total"><td colspan="3" style="text-align:right">TOTAL</td><td style="text-align:right">${demande.montantTotal?.toLocaleString("fr-MR") ?? "—"} MRU</td></tr></tfoot></table>
-    <p style="margin-top:30px">Date : ${new Date().toLocaleDateString("fr-MR")}</p></body></html>`;
-    const blob = new Blob([html], { type: "text/html" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${demande.bonNumber ?? "bon"}.html`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:Arial,sans-serif;background:#fff;color:#111;}
+      .page{width:21cm;min-height:29.7cm;margin:auto;padding:2cm;display:flex;flex-direction:column;gap:20px;}
+      .header{text-align:center;border-bottom:3px double #333;padding-bottom:14px;}
+      .header h1{font-size:20px;text-transform:uppercase;letter-spacing:2px;}
+      .header .ref{font-size:12px;color:#555;margin-top:6px;}
+      table{width:100%;border-collapse:collapse;margin-top:8px;}
+      th,td{border:1px solid #ccc;padding:8px 12px;font-size:13px;}
+      thead th{background:#f5f5f5;font-weight:bold;text-align:left;}
+      tfoot td{font-weight:bold;background:#f0f0f0;}
+      .date{font-size:12px;color:#666;margin-top:8px;}
+      .signatures{display:flex;justify-content:space-between;margin-top:48px;}
+      .sign-box{text-align:center;width:200px;}
+      .sign-box .line{border-top:1px solid #333;padding-top:8px;font-size:12px;color:#555;}
+      @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .no-print{display:none;}}
+    </style>
+    </head><body><div class="page">
+    <div class="header">
+      <div style="font-size:13px;font-weight:bold;color:#555;margin-bottom:4px;">SOMELEC — Direction des Achats</div>
+      <h1>Bon de Consommation Matériel</h1>
+      <div class="ref">Réf. Bon : <strong>${demande.bonNumber ?? "—"}</strong> &nbsp;|&nbsp; Plan d'action : <strong>${planRef}</strong></div>
+    </div>
+    <table>
+      <thead><tr><th>Article</th><th style="text-align:center">Qté</th><th style="text-align:right">Prix unitaire</th><th style="text-align:right">Total</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="3" style="text-align:right">TOTAL GÉNÉRAL</td><td style="text-align:right">${demande.montantTotal?.toLocaleString("fr-FR") ?? "—"} MRU</td></tr></tfoot>
+    </table>
+    <div class="date">Date d'émission : ${new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</div>
+    <div class="signatures">
+      <div class="sign-box"><div class="line">Responsable DA<br><em>Signature &amp; cachet</em></div></div>
+      <div class="sign-box"><div class="line">Demandeur<br><em>Signature</em></div></div>
+    </div>
+    <div class="no-print" style="margin-top:32px;text-align:center;">
+      <button onclick="window.print()" style="padding:10px 28px;font-size:14px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ Imprimer / Enregistrer en PDF</button>
+    </div>
+    </div></body></html>`;
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(() => win.print(), 500); }
   };
 
   const handleDemander = async (moyen: Moyen) => {
@@ -866,8 +921,8 @@ export default function PlanDetails() {
                               {beneficiairesMap[m.id] ? ` (${beneficiairesMap[m.id].length})` : ""}
                             </button>
                           )}
-                          {/* Liste matériel for materiel/outillage/accessoire */}
-                          {["materiel","outillage","accessoire"].includes(m.categorie) && listeMaterielRows.length > 0 && (
+                          {/* Liste matériel for materiel */}
+                          {m.categorie === "materiel" && listeMaterielRows.length > 0 && (
                             <div className="mt-2">
                               <button
                                 className="text-xs text-primary underline hover:text-primary/70 transition-colors"
@@ -1746,7 +1801,7 @@ export default function PlanDetails() {
                           <span>{consommeErrors[m.id]}</span>
                         </div>
                       )}
-                      {["logistique", "materiel", "outillage", "accessoire"].includes(m.categorie ?? "") && (
+                      {["logistique", "materiel"].includes(m.categorie ?? "") && (
                         <p className="text-[11px] text-blue-600 italic">
                           ℹ️ Cette catégorie autorise le dépassement du budget prévu.
                         </p>
