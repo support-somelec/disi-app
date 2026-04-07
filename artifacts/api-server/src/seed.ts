@@ -27,7 +27,8 @@ const USERS = [
   { nom: "", prenom: "DA",  email: "da@somelec.mr",  role: "da",                 directionIdx: null },
   { nom: "", prenom: "CF",  email: "cf@somelec.mr",  role: "controle_financier", directionIdx: null },
   { nom: "", prenom: "DF",  email: "df@somelec.mr",  role: "direction_financiere", directionIdx: 3 },
-  { nom: "", prenom: "RH",  email: "rh@somelec.mr",  role: "rh", directionIdx: 4 },
+  { nom: "", prenom: "RH",    email: "rh@somelec.mr",    role: "rh",    directionIdx: 4 },
+  { nom: "", prenom: "DCGAI", email: "dcgai@somelec.mr", role: "dcgai", directionIdx: null },
 ];
 
 const EMPLOYES_INIT = [
