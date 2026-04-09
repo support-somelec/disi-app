@@ -1,0 +1,51 @@
+ => ERROR [frontend builder 8/8] RUN pnpm --filter @workspace/somelec-plans run buil  2.2s
+------
+ > [frontend builder 8/8] RUN pnpm --filter @workspace/somelec-plans run build:
+1.415 
+1.415 > @workspace/somelec-plans@0.0.0 build /app/artifacts/somelec-plans
+1.415 > vite build --config vite.config.ts
+1.415 
+1.685 ▲ [WARNING] Cannot find base config file "../../tsconfig.base.json" [tsconfig.json]
+1.685 
+1.685     tsconfig.json:2:13:
+1.685       2 │   "extends": "../../tsconfig.base.json",
+1.685         ╵              ~~~~~~~~~~~~~~~~~~~~~~~~~~
+1.685 
+1.999 vite v7.3.1 building client environment for production...
+2.102 ✓ 0 modules transformed.
+2.107 ✗ Build failed in 67ms
+2.108 error during build:
+2.108 [vite:build-html] failed to resolve "extends":"../../tsconfig.base.json" in /app/artifacts/somelec-plans/tsconfig.json
+2.108 file: /app/artifacts/somelec-plans/index.html
+2.108     at resolveExtends (file:///app/node_modules/.pnpm/vite@7.3.1_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/chunks/config.js:5809:8)
+2.108     at parseExtends (file:///app/node_modules/.pnpm/vite@7.3.1_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/chunks/config.js:5775:71)
+2.108     at parse$13 (file:///app/node_modules/.pnpm/vite@7.3.1_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/chunks/config.js:5677:23)
+2.108     at async loadTsconfigJsonForFile (file:///app/node_modules/.pnpm/vite@7.3.1_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/chunks/config.js:6286:37)
+2.108     at async transformWithEsbuild (file:///app/node_modules/.pnpm/vite@7.3.1_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/chunks/config.js:6086:55)
+2.108     at async Object.transform (file:///app/node_modules/.pnpm/vite@7.3.1_@types+node@25.3.5_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0_yaml@2.8.2/node_modules/vite/dist/node/chunks/config.js:6172:20)
+2.108     at async transform (file:///app/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/node-entry.js:21269:16)
+2.108     at async ModuleLoader.addModuleSource (file:///app/node_modules/.pnpm/rollup@4.59.0/node_modules/rollup/dist/es/shared/node-entry.js:21497:36)
+2.131 /app/artifacts/somelec-plans:
+2.131  ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/somelec-plans@0.0.0 build: `vite build --config vite.config.ts`
+2.131 Exit status 1
+------
+[+] build 0/2
+ ⠙ Image somelec-api      Building                                                    44.3s
+ ⠙ Image somelec-frontend Building                                                    44.3s
+Dockerfile.frontend:17
+
+--------------------
+
+  15 |     ENV BASE_PATH=/somelec-plans/
+
+  16 |     ENV NODE_ENV=production
+
+  17 | >>> RUN pnpm --filter @workspace/somelec-plans run build
+
+  18 |     
+
+  19 |     # --- Étape de service ---
+
+--------------------
+
+target frontend: failed to solve: process "/bin/sh -c pnpm --filter @workspace/somelec-plans run build" did not complete successfully: exit code: 1
