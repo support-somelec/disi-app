@@ -384,9 +384,10 @@ export default function PlanDetails() {
       th{background:#f5f5f5;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;}
       th,td{border:1px solid #ccc;padding:7px 11px;font-size:13px;}
       .total-row td{background:#f0f7ff;font-weight:700;}
-      .signatures{display:flex;justify-content:space-between;margin-top:40px;}
-      .sign-box{text-align:center;width:180px;}
-      .sign-box .line{border-top:1px solid #333;padding-top:8px;font-size:12px;color:#555;}
+      .qr-section{display:flex;align-items:flex-start;gap:18px;margin-top:28px;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa;}
+      .qr-section img{width:110px;height:110px;flex-shrink:0;}
+      .qr-info{font-size:11px;color:#555;line-height:1.7;}
+      .qr-info .ref{font-size:13px;font-weight:700;color:#111;margin-bottom:4px;}
       @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .no-print{display:none;}}
     </style></head><body><div class="page">
     <div class="header">
@@ -406,9 +407,17 @@ export default function PlanDetails() {
         <tbody>${rows}<tr class="total-row"><td colspan="3">TOTAL</td><td style="text-align:right">${totalMontant.toLocaleString("fr-MR")} MRU</td></tr></tbody>
       </table>
     </div>
-    <div class="signatures">
-      <div class="sign-box"><div class="line">Directeur Financier<br><em>Signature &amp; cachet</em></div></div>
-      <div class="sign-box"><div class="line">Directeur Général<br><em>Signature &amp; cachet</em></div></div>
+    <div class="qr-section">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(`SOMELEC|${planRef}|${moyen.categorie}|${totalMontant}MRU|${new Date().toISOString().slice(0,10)}|${demandes[0]?.batchRef ?? ""}`)}" alt="QR Code" />
+      <div class="qr-info">
+        <div class="ref">Vérification du document</div>
+        <div>Plan : ${planRef}</div>
+        <div>Catégorie : ${CATEGORIE_LABELS[moyen.categorie]?.label ?? moyen.categorie}</div>
+        <div>Nombre de bénéficiaires : ${demandes.length}</div>
+        <div>Montant total : ${totalMontant.toLocaleString("fr-MR")} MRU</div>
+        <div>Date d'émission : ${new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</div>
+        <div style="margin-top:4px;font-size:10px;color:#999;">Scannez le QR code pour vérifier l'authenticité de ce document.</div>
+      </div>
     </div>
     <div class="no-print" style="margin-top:28px;text-align:center;">
       <button onclick="window.print()" style="padding:10px 28px;font-size:14px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ Imprimer / Enregistrer en PDF</button>
@@ -432,9 +441,10 @@ export default function PlanDetails() {
       th,td{border:1px solid #ccc;padding:9px 12px;font-size:13px;text-align:left;vertical-align:top;}
       th{background:#f5f5f5;font-weight:600;width:40%;}
       .amount{font-size:16px;font-weight:bold;color:#1a1a1a;}
-      .signatures{display:flex;justify-content:space-between;margin-top:48px;}
-      .sign-box{text-align:center;width:200px;}
-      .sign-box .line{border-top:1px solid #333;padding-top:8px;font-size:12px;color:#555;}
+      .qr-section{display:flex;align-items:flex-start;gap:18px;margin-top:28px;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa;}
+      .qr-section img{width:110px;height:110px;flex-shrink:0;}
+      .qr-info{font-size:11px;color:#555;line-height:1.7;}
+      .qr-info .ref{font-size:13px;font-weight:700;color:#111;margin-bottom:4px;}
       @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .no-print{display:none;}}
     </style>
     </head><body><div class="page">
@@ -458,9 +468,17 @@ export default function PlanDetails() {
         <tr><th>Date de paiement</th><td>${new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</td></tr>
       </table>
     </div>
-    <div class="signatures">
-      <div class="sign-box"><div class="line">Directeur Financier<br><em>Signature &amp; cachet</em></div></div>
-      <div class="sign-box"><div class="line">Bénéficiaire<br><em>Signature</em></div></div>
+    <div class="qr-section">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(`SOMELEC|${demande.pieceReference ?? ""}|${planRef}|${demande.nomBeneficiaire}|${(demande.montantPaye ?? 0)}MRU|${new Date().toISOString().slice(0,10)}`)}" alt="QR Code" />
+      <div class="qr-info">
+        <div class="ref">Vérification du document</div>
+        <div>Référence pièce : ${demande.pieceReference ?? "—"}</div>
+        <div>Plan : ${planRef}</div>
+        <div>Bénéficiaire : ${demande.nomBeneficiaire}</div>
+        <div>Montant payé : ${(demande.montantPaye ?? 0).toLocaleString("fr-MR")} MRU</div>
+        <div>Date d'émission : ${new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</div>
+        <div style="margin-top:4px;font-size:10px;color:#999;">Scannez le QR code pour vérifier l'authenticité de ce document.</div>
+      </div>
     </div>
     <div class="no-print" style="margin-top:32px;text-align:center;">
       <button onclick="window.print()" style="padding:10px 28px;font-size:14px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ Imprimer / Enregistrer en PDF</button>
@@ -742,9 +760,10 @@ export default function PlanDetails() {
       thead th{background:#f5f5f5;font-weight:bold;text-align:left;}
       tfoot td{font-weight:bold;background:#f0f0f0;}
       .date{font-size:12px;color:#666;margin-top:8px;}
-      .signatures{display:flex;justify-content:space-between;margin-top:48px;}
-      .sign-box{text-align:center;width:200px;}
-      .sign-box .line{border-top:1px solid #333;padding-top:8px;font-size:12px;color:#555;}
+      .qr-section{display:flex;align-items:flex-start;gap:18px;margin-top:28px;padding:14px 16px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa;}
+      .qr-section img{width:110px;height:110px;flex-shrink:0;}
+      .qr-info{font-size:11px;color:#555;line-height:1.7;}
+      .qr-info .ref{font-size:13px;font-weight:700;color:#111;margin-bottom:4px;}
       @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .no-print{display:none;}}
     </style>
     </head><body><div class="page">
@@ -759,9 +778,16 @@ export default function PlanDetails() {
       <tfoot><tr><td colspan="3" style="text-align:right">TOTAL GÉNÉRAL</td><td style="text-align:right">${demande.montantTotal?.toLocaleString("fr-FR") ?? "—"} MRU</td></tr></tfoot>
     </table>
     <div class="date">Date d'émission : ${new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</div>
-    <div class="signatures">
-      <div class="sign-box"><div class="line">Responsable DA<br><em>Signature &amp; cachet</em></div></div>
-      <div class="sign-box"><div class="line">Demandeur<br><em>Signature</em></div></div>
+    <div class="qr-section">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(`SOMELEC|${demande.bonNumber ?? ""}|${planRef}|MATERIEL|${demande.montantTotal ?? 0}MRU|${new Date().toISOString().slice(0,10)}`)}" alt="QR Code" />
+      <div class="qr-info">
+        <div class="ref">Vérification du document</div>
+        <div>Référence bon : ${demande.bonNumber ?? "—"}</div>
+        <div>Plan : ${planRef}</div>
+        <div>Montant total : ${demande.montantTotal?.toLocaleString("fr-FR") ?? "—"} MRU</div>
+        <div>Date d'émission : ${new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</div>
+        <div style="margin-top:4px;font-size:10px;color:#999;">Scannez le QR code pour vérifier l'authenticité de ce document.</div>
+      </div>
     </div>
     <div class="no-print" style="margin-top:32px;text-align:center;">
       <button onclick="window.print()" style="padding:10px 28px;font-size:14px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ Imprimer / Enregistrer en PDF</button>
