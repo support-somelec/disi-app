@@ -1483,6 +1483,51 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dfc-payer", 
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
 });
 
+// POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dfc-payer
+router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dfc-payer", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const batchRef = req.params.batchRef;
+    const { dfcUserId, montantTotal } = req.body as { dfcUserId: number; montantTotal: number };
+
+    const rows = await db.select().from(depenseDemandesTable)
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_dfc")));
+    if (rows.length === 0) return res.status(400).json({ error: "Aucune demande en attente de paiement pour ce batch." });
+
+    const pieceReference = `BATCH-PIECE-${planId}-${Date.now()}`;
+
+    const updated = await db.update(depenseDemandesTable)
+      .set({ statut: "payee", dfcValidatedById: dfcUserId, dfcValidatedAt: new Date(), montantPaye: String(montantTotal), pieceReference })
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_dfc")))
+      .returning();
+
+    // Deduct total from moyen budget
+    const [moyen] = await db.select().from(moyensTable).where(eq(moyensTable.id, moyenId));
+    if (moyen) {
+      await db.update(moyensTable)
+        .set({ montantConsomme: String(Number(moyen.montantConsomme ?? 0) + montantTotal) })
+        .where(eq(moyensTable.id, moyenId));
+    }
+
+    try {
+      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+      if (plan) {
+        const dirEmail = await getUserEmailById(plan.createdById);
+        if (dirEmail) {
+          await sendMail({
+            to: dirEmail,
+            subject: `[SOMELEC] Paiement groupé effectué — ${pieceReference}`,
+            html: `<p>Le paiement groupé (${rows.length} bénéficiaire(s)) pour le plan <strong>${plan.titre}</strong> a été effectué.<br>Montant total : <strong>${montantTotal.toLocaleString("fr-MR")} MRU</strong><br>Réf. pièce : <strong>${pieceReference}</strong></p>`,
+          });
+        }
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.json(updated.map(mapDepenseDemande));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
 // GET /plans/:id/carburant-demandes-all  (all for CAD view)
 router.get("/plans/:id/carburant-demandes-all", async (req, res) => {
   try {

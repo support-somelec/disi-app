@@ -165,6 +165,9 @@ export default function PlanDetails() {
   const [primeBatchMontants, setPrimeBatchMontants] = useState<Record<number, string>>({}); // benefId -> montant string
   const [primeBatchLoading, setPrimeBatchLoading] = useState(false);
   const [dcgaiBatchLoading, setDcgaiBatchLoading] = useState<string | null>(null); // batchRef being validated
+  const [dfcBatchPayerDialog, setDfcBatchPayerDialog] = useState<{ moyenId: number; batchRef: string; dems: DepenseDemande[] } | null>(null);
+  const [dfcBatchMontantInput, setDfcBatchMontantInput] = useState("");
+  const [dfcBatchLoading, setDfcBatchLoading] = useState(false);
 
   const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
@@ -334,6 +337,30 @@ export default function PlanDetails() {
       await loadDepenseData(moyenId);
     } catch { alert("Erreur réseau"); }
     finally { setDcgaiBatchLoading(null); }
+  };
+
+  const handleDfcBatchPayer = async () => {
+    if (!dfcBatchPayerDialog || !currentUser) return;
+    const { moyenId, batchRef } = dfcBatchPayerDialog;
+    const montant = Number(dfcBatchMontantInput);
+    if (!montant || montant <= 0) { alert("Montant invalide."); return; }
+    setDfcBatchLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes-batch/${encodeURIComponent(batchRef)}/dfc-payer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dfcUserId: currentUser.id, montantTotal: montant }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      const updatedDems: DepenseDemande[] = await res.json();
+      await Promise.all([loadDepenseData(moyenId), refetchMoyens()]);
+      // Open PDF automatically after payment
+      const moyen = moyens.find(mo => mo.id === moyenId);
+      if (moyen) downloadPdfListe(plan, moyen, updatedDems);
+      setDfcBatchPayerDialog(null);
+      setDfcBatchMontantInput("");
+    } catch { alert("Erreur réseau"); }
+    finally { setDfcBatchLoading(false); }
   };
 
   const downloadPdfListe = (planObj: typeof plan, moyen: typeof moyens[0], demandes: DepenseDemande[]) => {
@@ -1934,12 +1961,12 @@ export default function PlanDetails() {
                             <div key={batchRef} className="border border-blue-200 rounded-lg bg-white p-3 space-y-2">
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <p className="text-xs font-semibold text-blue-900">{dems.length} bénéficiaire(s) — Total : {total.toLocaleString("fr-MR")} MRU</p>
-                                  <p className="text-xs text-muted-foreground">Validé par le DCGAI — en attente de paiement</p>
+                                  <p className="text-xs font-semibold text-blue-900">{dems.length} bénéficiaire(s) — Montant demandé : {total.toLocaleString("fr-MR")} MRU</p>
+                                  <p className="text-xs text-muted-foreground">Validé par le DCGAI — saisir le paiement pour générer le document</p>
                                 </div>
                                 <Button size="sm" className="h-7 text-xs gap-1 px-2.5 bg-blue-600 hover:bg-blue-700 text-white"
-                                  onClick={() => downloadPdfListe(plan, m, dems)}>
-                                  <Download className="w-3 h-3" /> Télécharger PDF
+                                  onClick={() => { setDfcBatchPayerDialog({ moyenId: m.id, batchRef, dems }); setDfcBatchMontantInput(String(total)); }}>
+                                  <DollarSign className="w-3 h-3" /> Saisir paiement
                                 </Button>
                               </div>
                               <table className="w-full text-xs border-collapse">
@@ -1947,7 +1974,7 @@ export default function PlanDetails() {
                                   <tr className="bg-blue-50">
                                     <th className="border border-blue-200 px-2 py-1 text-left font-semibold text-blue-800">Bénéficiaire</th>
                                     <th className="border border-blue-200 px-2 py-1 text-left font-semibold text-blue-800">Matricule</th>
-                                    <th className="border border-blue-200 px-2 py-1 text-right font-semibold text-blue-800">Montant</th>
+                                    <th className="border border-blue-200 px-2 py-1 text-right font-semibold text-blue-800">Montant demandé</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -1964,16 +1991,21 @@ export default function PlanDetails() {
                           );
                         })}
                         {doneBatches.map(([batchRef, dems]) => {
-                          const total = dems.reduce((s, d) => s + d.montantDemande, 0);
+                          const total = dems.reduce((s, d) => s + (d.montantPaye ?? d.montantDemande), 0);
                           return (
-                            <div key={batchRef} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
-                              <span className="text-xs text-green-800 font-semibold">{dems.length} bénéficiaire(s) — {total.toLocaleString("fr-MR")} MRU</span>
-                              <div className="flex items-center gap-2">
-                                <Button size="sm" variant="outline" className="h-6 text-xs gap-1 px-2 border-green-300 text-green-700 hover:bg-green-50"
-                                  onClick={() => downloadPdfListe(plan, m, dems)}>
-                                  <Download className="w-3 h-3" /> PDF
-                                </Button>
-                                <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Traité</span>
+                            <div key={batchRef} className="border border-green-200 rounded-lg bg-green-50/40 p-3 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-xs text-green-800 font-semibold">{dems.length} bénéficiaire(s) — Payé : {total.toLocaleString("fr-MR")} MRU</p>
+                                  {dems[0]?.pieceReference && <p className="text-xs text-green-700">Réf. : {dems[0].pieceReference}</p>}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button size="sm" variant="outline" className="h-6 text-xs gap-1 px-2 border-green-300 text-green-700 hover:bg-green-50"
+                                    onClick={() => downloadPdfListe(plan, m, dems)}>
+                                    <Download className="w-3 h-3" /> PDF
+                                  </Button>
+                                  <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Payé</span>
+                                </div>
                               </div>
                             </div>
                           );
@@ -2643,6 +2675,65 @@ export default function PlanDetails() {
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={dfcLoading || !Number(dfcMontantInput)} onClick={handleDfcPayer}>
               {dfcLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
               Enregistrer & Générer la pièce
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── DFC: Saisir paiement BATCH (prime / indemnite) dialog ─── */}
+      <Dialog open={!!dfcBatchPayerDialog} onOpenChange={(open) => { if (!open) { setDfcBatchPayerDialog(null); setDfcBatchMontantInput(""); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-blue-600" /> Saisir le paiement groupé</DialogTitle>
+            <DialogDescription>Indiquez le montant total payé. Le document PDF sera généré automatiquement.</DialogDescription>
+          </DialogHeader>
+          {dfcBatchPayerDialog && (() => {
+            const { dems } = dfcBatchPayerDialog;
+            const totalDemande = dems.reduce((s, d) => s + d.montantDemande, 0);
+            return (
+              <div className="space-y-3">
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-blue-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-blue-800">Bénéficiaire</th>
+                        <th className="px-3 py-2 text-left font-semibold text-blue-800">Matricule</th>
+                        <th className="px-3 py-2 text-right font-semibold text-blue-800">Montant demandé</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {dems.map(d => (
+                        <tr key={d.id} className="bg-white">
+                          <td className="px-3 py-2 font-medium">{d.nomBeneficiaire}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{d.matriculeBeneficiaire ?? "—"}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{d.montantDemande.toLocaleString("fr-MR")} MRU</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-blue-50/60">
+                      <tr>
+                        <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-blue-800">Total demandé</td>
+                        <td className="px-3 py-2 text-sm font-bold text-blue-900 text-right">{totalDemande.toLocaleString("fr-MR")} MRU</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Montant total payé (MRU) <span className="text-destructive">*</span></label>
+                  <input type="number" min={0} step={0.01} placeholder="Montant effectivement payé"
+                    value={dfcBatchMontantInput} onChange={e => setDfcBatchMontantInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  />
+                  <p className="text-xs text-muted-foreground">Le PDF avec la liste des bénéficiaires sera généré après validation.</p>
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setDfcBatchPayerDialog(null); setDfcBatchMontantInput(""); }} disabled={dfcBatchLoading}>Annuler</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={dfcBatchLoading || !Number(dfcBatchMontantInput)} onClick={handleDfcBatchPayer}>
+              {dfcBatchLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
+              Valider & Télécharger PDF
             </Button>
           </DialogFooter>
         </DialogContent>
