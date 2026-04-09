@@ -1272,7 +1272,7 @@ router.post("/plans/:id/moyens/:moyenId/carburant-demandes/:demandeId/cad-valide
 const mapDepenseDemande = (d: typeof depenseDemandesTable.$inferSelect) => ({
   id: d.id, moyenId: d.moyenId, planId: d.planId, createdById: d.createdById,
   montantDemande: Number(d.montantDemande), nomBeneficiaire: d.nomBeneficiaire,
-  matriculeBeneficiaire: d.matriculeBeneficiaire, statut: d.statut,
+  matriculeBeneficiaire: d.matriculeBeneficiaire, batchRef: d.batchRef ?? null, statut: d.statut,
   dcgaiValidatedById: d.dcgaiValidatedById, dcgaiValidatedAt: d.dcgaiValidatedAt,
   dfcValidatedById: d.dfcValidatedById, dfcValidatedAt: d.dfcValidatedAt,
   montantPaye: d.montantPaye !== null ? Number(d.montantPaye) : null,
@@ -1295,6 +1295,84 @@ router.get("/plans/:id/depense-demandes-all", async (req, res) => {
     const rows = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.planId, planId));
     res.json(rows.map(mapDepenseDemande));
   } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes/batch  (prime / indemnite_journaliere)
+router.post("/plans/:id/moyens/:moyenId/depense-demandes/batch", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const { createdById, lignes } = req.body as {
+      createdById: number;
+      lignes: Array<{ nomBeneficiaire: string; matriculeBeneficiaire?: string; montantDemande: number }>;
+    };
+    if (!Array.isArray(lignes) || lignes.length === 0) return res.status(400).json({ error: "Au moins une ligne requise." });
+    if (lignes.some(l => !l.montantDemande || l.montantDemande <= 0)) return res.status(400).json({ error: "Montants invalides." });
+
+    const batchRef = `BATCH-${planId}-${moyenId}-${Date.now()}`;
+
+    const inserted = await db.insert(depenseDemandesTable).values(
+      lignes.map(l => ({
+        planId, moyenId, createdById,
+        montantDemande: String(l.montantDemande),
+        nomBeneficiaire: l.nomBeneficiaire.trim(),
+        matriculeBeneficiaire: l.matriculeBeneficiaire?.trim() || null,
+        batchRef,
+        statut: "en_attente_dcgai" as const,
+      }))
+    ).returning();
+
+    try {
+      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+      const [moyen] = await db.select({ description: moyensTable.description, categorie: moyensTable.categorie }).from(moyensTable).where(eq(moyensTable.id, moyenId));
+      const dcgaiEmails = await getUserEmailsByRole(["dcgai"]);
+      if (plan && moyen && dcgaiEmails.length > 0) {
+        const rows = lignes.map(l => `<tr><td style="border:1px solid #ccc;padding:6px 10px">${l.nomBeneficiaire}${l.matriculeBeneficiaire ? ` (${l.matriculeBeneficiaire})` : ""}</td><td style="border:1px solid #ccc;padding:6px 10px;text-align:right">${Number(l.montantDemande).toLocaleString("fr-MR")} MRU</td></tr>`).join("");
+        await sendMail({
+          to: dcgaiEmails,
+          subject: `[SOMELEC] Demande groupée ${moyen.categorie} — ${plan.reference ?? plan.id}`,
+          html: `<p>Nouvelle demande groupée (${lignes.length} bénéficiaire(s)) pour le plan <strong>${plan.titre}</strong> — ${plan.reference ?? ""}.<br>Catégorie : <strong>${moyen.categorie}</strong> — ${moyen.description}</p><table style="border-collapse:collapse;margin-top:12px"><thead><tr><th style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5">Bénéficiaire</th><th style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5">Montant</th></tr></thead><tbody>${rows}</tbody></table>`,
+        });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.status(201).json(inserted.map(mapDepenseDemande));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dcgai-valider
+router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dcgai-valider", async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const moyenId = Number(req.params.moyenId);
+    const batchRef = req.params.batchRef;
+    const { dcgaiUserId } = req.body as { dcgaiUserId: number };
+
+    const rows = await db.select().from(depenseDemandesTable)
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_dcgai")));
+    if (rows.length === 0) return res.status(400).json({ error: "Aucune demande en attente pour ce batch." });
+
+    const updated = await db.update(depenseDemandesTable)
+      .set({ statut: "en_attente_dfc", dcgaiValidatedById: dcgaiUserId, dcgaiValidatedAt: new Date() })
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_dcgai")))
+      .returning();
+
+    try {
+      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
+      const [moyen] = await db.select({ description: moyensTable.description, categorie: moyensTable.categorie }).from(moyensTable).where(eq(moyensTable.id, moyenId));
+      const dfcEmails = await getUserEmailsByRole(["direction_financiere"]);
+      if (plan && moyen && dfcEmails.length > 0) {
+        const tableRows = rows.map(r => `<tr><td style="border:1px solid #ccc;padding:6px 10px">${r.nomBeneficiaire}${r.matriculeBeneficiaire ? ` (${r.matriculeBeneficiaire})` : ""}</td><td style="border:1px solid #ccc;padding:6px 10px;text-align:right">${Number(r.montantDemande).toLocaleString("fr-MR")} MRU</td></tr>`).join("");
+        await sendMail({
+          to: dfcEmails,
+          subject: `[SOMELEC] Dépense groupée validée DCGAI — paiement à effectuer — ${plan.reference ?? plan.id}`,
+          html: `<p>Une demande groupée (${rows.length} bénéficiaire(s)) a été validée par le DCGAI pour le plan <strong>${plan.titre}</strong> (${plan.reference ?? ""}).<br>Catégorie : <strong>${moyen.categorie}</strong> — ${moyen.description}<br>Un document PDF est disponible sur l'application.</p><table style="border-collapse:collapse;margin-top:12px"><thead><tr><th style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5">Bénéficiaire</th><th style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5">Montant</th></tr></thead><tbody>${tableRows}</tbody></table>`,
+        });
+      }
+    } catch (e) { console.error("Mail error", e); }
+
+    res.json(updated.map(mapDepenseDemande));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
 });
 
 // POST /plans/:id/moyens/:moyenId/depense-demandes

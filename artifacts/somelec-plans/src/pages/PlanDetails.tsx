@@ -147,7 +147,7 @@ export default function PlanDetails() {
   const [cadLoading, setCadLoading] = useState(false);
 
   // ── Dépenses workflow state (prime/logement/logistique/indemnite/autres) ──
-  type DepenseDemande = { id: number; moyenId: number; statut: string; montantDemande: number; nomBeneficiaire: string; matriculeBeneficiaire?: string; montantPaye: number | null; pieceReference?: string; dcgaiValidatedAt?: string; dfcValidatedAt?: string; createdAt: string };
+  type DepenseDemande = { id: number; moyenId: number; statut: string; montantDemande: number; nomBeneficiaire: string; matriculeBeneficiaire?: string; batchRef?: string | null; montantPaye: number | null; pieceReference?: string; dcgaiValidatedAt?: string; dfcValidatedAt?: string; createdAt: string };
   const [depenseDemandesMap, setDepenseDemandesMap] = useState<Record<number, DepenseDemande[]>>({});
   const [expandedDepenseMoyen, setExpandedDepenseMoyen] = useState<Record<number, boolean>>({});
   const [depenseDemandeDialog, setDepenseDemandeDialog] = useState<number | null>(null);
@@ -159,6 +159,12 @@ export default function PlanDetails() {
   const [dfcPayerDialog, setDfcPayerDialog] = useState<{ moyenId: number; demandeId: number; demande: DepenseDemande } | null>(null);
   const [dfcMontantInput, setDfcMontantInput] = useState("");
   const [dfcLoading, setDfcLoading] = useState(false);
+  // Batch dialog (prime / indemnite_journaliere)
+  const BATCH_DEPENSE_CATS = ["prime", "indemnite_journaliere"];
+  const [primeBatchDialog, setPrimeBatchDialog] = useState<number | null>(null); // moyenId
+  const [primeBatchMontants, setPrimeBatchMontants] = useState<Record<number, string>>({}); // benefId -> montant string
+  const [primeBatchLoading, setPrimeBatchLoading] = useState(false);
+  const [dcgaiBatchLoading, setDcgaiBatchLoading] = useState<string | null>(null); // batchRef being validated
 
   const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
@@ -289,6 +295,100 @@ export default function PlanDetails() {
       setDfcMontantInput("");
     } catch { alert("Erreur réseau"); }
     finally { setDfcLoading(false); }
+  };
+
+  const handleDemanderDepenseBatch = async (moyenId: number) => {
+    if (!currentUser) return;
+    const benefs = beneficiairesMap[moyenId] ?? [];
+    const lignes = benefs.map(b => ({
+      nomBeneficiaire: b.nom,
+      matriculeBeneficiaire: b.matricule ?? undefined,
+      montantDemande: Number(primeBatchMontants[b.id] ?? 0),
+    }));
+    if (lignes.some(l => !l.montantDemande || l.montantDemande <= 0)) { alert("Veuillez saisir un montant valide pour chaque bénéficiaire."); return; }
+    setPrimeBatchLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes/batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ createdById: currentUser.id, lignes }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadDepenseData(moyenId);
+      setPrimeBatchDialog(null);
+      setPrimeBatchMontants({});
+    } catch { alert("Erreur réseau"); }
+    finally { setPrimeBatchLoading(false); }
+  };
+
+  const handleDcgaiBatchValider = async (moyenId: number, batchRef: string) => {
+    if (!currentUser) return;
+    setDcgaiBatchLoading(batchRef);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes-batch/${encodeURIComponent(batchRef)}/dcgai-valider`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dcgaiUserId: currentUser.id }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadDepenseData(moyenId);
+    } catch { alert("Erreur réseau"); }
+    finally { setDcgaiBatchLoading(null); }
+  };
+
+  const downloadPdfListe = (planObj: typeof plan, moyen: typeof moyens[0], demandes: DepenseDemande[]) => {
+    if (!planObj) return;
+    const planRef = planObj.reference ?? `PLAN-${planObj.id}`;
+    const totalMontant = demandes.reduce((s, d) => s + d.montantDemande, 0);
+    const rows = demandes.map((d, i) => `<tr><td style="border:1px solid #ccc;padding:7px 11px">${i + 1}</td><td style="border:1px solid #ccc;padding:7px 11px">${d.nomBeneficiaire}</td><td style="border:1px solid #ccc;padding:7px 11px">${d.matriculeBeneficiaire ?? "—"}</td><td style="border:1px solid #ccc;padding:7px 11px;text-align:right;font-weight:600">${d.montantDemande.toLocaleString("fr-MR")} MRU</td></tr>`).join("");
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Liste ${CATEGORIE_LABELS[moyen.categorie]?.label ?? moyen.categorie} — ${planRef}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:Arial,sans-serif;background:#fff;color:#111;}
+      .page{width:21cm;min-height:29.7cm;margin:auto;padding:2cm;display:flex;flex-direction:column;gap:20px;}
+      .header{text-align:center;border-bottom:3px double #333;padding-bottom:14px;}
+      .header h1{font-size:20px;text-transform:uppercase;letter-spacing:2px;}
+      .header .sub{font-size:13px;color:#555;margin-top:5px;}
+      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+      .info-box{border:1px solid #ddd;border-radius:6px;padding:10px 14px;}
+      .info-box .label{font-size:11px;text-transform:uppercase;color:#888;font-weight:600;letter-spacing:1px;}
+      .info-box .value{font-size:14px;font-weight:700;margin-top:3px;}
+      table{width:100%;border-collapse:collapse;}
+      th{background:#f5f5f5;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;}
+      th,td{border:1px solid #ccc;padding:7px 11px;font-size:13px;}
+      .total-row td{background:#f0f7ff;font-weight:700;}
+      .signatures{display:flex;justify-content:space-between;margin-top:40px;}
+      .sign-box{text-align:center;width:180px;}
+      .sign-box .line{border-top:1px solid #333;padding-top:8px;font-size:12px;color:#555;}
+      @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .no-print{display:none;}}
+    </style></head><body><div class="page">
+    <div class="header">
+      <div style="font-size:13px;font-weight:bold;color:#555;margin-bottom:4px;">SOMELEC — Direction Financière &amp; Comptabilité</div>
+      <h1>Liste de ${CATEGORIE_LABELS[moyen.categorie]?.label ?? moyen.categorie}</h1>
+      <div class="sub">Plan d'action : <strong>${planRef}</strong> &nbsp;|&nbsp; ${planObj.titre}</div>
+    </div>
+    <div class="info-grid">
+      <div class="info-box"><div class="label">Référence plan</div><div class="value">${planRef}</div></div>
+      <div class="info-box"><div class="label">Titre</div><div class="value" style="font-size:12px">${planObj.titre}</div></div>
+      <div class="info-box"><div class="label">Catégorie</div><div class="value">${CATEGORIE_LABELS[moyen.categorie]?.label ?? moyen.categorie}</div></div>
+      <div class="info-box"><div class="label">Moyen</div><div class="value" style="font-size:12px">${moyen.description}</div></div>
+    </div>
+    <div>
+      <table>
+        <thead><tr><th>#</th><th>Nom complet</th><th>Matricule</th><th style="text-align:right">Montant (MRU)</th></tr></thead>
+        <tbody>${rows}<tr class="total-row"><td colspan="3">TOTAL</td><td style="text-align:right">${totalMontant.toLocaleString("fr-MR")} MRU</td></tr></tbody>
+      </table>
+    </div>
+    <div class="signatures">
+      <div class="sign-box"><div class="line">Directeur Financier<br><em>Signature &amp; cachet</em></div></div>
+      <div class="sign-box"><div class="line">Directeur Général<br><em>Signature &amp; cachet</em></div></div>
+    </div>
+    <div class="no-print" style="margin-top:28px;text-align:center;">
+      <button onclick="window.print()" style="padding:10px 28px;font-size:14px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨️ Imprimer / Enregistrer en PDF</button>
+    </div>
+    </div></body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
   };
 
   const downloadPiece = (demande: DepenseDemande, planRef: string) => {
@@ -1048,13 +1148,33 @@ export default function PlanDetails() {
                             ) : <span className="text-muted-foreground text-xs">—</span>
                           ) : DEPENSE_CATS.includes(m.categorie) ? (
                             canDemanderExecution ? (
-                              <Button
-                                size="sm" variant="outline"
-                                className="h-7 text-xs gap-1 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                                onClick={() => { setDepenseMontantInput(""); setDepenseNomBenef(""); setDepenseMatricule(""); setDepenseDemandeDialog(m.id); }}
-                              >
-                                <DollarSign className="w-3 h-3" /> Dem. dépense
-                              </Button>
+                              BATCH_DEPENSE_CATS.includes(m.categorie) ? (
+                                <Button
+                                  size="sm" variant="outline"
+                                  className="h-7 text-xs gap-1 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                                  onClick={async () => {
+                                    if (!beneficiairesMap[m.id]) {
+                                      try {
+                                        const r = await fetch(`${BASE_URL}api/plans/${id}/moyens/${m.id}/beneficiaires`);
+                                        const data = await r.json();
+                                        setBeneficiairesMap(prev => ({ ...prev, [m.id]: data }));
+                                      } catch { /* ignore */ }
+                                    }
+                                    setPrimeBatchMontants({});
+                                    setPrimeBatchDialog(m.id);
+                                  }}
+                                >
+                                  <DollarSign className="w-3 h-3" /> Dem. dépense
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm" variant="outline"
+                                  className="h-7 text-xs gap-1 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                                  onClick={() => { setDepenseMontantInput(""); setDepenseNomBenef(""); setDepenseMatricule(""); setDepenseDemandeDialog(m.id); }}
+                                >
+                                  <DollarSign className="w-3 h-3" /> Dem. dépense
+                                </Button>
+                              )
                             ) : <span className="text-muted-foreground text-xs">—</span>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
@@ -1668,8 +1788,72 @@ export default function PlanDetails() {
               </CardHeader>
               <CardContent className="p-5 space-y-4">
                 {depenseMoyens.map(m => {
-                  const pending = (depenseDemandesMap[m.id] ?? []).filter(d => d.statut === "en_attente_dcgai");
-                  const rest = (depenseDemandesMap[m.id] ?? []).filter(d => d.statut !== "en_attente_dcgai");
+                  const allDems = depenseDemandesMap[m.id] ?? [];
+                  const isBatchCat = BATCH_DEPENSE_CATS.includes(m.categorie);
+                  if (isBatchCat) {
+                    // Group by batchRef
+                    const batches = allDems.reduce<Record<string, DepenseDemande[]>>((acc, d) => {
+                      const key = d.batchRef ?? `solo-${d.id}`;
+                      if (!acc[key]) acc[key] = [];
+                      acc[key].push(d);
+                      return acc;
+                    }, {});
+                    return (
+                      <div key={m.id} className="space-y-3">
+                        <p className="text-xs font-semibold text-emerald-800">{CATEGORIE_LABELS[m.categorie]?.label ?? m.categorie} — {m.description}</p>
+                        {!depenseDemandesMap[m.id] ? (
+                          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => loadDepenseData(m.id)}>
+                            <Loader2 className="w-3 h-3 mr-1" /> Charger
+                          </Button>
+                        ) : Object.keys(batches).length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic">Aucune demande.</p>
+                        ) : Object.entries(batches).map(([batchRef, dems]) => {
+                          const isPending = dems.every(d => d.statut === "en_attente_dcgai");
+                          const isDone = dems.every(d => d.statut !== "en_attente_dcgai");
+                          const total = dems.reduce((s, d) => s + d.montantDemande, 0);
+                          return (
+                            <div key={batchRef} className={cn("border rounded-lg bg-white p-3 space-y-2", isPending ? "border-emerald-200" : "border-gray-200 opacity-70")}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-semibold text-emerald-900">{dems.length} bénéficiaire(s) — Total : {total.toLocaleString("fr-MR")} MRU</span>
+                                {isPending ? (
+                                  <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    disabled={dcgaiBatchLoading === batchRef}
+                                    onClick={() => handleDcgaiBatchValider(m.id, batchRef)}>
+                                    {dcgaiBatchLoading === batchRef ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />} Valider tout
+                                  </Button>
+                                ) : (
+                                  <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium", isDone && dems[0]?.statut === "payee" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700")}>
+                                    {isDone && dems[0]?.statut === "payee" ? "Payée" : "En attente DFC"}
+                                  </span>
+                                )}
+                              </div>
+                              <table className="w-full text-xs border-collapse">
+                                <thead>
+                                  <tr className="bg-emerald-50">
+                                    <th className="border border-emerald-200 px-2 py-1 text-left font-semibold text-emerald-800">Bénéficiaire</th>
+                                    <th className="border border-emerald-200 px-2 py-1 text-left font-semibold text-emerald-800">Matricule</th>
+                                    <th className="border border-emerald-200 px-2 py-1 text-right font-semibold text-emerald-800">Montant</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {dems.map(d => (
+                                    <tr key={d.id}>
+                                      <td className="border border-emerald-100 px-2 py-1">{d.nomBeneficiaire}</td>
+                                      <td className="border border-emerald-100 px-2 py-1 text-muted-foreground">{d.matriculeBeneficiaire ?? "—"}</td>
+                                      <td className="border border-emerald-100 px-2 py-1 text-right font-semibold">{d.montantDemande.toLocaleString("fr-MR")} MRU</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+                  // Non-batch categories: keep original per-item flow
+                  const pending = allDems.filter(d => d.statut === "en_attente_dcgai");
+                  const rest = allDems.filter(d => d.statut !== "en_attente_dcgai");
                   return (
                     <div key={m.id} className="space-y-2">
                       <p className="text-xs font-semibold text-emerald-800">{CATEGORIE_LABELS[m.categorie]?.label ?? m.categorie} — {m.description}</p>
@@ -1722,8 +1906,84 @@ export default function PlanDetails() {
               </CardHeader>
               <CardContent className="p-5 space-y-4">
                 {depenseMoyens.map(m => {
-                  const pending = (depenseDemandesMap[m.id] ?? []).filter(d => d.statut === "en_attente_dfc");
-                  const paid = (depenseDemandesMap[m.id] ?? []).filter(d => d.statut === "payee");
+                  const allDems = depenseDemandesMap[m.id] ?? [];
+                  const isBatchCat = BATCH_DEPENSE_CATS.includes(m.categorie);
+                  if (isBatchCat) {
+                    // Group by batchRef — DFC sees PDF download per batch
+                    const batches = allDems.reduce<Record<string, DepenseDemande[]>>((acc, d) => {
+                      const key = d.batchRef ?? `solo-${d.id}`;
+                      if (!acc[key]) acc[key] = [];
+                      acc[key].push(d);
+                      return acc;
+                    }, {});
+                    const pendingBatches = Object.entries(batches).filter(([, dems]) => dems.some(d => d.statut === "en_attente_dfc"));
+                    const doneBatches = Object.entries(batches).filter(([, dems]) => dems.every(d => d.statut !== "en_attente_dfc") && dems.length > 0);
+                    return (
+                      <div key={m.id} className="space-y-3">
+                        <p className="text-xs font-semibold text-blue-800">{CATEGORIE_LABELS[m.categorie]?.label ?? m.categorie} — {m.description}</p>
+                        {!depenseDemandesMap[m.id] ? (
+                          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => loadDepenseData(m.id)}>
+                            <Loader2 className="w-3 h-3 mr-1" /> Charger
+                          </Button>
+                        ) : Object.keys(batches).length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic">Aucun document disponible.</p>
+                        ) : null}
+                        {pendingBatches.map(([batchRef, dems]) => {
+                          const total = dems.reduce((s, d) => s + d.montantDemande, 0);
+                          return (
+                            <div key={batchRef} className="border border-blue-200 rounded-lg bg-white p-3 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-xs font-semibold text-blue-900">{dems.length} bénéficiaire(s) — Total : {total.toLocaleString("fr-MR")} MRU</p>
+                                  <p className="text-xs text-muted-foreground">Validé par le DCGAI — en attente de paiement</p>
+                                </div>
+                                <Button size="sm" className="h-7 text-xs gap-1 px-2.5 bg-blue-600 hover:bg-blue-700 text-white"
+                                  onClick={() => downloadPdfListe(plan, m, dems)}>
+                                  <Download className="w-3 h-3" /> Télécharger PDF
+                                </Button>
+                              </div>
+                              <table className="w-full text-xs border-collapse">
+                                <thead>
+                                  <tr className="bg-blue-50">
+                                    <th className="border border-blue-200 px-2 py-1 text-left font-semibold text-blue-800">Bénéficiaire</th>
+                                    <th className="border border-blue-200 px-2 py-1 text-left font-semibold text-blue-800">Matricule</th>
+                                    <th className="border border-blue-200 px-2 py-1 text-right font-semibold text-blue-800">Montant</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {dems.map(d => (
+                                    <tr key={d.id}>
+                                      <td className="border border-blue-100 px-2 py-1">{d.nomBeneficiaire}</td>
+                                      <td className="border border-blue-100 px-2 py-1 text-muted-foreground">{d.matriculeBeneficiaire ?? "—"}</td>
+                                      <td className="border border-blue-100 px-2 py-1 text-right font-semibold">{d.montantDemande.toLocaleString("fr-MR")} MRU</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        })}
+                        {doneBatches.map(([batchRef, dems]) => {
+                          const total = dems.reduce((s, d) => s + d.montantDemande, 0);
+                          return (
+                            <div key={batchRef} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
+                              <span className="text-xs text-green-800 font-semibold">{dems.length} bénéficiaire(s) — {total.toLocaleString("fr-MR")} MRU</span>
+                              <div className="flex items-center gap-2">
+                                <Button size="sm" variant="outline" className="h-6 text-xs gap-1 px-2 border-green-300 text-green-700 hover:bg-green-50"
+                                  onClick={() => downloadPdfListe(plan, m, dems)}>
+                                  <Download className="w-3 h-3" /> PDF
+                                </Button>
+                                <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Traité</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+                  // Non-batch: regular per-item flow
+                  const pending = allDems.filter(d => d.statut === "en_attente_dfc");
+                  const paid = allDems.filter(d => d.statut === "payee");
                   return (
                     <div key={m.id} className="space-y-2">
                       <p className="text-xs font-semibold text-blue-800">{CATEGORIE_LABELS[m.categorie]?.label ?? m.categorie} — {m.description}</p>
@@ -2229,6 +2489,76 @@ export default function PlanDetails() {
             <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={cadLoading || !Number(cadMontantInput)} onClick={handleCadValider}>
               {cadLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
               Valider & Déduire du budget
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Direction: Demande dépense BATCH (prime / indemnite_journaliere) dialog ─── */}
+      <Dialog open={primeBatchDialog !== null} onOpenChange={(open) => { if (!open) { setPrimeBatchDialog(null); setPrimeBatchMontants({}); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-emerald-600" /> Demande de dépense — Liste des bénéficiaires</DialogTitle>
+            <DialogDescription>Saisissez le montant pour chaque bénéficiaire puis envoyez au DCGAI.</DialogDescription>
+          </DialogHeader>
+          {primeBatchDialog !== null && (() => {
+            const m = moyens.find(mo => mo.id === primeBatchDialog);
+            const benefs = beneficiairesMap[primeBatchDialog] ?? [];
+            return m ? (
+              <div className="space-y-3">
+                <div className="rounded-xl border bg-muted/30 p-3 text-sm">
+                  <p className="font-semibold">{m.description}</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">{CATEGORIE_LABELS[m.categorie]?.label ?? m.categorie} — Budget : {formatCurrency(Number(m.budget))}</p>
+                </div>
+                {benefs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic text-center py-4">Aucun bénéficiaire associé à ce moyen.</p>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-emerald-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold text-emerald-800 text-xs">Bénéficiaire</th>
+                          <th className="px-3 py-2 text-left font-semibold text-emerald-800 text-xs">Matricule</th>
+                          <th className="px-3 py-2 text-left font-semibold text-emerald-800 text-xs w-36">Montant (MRU)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {benefs.map(b => (
+                          <tr key={b.id} className="bg-white">
+                            <td className="px-3 py-2 font-medium text-sm">{b.nom}</td>
+                            <td className="px-3 py-2 text-muted-foreground text-xs">{b.matricule ?? "—"}</td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number" min={0} step={0.01} placeholder="0"
+                                value={primeBatchMontants[b.id] ?? ""}
+                                onChange={e => setPrimeBatchMontants(prev => ({ ...prev, [b.id]: e.target.value }))}
+                                className="w-full px-2 py-1 rounded border border-border text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-emerald-50/60">
+                        <tr>
+                          <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-emerald-800">Total</td>
+                          <td className="px-3 py-2 text-sm font-bold text-emerald-900">
+                            {benefs.reduce((s, b) => s + (Number(primeBatchMontants[b.id] ?? 0) || 0), 0).toLocaleString("fr-MR")} MRU
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : null;
+          })()}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setPrimeBatchDialog(null); setPrimeBatchMontants({}); }} disabled={primeBatchLoading}>Annuler</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={primeBatchLoading || (beneficiairesMap[primeBatchDialog ?? -1] ?? []).length === 0}
+              onClick={() => primeBatchDialog !== null && handleDemanderDepenseBatch(primeBatchDialog)}>
+              {primeBatchLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+              Envoyer au DCGAI
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -134,6 +134,7 @@ export const depenseDemandesTable = pgTable("depense_demandes", {
   montantDemande: numeric("montant_demande", { precision: 12, scale: 2 }).notNull(),
   nomBeneficiaire: text("nom_beneficiaire").notNull(),
   matriculeBeneficiaire: text("matricule_beneficiaire"),
+  batchRef: text("batch_ref"), // groups batch prime/indemnite submissions
   statut: text("statut").notNull().default("en_attente_dcgai"),
   dcgaiValidatedById: integer("dcgai_validated_by_id").references(() => usersTable.id),
   dcgaiValidatedAt: timestamp("dcgai_validated_at"),
