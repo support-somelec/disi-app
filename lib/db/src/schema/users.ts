@@ -10,6 +10,7 @@ export const usersTable = pgTable("users", {
   email: text("email").notNull().unique(),
   role: text("role").notNull(), // direction, controle_technique, directeur_general
   directionId: integer("direction_id").references(() => directionsTable.id),
+  niveau: text("niveau").notNull().default("standard"), // standard | directeur_centrale
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true });

@@ -50,6 +50,7 @@ interface UserEditState {
   userId: number;
   role: string;
   directionId: number | null;
+  niveau: string;
 }
 
 interface DirEditState {
@@ -106,7 +107,7 @@ export default function AdminUsers() {
 
   /* ── User handlers ── */
   const handleUserEdit = (user: User) => {
-    setUserEdit({ userId: user.id, role: user.role, directionId: user.directionId ?? null });
+    setUserEdit({ userId: user.id, role: user.role, directionId: user.directionId ?? null, niveau: user.niveau ?? "standard" });
     setConfirmDeleteUser(null);
   };
 
@@ -114,7 +115,7 @@ export default function AdminUsers() {
     if (!userEdit) return;
     setSavingUser(true);
     try {
-      await updateUser.mutateAsync({ id: userEdit.userId, data: { role: userEdit.role, directionId: userEdit.directionId } });
+      await updateUser.mutateAsync({ id: userEdit.userId, data: { role: userEdit.role, directionId: userEdit.directionId, niveau: userEdit.niveau } });
       await refetchUsers();
       setUserEdit(null);
     } finally {
@@ -254,6 +255,7 @@ export default function AdminUsers() {
                   <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">E-mail</th>
                   <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Rôle</th>
                   <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden md:table-cell">Direction</th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden lg:table-cell">Niveau</th>
                   <th className="text-right px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
@@ -312,6 +314,22 @@ export default function AdminUsers() {
                           </select>
                         ) : (
                           user.directionNom ?? <span className="text-muted-foreground/50">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        {isEditing ? (
+                          <select
+                            value={userEdit.niveau}
+                            onChange={e => setUserEdit(s => s ? { ...s, niveau: e.target.value } : null)}
+                            className="px-2 py-1 border border-border rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 w-full max-w-[180px]"
+                          >
+                            <option value="standard">Standard</option>
+                            <option value="directeur_centrale">Directeur Centrale</option>
+                          </select>
+                        ) : (
+                          user.niveau === "directeur_centrale"
+                            ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">Dir. Centrale</span>
+                            : <span className="text-muted-foreground/50 text-xs">Standard</span>
                         )}
                       </td>
                       <td className="px-4 py-3">

@@ -5,6 +5,7 @@
  * SOMELEC Plans d'Action API
  * OpenAPI spec version: 0.1.0
  */
+import type { UserNiveau } from "./userNiveau";
 import type { UserRole } from "./userRole";
 
 export interface User {
@@ -15,4 +16,5 @@ export interface User {
   role: UserRole;
   directionId?: number;
   directionNom?: string;
+  niveau?: UserNiveau;
 }

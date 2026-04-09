@@ -34,9 +34,11 @@ export const GetUsersResponseItem = zod.object({
     "direction_financiere",
     "rh",
     "admin",
+    "en_attente",
   ]),
   directionId: zod.number().optional(),
   directionNom: zod.string().optional(),
+  niveau: zod.enum(["standard", "directeur_centrale"]).optional(),
 });
 export const GetUsersResponse = zod.array(GetUsersResponseItem);
 
@@ -58,8 +60,10 @@ export const CreateUserBody = zod.object({
     "direction_financiere",
     "rh",
     "admin",
+    "en_attente",
   ]),
   directionId: zod.number().optional(),
+  niveau: zod.enum(["standard", "directeur_centrale"]).optional(),
 });
 
 /**
@@ -84,9 +88,11 @@ export const UpdateUserBody = zod.object({
       "direction_financiere",
       "rh",
       "admin",
+      "en_attente",
     ])
     .optional(),
   directionId: zod.number().optional(),
+  niveau: zod.enum(["standard", "directeur_centrale"]).optional(),
 });
 
 export const UpdateUserResponse = zod.object({
@@ -106,9 +112,11 @@ export const UpdateUserResponse = zod.object({
     "direction_financiere",
     "rh",
     "admin",
+    "en_attente",
   ]),
   directionId: zod.number().optional(),
   directionNom: zod.string().optional(),
+  niveau: zod.enum(["standard", "directeur_centrale"]).optional(),
 });
 
 /**
@@ -138,6 +146,7 @@ export const GetPlansResponseItem = zod.object({
   directionNom: zod.string().optional(),
   statut: zod.enum([
     "brouillon",
+    "en_attente_dc",
     "en_attente_ct",
     "en_attente_dga",
     "en_attente_dg",
@@ -258,6 +267,7 @@ export const GetPlanResponse = zod.object({
   directionNom: zod.string().optional(),
   statut: zod.enum([
     "brouillon",
+    "en_attente_dc",
     "en_attente_ct",
     "en_attente_dga",
     "en_attente_dg",
@@ -349,6 +359,7 @@ export const UpdatePlanResponse = zod.object({
   directionNom: zod.string().optional(),
   statut: zod.enum([
     "brouillon",
+    "en_attente_dc",
     "en_attente_ct",
     "en_attente_dga",
     "en_attente_dg",
@@ -438,6 +449,7 @@ export const ValidatePlanResponse = zod.object({
   directionNom: zod.string().optional(),
   statut: zod.enum([
     "brouillon",
+    "en_attente_dc",
     "en_attente_ct",
     "en_attente_dga",
     "en_attente_dg",
@@ -526,6 +538,7 @@ export const CloturerPlanResponse = zod.object({
   directionNom: zod.string().optional(),
   statut: zod.enum([
     "brouillon",
+    "en_attente_dc",
     "en_attente_ct",
     "en_attente_dga",
     "en_attente_dg",

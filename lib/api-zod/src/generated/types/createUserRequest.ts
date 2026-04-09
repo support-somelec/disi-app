@@ -5,6 +5,7 @@
  * SOMELEC Plans d'Action API
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateUserRequestNiveau } from "./createUserRequestNiveau";
 import type { CreateUserRequestRole } from "./createUserRequestRole";
 
 export interface CreateUserRequest {
@@ -13,4 +14,5 @@ export interface CreateUserRequest {
   email: string;
   role: CreateUserRequestRole;
   directionId?: number;
+  niveau?: CreateUserRequestNiveau;
 }

@@ -38,6 +38,7 @@ const CATEGORIE_LABELS: Record<string, { label: string; icon: React.ElementType;
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "secondary"|"warning"|"info"|"success"|"destructive"|"default" }> = {
   brouillon:      { label: "Brouillon",    variant: "secondary" },
+  en_attente_dc:  { label: "Attente DC",   variant: "warning" },
   en_attente_ct:  { label: "Attente CT",   variant: "warning" },
   en_attente_dga: { label: "Attente DGA",  variant: "warning" },
   en_attente_dg:  { label: "Attente DG",   variant: "info" },
@@ -49,6 +50,7 @@ const STATUS_CONFIG: Record<string, { label: string; variant: "secondary"|"warni
 
 const VALIDATION_STEPS = [
   { key: "creation",      label: "Direction",  sub: "Création",        statuts: ["brouillon"] },
+  { key: "dc",            label: "DC",         sub: "Dir. Centrale",   statuts: ["en_attente_dc"] },
   { key: "ct",            label: "CT",         sub: "Contrôle Tech.",  statuts: ["en_attente_ct"] },
   { key: "dga",           label: "DGA",        sub: "Dir. Gén. Adj.",  statuts: ["en_attente_dga"] },
   { key: "dg",            label: "DG",         sub: "Directeur Gén.",  statuts: ["en_attente_dg"] },
@@ -56,7 +58,7 @@ const VALIDATION_STEPS = [
   { key: "cloture",       label: "Clôture",    sub: "Terminé",         statuts: ["cloture"] },
 ];
 
-const STATUS_ORDER = ["brouillon", "en_attente_ct", "en_attente_dga", "en_attente_dg", "ouvert", "cloture"];
+const STATUS_ORDER = ["brouillon", "en_attente_dc", "en_attente_ct", "en_attente_dga", "en_attente_dg", "ouvert", "cloture"];
 
 function ProgressBar({ value, max, className }: { value: number; max: number; className?: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
@@ -655,6 +657,7 @@ export default function PlanDetails() {
     }
   };
 
+  const canValidateDC  = currentUser?.niveau === "directeur_centrale" && plan.statut === "en_attente_dc" && currentUser?.directionId === plan.directionId;
   const canValidateCT  = currentUser?.role === "controle_technique" && plan.statut === "en_attente_ct";
   const canValidateDGA = currentUser?.role === "dga"                && plan.statut === "en_attente_dga";
   const canValidateDG  = currentUser?.role === "directeur_general"  && plan.statut === "en_attente_dg";
@@ -1309,6 +1312,43 @@ export default function PlanDetails() {
 
         {/* Sidebar */}
         <div className="space-y-6">
+
+          {/* Validation panel - Directeur Centrale */}
+          {canValidateDC && (
+            <Card className="border-warning/30 bg-warning/5 shadow-lg">
+              <CardHeader className="border-b border-warning/20 pb-4">
+                <CardTitle className="text-base flex items-center gap-2 text-warning-foreground font-bold">
+                  <ShieldCheck className="w-5 h-5" /> Validation Direction Centrale
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-5 space-y-4">
+                <p className="text-sm text-foreground">
+                  Ce plan attend votre validation en tant que <strong>Directeur Centrale</strong>.
+                </p>
+                <textarea
+                  className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  placeholder="Commentaire (obligatoire en cas de rejet)..."
+                  rows={3}
+                  value={commentaire}
+                  onChange={(e) => setCommentaire(e.target.value)}
+                />
+                <div className="flex gap-3">
+                  <Button
+                    variant="destructive" className="flex-1"
+                    onClick={() => handleValidate("rejeter")}
+                    disabled={validateMutation.isPending || !commentaire}
+                  >Rejeter</Button>
+                  <Button
+                    className="flex-1 bg-success hover:bg-success/90 text-white"
+                    onClick={() => handleValidate("approuver")}
+                    disabled={validateMutation.isPending}
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-2" /> Approuver
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Validation panel - CT, DGA, DG */}
           {(canValidateCT || canValidateDGA || canValidateDG) && (

@@ -314,7 +314,14 @@ router.post("/plans/:id/validate", async (req, res) => {
     let commentaireRejet = current.commentaireRejet;
 
     if (body.action === "approuver") {
-      if (current.statut === "brouillon")         newStatut = "en_attente_ct";
+      if (current.statut === "brouillon") {
+        // Check if the creator is a directeur_centrale — if so, skip DC validation step
+        const creator = current.createdById
+          ? (await db.select({ niveau: usersTable.niveau }).from(usersTable).where(eq(usersTable.id, current.createdById)))[0]
+          : null;
+        newStatut = creator?.niveau === "directeur_centrale" ? "en_attente_ct" : "en_attente_dc";
+      }
+      else if (current.statut === "en_attente_dc")  newStatut = "en_attente_ct";
       else if (current.statut === "en_attente_ct")  newStatut = "en_attente_dga";
       else if (current.statut === "en_attente_dga") newStatut = "en_attente_dg";
       else if (current.statut === "en_attente_dg")  newStatut = "ouvert";
@@ -330,7 +337,17 @@ router.post("/plans/:id/validate", async (req, res) => {
     if (plan && newStatut !== current.statut) {
       setImmediate(async () => {
         try {
-          if (newStatut === "en_attente_ct") {
+          if (newStatut === "en_attente_dc") {
+            // Notify all directeur_centrale users in the same direction
+            const dcUsers = await db.select({ email: usersTable.email })
+              .from(usersTable)
+              .where(and(eq(usersTable.niveau, "directeur_centrale"), eq(usersTable.directionId, current.directionId)));
+            const emails = dcUsers.map(u => u.email).filter(Boolean);
+            if (emails.length) {
+              const { subject, html } = mailPlanCreated(plan);
+              await sendMail({ to: emails, subject, html });
+            }
+          } else if (newStatut === "en_attente_ct") {
             const emails = await getUserEmailsByRole(["controle_technique"]);
             const { subject, html } = mailPlanCreated(plan);
             await sendMail({ to: emails, subject, html });

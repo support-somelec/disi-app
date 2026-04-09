@@ -20,4 +20,5 @@ export const UserRole = {
   direction_financiere: "direction_financiere",
   rh: "rh",
   admin: "admin",
+  en_attente: "en_attente",
 } as const;

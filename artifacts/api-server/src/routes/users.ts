@@ -14,6 +14,7 @@ async function getUserWithDirection(id: number) {
       prenom: usersTable.prenom,
       email: usersTable.email,
       role: usersTable.role,
+      niveau: usersTable.niveau,
       directionId: usersTable.directionId,
       directionNom: directionsTable.nom,
     })
@@ -32,6 +33,7 @@ router.get("/users", async (_req, res) => {
         prenom: usersTable.prenom,
         email: usersTable.email,
         role: usersTable.role,
+        niveau: usersTable.niveau,
         directionId: usersTable.directionId,
         directionNom: directionsTable.nom,
       })
@@ -51,6 +53,7 @@ const CreateUserBody = z.object({
   email: z.string().email(),
   role: z.string().default("en_attente"),
   directionId: z.number().int().optional().nullable(),
+  niveau: z.string().default("standard"),
 });
 
 router.post("/users", async (req, res) => {
@@ -62,6 +65,7 @@ router.post("/users", async (req, res) => {
       email: body.email,
       role: body.role,
       directionId: body.directionId ?? null,
+      niveau: body.niveau ?? "standard",
     }).returning();
     const full = await getUserWithDirection(created.id);
     res.status(201).json(full);
@@ -80,6 +84,7 @@ const UpdateUserBody = z.object({
   prenom: z.string().optional(),
   role: z.string().optional(),
   directionId: z.number().int().nullable().optional(),
+  niveau: z.string().optional(),
 });
 
 router.put("/users/:id", async (req, res) => {
@@ -91,6 +96,7 @@ router.put("/users/:id", async (req, res) => {
     if (body.prenom !== undefined) updates.prenom = body.prenom;
     if (body.role !== undefined) updates.role = body.role;
     if ("directionId" in body) updates.directionId = body.directionId ?? null;
+    if (body.niveau !== undefined) updates.niveau = body.niveau;
     await db.update(usersTable).set(updates).where(eq(usersTable.id, id));
     const full = await getUserWithDirection(id);
     if (!full) return res.status(404).json({ error: "Utilisateur non trouvé" });

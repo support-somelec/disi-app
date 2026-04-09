@@ -859,11 +859,14 @@ components:
           type: string
         role:
           type: string
-          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, dcgai, direction_financiere, rh, admin]
+          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, dcgai, direction_financiere, rh, admin, en_attente]
         directionId:
           type: integer
         directionNom:
           type: string
+        niveau:
+          type: string
+          enum: [standard, directeur_centrale]
       required: [id, nom, prenom, email, role]
 
     Plan:
@@ -888,7 +891,7 @@ components:
           type: string
         statut:
           type: string
-          enum: [brouillon, en_attente_ct, en_attente_dga, en_attente_dg, approuve, rejete, ouvert, cloture]
+          enum: [brouillon, en_attente_dc, en_attente_ct, en_attente_dga, en_attente_dg, approuve, rejete, ouvert, cloture]
         createdById:
           type: integer
         createdByNom:
@@ -1143,9 +1146,12 @@ components:
           type: string
         role:
           type: string
-          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, rh, admin]
+          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, rh, admin, en_attente]
         directionId:
           type: integer
+        niveau:
+          type: string
+          enum: [standard, directeur_centrale]
       required: [nom, prenom, email, role]
 
     UpdateUserRequest:
@@ -1157,9 +1163,12 @@ components:
           type: string
         role:
           type: string
-          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, rh, admin]
+          enum: [direction, controle_technique, dga, directeur_general, dmg, da, controle_financier, direction_financiere, rh, admin, en_attente]
         directionId:
           type: integer
+        niveau:
+          type: string
+          enum: [standard, directeur_centrale]
 
     Employe:
       type: object

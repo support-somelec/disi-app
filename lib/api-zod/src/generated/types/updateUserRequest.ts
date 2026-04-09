@@ -5,6 +5,7 @@
  * SOMELEC Plans d'Action API
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateUserRequestNiveau } from "./updateUserRequestNiveau";
 import type { UpdateUserRequestRole } from "./updateUserRequestRole";
 
 export interface UpdateUserRequest {
@@ -12,4 +13,5 @@ export interface UpdateUserRequest {
   prenom?: string;
   role?: UpdateUserRequestRole;
   directionId?: number;
+  niveau?: UpdateUserRequestNiveau;
 }

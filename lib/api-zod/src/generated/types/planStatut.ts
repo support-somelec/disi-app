@@ -10,6 +10,7 @@ export type PlanStatut = (typeof PlanStatut)[keyof typeof PlanStatut];
 
 export const PlanStatut = {
   brouillon: "brouillon",
+  en_attente_dc: "en_attente_dc",
   en_attente_ct: "en_attente_ct",
   en_attente_dga: "en_attente_dga",
   en_attente_dg: "en_attente_dg",

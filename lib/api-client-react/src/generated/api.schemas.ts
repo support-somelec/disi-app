@@ -34,6 +34,14 @@ export const UserRole = {
   direction_financiere: "direction_financiere",
   rh: "rh",
   admin: "admin",
+  en_attente: "en_attente",
+} as const;
+
+export type UserNiveau = (typeof UserNiveau)[keyof typeof UserNiveau];
+
+export const UserNiveau = {
+  standard: "standard",
+  directeur_centrale: "directeur_centrale",
 } as const;
 
 export interface User {
@@ -44,12 +52,14 @@ export interface User {
   role: UserRole;
   directionId?: number;
   directionNom?: string;
+  niveau?: UserNiveau;
 }
 
 export type PlanStatut = (typeof PlanStatut)[keyof typeof PlanStatut];
 
 export const PlanStatut = {
   brouillon: "brouillon",
+  en_attente_dc: "en_attente_dc",
   en_attente_ct: "en_attente_ct",
   en_attente_dga: "en_attente_dga",
   en_attente_dg: "en_attente_dg",
@@ -251,6 +261,15 @@ export const CreateUserRequestRole = {
   direction_financiere: "direction_financiere",
   rh: "rh",
   admin: "admin",
+  en_attente: "en_attente",
+} as const;
+
+export type CreateUserRequestNiveau =
+  (typeof CreateUserRequestNiveau)[keyof typeof CreateUserRequestNiveau];
+
+export const CreateUserRequestNiveau = {
+  standard: "standard",
+  directeur_centrale: "directeur_centrale",
 } as const;
 
 export interface CreateUserRequest {
@@ -259,6 +278,7 @@ export interface CreateUserRequest {
   email: string;
   role: CreateUserRequestRole;
   directionId?: number;
+  niveau?: CreateUserRequestNiveau;
 }
 
 export type UpdateUserRequestRole =
@@ -275,6 +295,15 @@ export const UpdateUserRequestRole = {
   direction_financiere: "direction_financiere",
   rh: "rh",
   admin: "admin",
+  en_attente: "en_attente",
+} as const;
+
+export type UpdateUserRequestNiveau =
+  (typeof UpdateUserRequestNiveau)[keyof typeof UpdateUserRequestNiveau];
+
+export const UpdateUserRequestNiveau = {
+  standard: "standard",
+  directeur_centrale: "directeur_centrale",
 } as const;
 
 export interface UpdateUserRequest {
@@ -282,6 +311,7 @@ export interface UpdateUserRequest {
   prenom?: string;
   role?: UpdateUserRequestRole;
   directionId?: number;
+  niveau?: UpdateUserRequestNiveau;
 }
 
 export interface Employe {
