@@ -1,0 +1,82 @@
+[root@vps-plan-action ~]# cat /www/server/panel/vhost/rewrite/plans.somelec.mr.conf
+[root@vps-plan-action ~]# cat /www/server/panel/vhost/nginx/extension/plans.somelec.mr/somelec.conf
+location = / {
+    return 301 /somelec-plans/;
+}
+
+location /somelec-plans/ {
+    alias /www/wwwroot/plans.somelec.mr/somelec-plans/;
+    try_files $uri $uri/ /somelec-plans/index.html;
+}
+
+location /somelec-plans/api/ {
+    proxy_pass http://127.0.0.1:3001/api/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+[root@vps-plan-action ~]# cat /www/server/panel/vhost/nginx/plans.somelec.mr.conf
+server
+{
+    listen 80;
+    server_name plans.somelec.mr;
+    index index.php index.html index.htm default.php default.htm default.html;
+    root /www/wwwroot/plans.somelec.mr;
+    include /www/server/panel/vhost/nginx/extension/plans.somelec.mr/*.conf;
+
+    #SSL-START SSL related configuration, do NOT delete or modify the next line of commented-out 404 rules
+    #error_page 404/404.html;
+    #SSL-END
+
+    #ERROR-PAGE-START  Error page configuration, allowed to be commented, deleted or modified
+    error_page 404 /404.html;
+    error_page 502 /502.html;
+    #ERROR-PAGE-END
+
+    #PHP-INFO-START  PHP reference configuration, allowed to be commented, deleted or modified
+    
+
+        include enable-php-00.conf;
+    #PHP-INFO-END
+
+    #REWRITE-START URL rewrite rule reference, any modification will invalidate the rewrite rules set by the panel
+    include /www/server/panel/vhost/rewrite/plans.somelec.mr.conf;
+    #REWRITE-END
+
+    # Forbidden files or directories
+    location ~ ^/(\.user.ini|\.htaccess|\.git|\.env|\.svn|\.project|LICENSE|README.md)
+    {
+        return 404;
+    }
+
+    # Directory verification related settings for one-click application for SSL certificate
+    location ~ \.well-known{
+        allow all;
+    }
+
+    #Prohibit putting sensitive files in certificate verification directory
+    if ( $uri ~ "^/\.well-known/.*\.(php|jsp|py|js|css|lua|ts|go|zip|tar\.gz|rar|7z|sql|bak)$" ) {
+        return 403;
+    }
+
+    location ~ .*\.(gif|jpg|jpeg|png|bmp|swf)$
+    {
+        expires      30d;
+        error_log /dev/null;
+        access_log /dev/null;
+    }
+    location ~ .*\.(js|css)?$
+    {
+        expires      12h;
+        error_log /dev/null;
+        access_log /dev/null;
+    }
+        access_log /www/wwwlogs/plans.somelec.mr.log;
+    error_log  /www/wwwlogs/plans.somelec.mr.error.log;
+}[root@vps-plan-action ~]#docker ps --format "table {{.Names}}\t{{.Ports}}""
+NAMES              PORTS
+somelec_api        0.0.0.0:3001->3001/tcp, [::]:3001->3001/tcp
+somelec_frontend   80/tcp, 0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp
+somelec_db         5432/tcp
+[root@vps-plan-action ~]# 
