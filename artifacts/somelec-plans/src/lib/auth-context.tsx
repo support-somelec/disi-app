@@ -38,12 +38,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const users = apiUsers?.length ? apiUsers : MOCK_USERS;
 
+  // Load session from storage
   useEffect(() => {
     const saved = sessionStorage.getItem(SESSION_KEY);
     if (saved) {
       try { setCurrentUser(JSON.parse(saved)); } catch { sessionStorage.removeItem(SESSION_KEY); }
     }
   }, []);
+
+  // Refresh currentUser from API when users list is available (ensures niveau & other fields are up to date)
+  useEffect(() => {
+    if (!apiUsers?.length) return;
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      const fresh = apiUsers.find(u => u.id === prev.id);
+      if (!fresh) return prev;
+      const updated = { ...prev, ...fresh };
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, [apiUsers]);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     if (!password || password.length < 4) return { success: false, error: "Mot de passe incorrect." };

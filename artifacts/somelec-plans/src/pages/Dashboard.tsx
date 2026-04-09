@@ -12,6 +12,7 @@ import { formatCurrency } from "@/lib/utils";
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "secondary" | "warning" | "info" | "success" | "destructive" | "default"; icon: React.ElementType }> = {
   brouillon:      { label: "Brouillon",   variant: "secondary",   icon: Clock },
+  en_attente_dc:  { label: "Attente DC",  variant: "warning",     icon: ShieldCheck },
   en_attente_ct:  { label: "Attente CT",  variant: "warning",     icon: ShieldCheck },
   en_attente_dga: { label: "Attente DGA", variant: "warning",     icon: ShieldCheck },
   en_attente_dg:  { label: "Attente DG",  variant: "info",        icon: ShieldCheck },
@@ -34,7 +35,12 @@ export default function Dashboard() {
   const [filterOverrun, setFilterOverrun] = useState<"" | "budget" | "delai" | "both">(""); 
 
   const seesAll = currentUser ? ROLES_SEE_ALL.includes(currentUser.role) : false;
-  const queryParams = seesAll ? {} : { createdById: currentUser?.id };
+  const isDC = currentUser?.niveau === "directeur_centrale";
+  const queryParams = seesAll
+    ? {}
+    : isDC && currentUser?.directionId
+      ? { directionId: currentUser.directionId }
+      : { createdById: currentUser?.id };
   const { data: allPlans = [], isLoading } = useGetPlans(queryParams as Parameters<typeof useGetPlans>[0]);
 
   const overBudgetPlans = allPlans.filter(p => (p.montantConsomme ?? 0) > (p.budgetTotal ?? 0) && p.budgetTotal > 0);
