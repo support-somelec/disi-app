@@ -1,0 +1,50 @@
+somelec_api  |     at Module._load (node:internal/modules/cjs/loader:1038:27)
+somelec_api  |     at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+somelec_api  |     at node:internal/main/run_main_module:28:49 {
+somelec_api  |   code: 'MODULE_NOT_FOUND',
+somelec_api  |   requireStack: []
+somelec_api  | }
+somelec_api  | 
+somelec_api  | Node.js v20.20.2
+somelec_api  | node:internal/modules/cjs/loader:1210
+somelec_api  |   throw err;
+somelec_api  |   ^
+somelec_api  | 
+somelec_api  | Error: Cannot find module '/app/artifacts/api-server/dist/index.js'
+somelec_api  |     at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+somelec_api  |     at Module._load (node:internal/modules/cjs/loader:1038:27)
+somelec_api  |     at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+somelec_api  |     at node:internal/main/run_main_module:28:49 {
+somelec_api  |   code: 'MODULE_NOT_FOUND',
+somelec_api  |   requireStack: []
+somelec_api  | }
+somelec_api  | 
+somelec_api  | Node.js v20.20.2
+somelec_api  | node:internal/modules/cjs/loader:1210
+somelec_api  |   throw err;
+somelec_api  |   ^
+somelec_api  | 
+somelec_api  | Error: Cannot find module '/app/artifacts/api-server/dist/index.js'
+somelec_api  |     at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+somelec_api  |     at Module._load (node:internal/modules/cjs/loader:1038:27)
+somelec_api  |     at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+somelec_api  |     at node:internal/main/run_main_module:28:49 {
+somelec_api  |   code: 'MODULE_NOT_FOUND',
+somelec_api  |   requireStack: []
+somelec_api  | }
+somelec_api  | 
+somelec_api  | Node.js v20.20.2
+somelec_api  | node:internal/modules/cjs/loader:1210
+somelec_api  |   throw err;
+somelec_api  |   ^
+somelec_api  | 
+somelec_api  | Error: Cannot find module '/app/artifacts/api-server/dist/index.js'
+somelec_api  |     at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+somelec_api  |     at Module._load (node:internal/modules/cjs/loader:1038:27)
+somelec_api  |     at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+somelec_api  |     at node:internal/main/run_main_module:28:49 {
+somelec_api  |   code: 'MODULE_NOT_FOUND',
+somelec_api  |   requireStack: []
+somelec_api  | }
+somelec_api  | 
+somelec_api  | Node.js v20.20.2
