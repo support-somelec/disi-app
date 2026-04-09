@@ -1,0 +1,65 @@
+ls /www/server/panel/vhost/nginx/proxy/plans.somelec.mr/
+cat /www/server/panel/vhost/nginx/proxy/plans.somelec.mr/*.conf 2>/dev/null || echo "VIDE"
+VIDE
+[root@vps-plan-action ~]# cat /www/server/panel/vhost/nginx/plans.somelec.mr.conf
+server
+{
+    listen 80;
+    server_name plans.somelec.mr;
+    index index.php index.html index.htm default.php default.htm default.html;
+    root /www/wwwroot/plans.somelec.mr;
+    include /www/server/panel/vhost/nginx/extension/plans.somelec.mr/*.conf;
+
+    #SSL-START SSL related configuration, do NOT delete or modify the next line of commented-out 404 rules
+    #error_page 404/404.html;
+    #SSL-END
+
+    #ERROR-PAGE-START  Error page configuration, allowed to be commented, deleted or modified
+    error_page 404 /404.html;
+    error_page 502 /502.html;
+    #ERROR-PAGE-END
+
+    #PHP-INFO-START  PHP reference configuration, allowed to be commented, deleted or modified
+    
+
+        include enable-php-00.conf;
+    #PHP-INFO-END
+
+    #REWRITE-START URL rewrite rule reference, any modification will invalidate the rewrite rules set by the panel
+    include /www/server/panel/vhost/rewrite/plans.somelec.mr.conf;
+    #REWRITE-END
+
+    # Forbidden files or directories
+    location ~ ^/(\.user.ini|\.htaccess|\.git|\.env|\.svn|\.project|LICENSE|README.md)
+    {
+        return 404;
+    }
+
+    # Directory verification related settings for one-click application for SSL certificate
+    location ~ \.well-known{
+        allow all;
+    }
+
+    #Prohibit putting sensitive files in certificate verification directory
+    if ( $uri ~ "^/\.well-known/.*\.(php|jsp|py|js|css|lua|ts|go|zip|tar\.gz|rar|7z|sql|bak)$" ) {
+        return 403;
+    }
+
+    location ~ .*\.(gif|jpg|jpeg|png|bmp|swf)$
+    {
+        expires      30d;
+        error_log /dev/null;
+        access_log /dev/null;
+    }
+    location ~ .*\.(js|css)?$
+    {
+        expires      12h;
+        error_log /dev/null;
+        access_log /dev/null;
+    }
+        access_log /www/wwwlogs/plans.somelec.mr.log;
+    error_log  /www/wwwlogs/plans.somelec.mr.error.log;
+}[root@vps-plan-action ~]#curl -v http://plans.somelec.mr/ 2>&1 | grep -E "< HTTP|< Server|
+< Location"
+< HTTP/1.1 200 OK
+< Server: nginx/1.20.1
