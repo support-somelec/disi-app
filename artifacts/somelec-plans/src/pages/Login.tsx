@@ -129,37 +129,6 @@ export default function Login() {
             </Link>
           </div>
 
-          <div className="mt-5 pt-5 border-t border-white/10">
-            <p className="text-xs text-slate-500 text-center mb-3">Comptes de démonstration :</p>
-            <div className="space-y-1.5">
-              {[
-                { label: "Admin", email: "admin@somelec.mr" },
-                { label: "DG", email: "dg@somelec.mr" },
-                { label: "DGA", email: "dga@somelec.mr" },
-                { label: "CT", email: "ct@somelec.mr" },
-                { label: "DT", email: "dt@somelec.mr" },
-                { label: "DMG", email: "dmg@somelec.mr" },
-                { label: "DA", email: "da@somelec.mr" },
-                { label: "CF", email: "cf@somelec.mr" },
-                { label: "DF", email: "df@somelec.mr" },
-                { label: "DCGAI", email: "dcgai@somelec.mr" },
-                { label: "CAD",   email: "cad@somelec.mr" },
-              ].map(u => (
-                <button
-                  key={u.email}
-                  type="button"
-                  onClick={() => { setEmail(u.email); setPassword("somelec2026"); }}
-                  className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
-                >
-                  <span className="text-xs font-medium text-slate-300">{u.label}</span>
-                  <span className="text-xs text-slate-500 ml-2">{u.email}</span>
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-slate-600 text-center mt-3">
-              Mot de passe unique : <span className="text-slate-400 font-mono">somelec2026</span>
-            </p>
-          </div>
         </div>
       </div>
     </div>
