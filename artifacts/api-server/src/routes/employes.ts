@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { employesTable } from "@workspace/db/schema";
 import { eq, or, ilike } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { z } from "zod/v4";
 
 const router = Router();
@@ -86,6 +87,35 @@ router.delete("/employes/:id", async (req, res) => {
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /employes/bulk — upsert list by matricule
+const BulkEmployeBody = z.array(z.object({
+  matricule: z.string().min(1),
+  nni: z.string().optional(),
+  nom: z.string().min(1),
+  fonction: z.string().optional(),
+}));
+
+router.post("/employes/bulk", async (req, res) => {
+  try {
+    const rows = BulkEmployeBody.parse(req.body);
+    if (!rows.length) return res.json({ inserted: 0, updated: 0 });
+    const result = await db.insert(employesTable)
+      .values(rows)
+      .onConflictDoUpdate({
+        target: employesTable.matricule,
+        set: {
+          nni: sql`excluded.nni`,
+          nom: sql`excluded.nom`,
+          fonction: sql`excluded.fonction`,
+        },
+      })
+      .returning();
+    res.json({ count: result.length });
+  } catch (err) {
+    res.status(400).json({ error: String(err) });
   }
 });
 

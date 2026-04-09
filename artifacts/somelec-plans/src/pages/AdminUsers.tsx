@@ -1,16 +1,19 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   useGetUsers, useUpdateUser, useDeleteUser,
   useGetDirections, useCreateDirection, useUpdateDirection, useDeleteDirection,
+  useGetEmployes, useCreateEmploye, useUpdateEmploye, useDeleteEmploye,
 } from "@workspace/api-client-react";
-import type { User } from "@workspace/api-client-react";
+import type { User, Employe } from "@workspace/api-client-react";
 import { useAuth, ROLE_LABELS } from "@/lib/auth-context";
 import { useLocation } from "wouter";
 import {
   Pencil, Trash2, X, Check, Loader2, Search, UserPlus, Shield,
-  Building2, Plus, AlertTriangle, Clock,
+  Building2, Plus, AlertTriangle, Clock, Users, Upload, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
 const ALL_ROLES = [
   "en_attente",
@@ -59,7 +62,15 @@ interface DirEditState {
   code: string;
 }
 
-type Tab = "utilisateurs" | "directions";
+type Tab = "utilisateurs" | "directions" | "employes";
+
+interface EmpEditState {
+  id: number | null;
+  matricule: string;
+  nni: string;
+  nom: string;
+  fonction: string;
+}
 
 export default function AdminUsers() {
   const [, navigate] = useLocation();
@@ -71,6 +82,13 @@ export default function AdminUsers() {
   const createDirection = useCreateDirection();
   const updateDirection = useUpdateDirection();
   const deleteDirection = useDeleteDirection();
+
+  const { data: employes, refetch: refetchEmps } = useGetEmployes({ q: "" });
+  const createEmploye = useCreateEmploye();
+  const updateEmploye = useUpdateEmploye();
+  const deleteEmploye = useDeleteEmploye();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [tab, setTab] = useState<Tab>("utilisateurs");
   const [search, setSearch] = useState("");
@@ -84,6 +102,14 @@ export default function AdminUsers() {
   const [savingDir, setSavingDir] = useState(false);
   const [deletingDir, setDeletingDir] = useState<number | null>(null);
   const [dirError, setDirError] = useState("");
+
+  const [empSearch, setEmpSearch] = useState("");
+  const [empEdit, setEmpEdit] = useState<EmpEditState | null>(null);
+  const [confirmDeleteEmp, setConfirmDeleteEmp] = useState<number | null>(null);
+  const [savingEmp, setSavingEmp] = useState(false);
+  const [deletingEmp, setDeletingEmp] = useState<number | null>(null);
+  const [importStatus, setImportStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [importing, setImporting] = useState(false);
 
   if (currentUser?.role !== "admin") {
     return (
@@ -166,6 +192,87 @@ export default function AdminUsers() {
     }
   };
 
+  /* ── Employé handlers ── */
+  const emptyEmp = (): EmpEditState => ({ id: null, matricule: "", nni: "", nom: "", fonction: "" });
+
+  const handleEmpSave = async () => {
+    if (!empEdit) return;
+    if (!empEdit.matricule.trim() || !empEdit.nom.trim()) return;
+    setSavingEmp(true);
+    try {
+      if (empEdit.id === null) {
+        await createEmploye.mutateAsync({ data: { matricule: empEdit.matricule.trim(), nni: empEdit.nni.trim() || undefined, nom: empEdit.nom.trim(), fonction: empEdit.fonction.trim() || undefined } });
+      } else {
+        await updateEmploye.mutateAsync({ id: empEdit.id, data: { matricule: empEdit.matricule.trim(), nni: empEdit.nni.trim() || undefined, nom: empEdit.nom.trim(), fonction: empEdit.fonction.trim() || undefined } });
+      }
+      await refetchEmps();
+      setEmpEdit(null);
+    } finally {
+      setSavingEmp(false);
+    }
+  };
+
+  const handleEmpDelete = async (id: number) => {
+    setDeletingEmp(id);
+    try {
+      await deleteEmploye.mutateAsync({ id });
+      await refetchEmps();
+      setConfirmDeleteEmp(null);
+    } finally {
+      setDeletingEmp(null);
+    }
+  };
+
+  const parseCSV = (text: string): Array<{ matricule: string; nni?: string; nom: string; fonction?: string }> => {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return [];
+    const delimiter = lines[0].includes(";") ? ";" : ",";
+    const headers = lines[0].split(delimiter).map(h => h.toLowerCase().replace(/[^a-z]/g, ""));
+    const rows: Array<{ matricule: string; nni?: string; nom: string; fonction?: string }> = [];
+    for (let i = 1; i < lines.length; i++) {
+      const vals = lines[i].split(delimiter);
+      const get = (key: string) => {
+        const idx = headers.findIndex(h => h === key || h.startsWith(key));
+        return idx >= 0 ? (vals[idx] ?? "").trim() : "";
+      };
+      const mat = get("matricule") || get("mat");
+      const nom = get("nom") || get("prenom");
+      if (mat && nom) rows.push({ matricule: mat, nni: get("nni") || undefined, nom, fonction: get("fonction") || get("poste") || get("fonction") || undefined });
+    }
+    return rows;
+  };
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportStatus(null);
+    try {
+      const text = await file.text();
+      const rows = parseCSV(text);
+      if (!rows.length) { setImportStatus({ type: "error", msg: "Aucun employé valide trouvé dans le fichier." }); return; }
+      const res = await fetch(`${BASE_URL}api/employes/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rows),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      await refetchEmps();
+      setImportStatus({ type: "success", msg: `${data.count} employé(s) importés / mis à jour avec succès.` });
+    } catch (err) {
+      setImportStatus({ type: "error", msg: `Erreur: ${String(err)}` });
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const filteredEmps = (employes ?? []).filter(e => {
+    const q = empSearch.toLowerCase();
+    return !q || e.nom.toLowerCase().includes(q) || e.matricule.toLowerCase().includes(q) || (e.nni ?? "").toLowerCase().includes(q) || (e.fonction ?? "").toLowerCase().includes(q);
+  });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -223,6 +330,19 @@ export default function AdminUsers() {
           <Building2 className="h-4 w-4" />
           Directions
           <span className="ml-1 text-xs text-muted-foreground">({directions?.length ?? 0})</span>
+        </button>
+        <button
+          onClick={() => setTab("employes")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
+            tab === "employes"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Users className="h-4 w-4" />
+          Employés
+          <span className="ml-1 text-xs text-muted-foreground">({employes?.length ?? 0})</span>
         </button>
       </div>
 
@@ -478,6 +598,181 @@ export default function AdminUsers() {
                             </button>
                             <button
                               onClick={() => { setConfirmDeleteDir(dir.id); setDirEdit(null); }}
+                              className="p-1.5 rounded-md hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors" title="Supprimer">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* ══════════════ ONGLET EMPLOYÉS ══════════════ */}
+      {tab === "employes" && (
+        <>
+          {/* Toolbar */}
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={empSearch}
+                onChange={e => setEmpSearch(e.target.value)}
+                placeholder="Rechercher par nom, matricule, NNI…"
+                className="w-full pl-10 pr-4 py-2.5 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setEmpEdit(emptyEmp()); setImportStatus(null); }}
+                className="flex items-center gap-1.5 px-3 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <Plus className="h-4 w-4" /> Ajouter
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+                className="flex items-center gap-1.5 px-3 py-2 border border-border hover:bg-muted rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+              >
+                {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Importer CSV
+              </button>
+              <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileImport} />
+            </div>
+          </div>
+
+          {/* Import format hint */}
+          <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-800">
+            <FileText className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+            <span>
+              <strong>Format CSV accepté :</strong> colonnes <code className="bg-blue-100 px-1 rounded">matricule</code>, <code className="bg-blue-100 px-1 rounded">nom</code>, <code className="bg-blue-100 px-1 rounded">nni</code> (optionnel), <code className="bg-blue-100 px-1 rounded">fonction</code> (optionnel). Séparateur virgule ou point-virgule. Les doublons de matricule sont mis à jour automatiquement.
+            </span>
+          </div>
+
+          {/* Import status */}
+          {importStatus && (
+            <div className={cn("flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium",
+              importStatus.type === "success" ? "bg-green-50 border border-green-200 text-green-800" : "bg-red-50 border border-red-200 text-red-700"
+            )}>
+              {importStatus.type === "success" ? <Check className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+              {importStatus.msg}
+              <button onClick={() => setImportStatus(null)} className="ml-auto p-0.5 hover:opacity-70"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          )}
+
+          {/* Add / Edit form */}
+          {empEdit && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 space-y-4">
+              <h3 className="text-sm font-semibold text-blue-900">
+                {empEdit.id === null ? "Ajouter un employé" : "Modifier l'employé"}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Matricule *</label>
+                  <input
+                    value={empEdit.matricule}
+                    onChange={e => setEmpEdit(s => s ? { ...s, matricule: e.target.value } : s)}
+                    placeholder="ex: MAT-001"
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">NNI</label>
+                  <input
+                    value={empEdit.nni}
+                    onChange={e => setEmpEdit(s => s ? { ...s, nni: e.target.value } : s)}
+                    placeholder="ex: 0123456789"
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Nom complet *</label>
+                  <input
+                    value={empEdit.nom}
+                    onChange={e => setEmpEdit(s => s ? { ...s, nom: e.target.value } : s)}
+                    placeholder="ex: Ahmed Ould Mohamed"
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Fonction</label>
+                  <input
+                    value={empEdit.fonction}
+                    onChange={e => setEmpEdit(s => s ? { ...s, fonction: e.target.value } : s)}
+                    placeholder="ex: Ingénieur électricien"
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleEmpSave} disabled={savingEmp || !empEdit.matricule.trim() || !empEdit.nom.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60">
+                  {savingEmp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  {empEdit.id === null ? "Créer" : "Enregistrer"}
+                </button>
+                <button onClick={() => setEmpEdit(null)}
+                  className="flex items-center gap-1.5 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">
+                  <X className="h-4 w-4" /> Annuler
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Employee table */}
+          <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Matricule</th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Nom</th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden md:table-cell">NNI</th>
+                  <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden lg:table-cell">Fonction</th>
+                  <th className="text-right px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredEmps.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-10 text-muted-foreground">
+                      {empSearch ? "Aucun employé trouvé." : "Aucun employé enregistré. Ajoutez-en ou importez un fichier CSV."}
+                    </td>
+                  </tr>
+                )}
+                {filteredEmps.map(emp => (
+                  <tr key={emp.id} className={cn("hover:bg-muted/30 transition-colors", empEdit?.id === emp.id && "bg-blue-50/50")}>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-mono font-bold">{emp.matricule}</span>
+                    </td>
+                    <td className="px-4 py-3 font-medium text-foreground">{emp.nom}</td>
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{emp.nni ?? <span className="text-muted-foreground/40">—</span>}</td>
+                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.fonction ?? <span className="text-muted-foreground/40">—</span>}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        {confirmDeleteEmp === emp.id ? (
+                          <>
+                            <span className="text-xs text-red-600 font-medium">Confirmer ?</span>
+                            <button onClick={() => handleEmpDelete(emp.id)} disabled={deletingEmp === emp.id}
+                              className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-60">
+                              {deletingEmp === emp.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Oui"}
+                            </button>
+                            <button onClick={() => setConfirmDeleteEmp(null)}
+                              className="px-3 py-1.5 border border-border hover:bg-muted rounded-md text-xs font-medium transition-colors">Non</button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => { setEmpEdit({ id: emp.id, matricule: emp.matricule, nni: emp.nni ?? "", nom: emp.nom, fonction: emp.fonction ?? "" }); setImportStatus(null); }}
+                              className="p-1.5 rounded-md hover:bg-blue-50 text-blue-600 hover:text-blue-700 transition-colors" title="Modifier">
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => { setConfirmDeleteEmp(emp.id); setEmpEdit(null); }}
                               className="p-1.5 rounded-md hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors" title="Supprimer">
                               <Trash2 className="h-4 w-4" />
                             </button>
