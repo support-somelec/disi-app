@@ -6,37 +6,67 @@ import { z } from "zod/v4";
 
 const router: IRouter = Router();
 
+const USER_SELECT = {
+  id: usersTable.id,
+  nom: usersTable.nom,
+  prenom: usersTable.prenom,
+  email: usersTable.email,
+  role: usersTable.role,
+  niveau: usersTable.niveau,
+  directionId: usersTable.directionId,
+  directionNom: directionsTable.nom,
+};
+
 async function getUserWithDirection(id: number) {
   const rows = await db
-    .select({
-      id: usersTable.id,
-      nom: usersTable.nom,
-      prenom: usersTable.prenom,
-      email: usersTable.email,
-      role: usersTable.role,
-      niveau: usersTable.niveau,
-      directionId: usersTable.directionId,
-      directionNom: directionsTable.nom,
-    })
+    .select(USER_SELECT)
     .from(usersTable)
     .leftJoin(directionsTable, eq(usersTable.directionId, directionsTable.id))
     .where(eq(usersTable.id, id));
   return rows[0] ?? null;
 }
 
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body as { email?: string; password?: string };
+    if (!email || !password) return res.status(400).json({ error: "Email et mot de passe requis." });
+    const rows = await db
+      .select({ ...USER_SELECT, password: usersTable.password })
+      .from(usersTable)
+      .leftJoin(directionsTable, eq(usersTable.directionId, directionsTable.id))
+      .where(eq(usersTable.email, email.toLowerCase().trim()));
+    const user = rows[0];
+    if (!user) return res.status(401).json({ error: "Aucun compte trouvé avec cet email." });
+    if (user.password !== password) return res.status(401).json({ error: "Mot de passe incorrect." });
+    const { password: _pw, ...safeUser } = user;
+    res.json(safeUser);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+router.put("/users/:id/password", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: "Champs requis." });
+    if (newPassword.length < 6) return res.status(400).json({ error: "Le nouveau mot de passe doit contenir au moins 6 caractères." });
+    const rows = await db.select({ password: usersTable.password }).from(usersTable).where(eq(usersTable.id, id));
+    if (!rows[0]) return res.status(404).json({ error: "Utilisateur non trouvé." });
+    if (rows[0].password !== currentPassword) return res.status(401).json({ error: "Mot de passe actuel incorrect." });
+    await db.update(usersTable).set({ password: newPassword }).where(eq(usersTable.id, id));
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 router.get("/users", async (_req, res) => {
   try {
     const users = await db
-      .select({
-        id: usersTable.id,
-        nom: usersTable.nom,
-        prenom: usersTable.prenom,
-        email: usersTable.email,
-        role: usersTable.role,
-        niveau: usersTable.niveau,
-        directionId: usersTable.directionId,
-        directionNom: directionsTable.nom,
-      })
+      .select(USER_SELECT)
       .from(usersTable)
       .leftJoin(directionsTable, eq(usersTable.directionId, directionsTable.id))
       .orderBy(usersTable.prenom);

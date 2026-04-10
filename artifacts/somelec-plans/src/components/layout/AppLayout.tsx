@@ -1,13 +1,132 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
-import { LayoutDashboard, FilePlus, User, LogOut, Shield, ChevronDown, BarChart2, Users } from "lucide-react";
+import { LayoutDashboard, FilePlus, User, LogOut, Shield, ChevronDown, BarChart2, Users, KeyRound, Eye, EyeOff, Check, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
+  const { changePassword } = useAuth();
+  const [current, setCurrent] = React.useState("");
+  const [next, setNext] = React.useState("");
+  const [confirm, setConfirm] = React.useState("");
+  const [showCurrent, setShowCurrent] = React.useState(false);
+  const [showNext, setShowNext] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [success, setSuccess] = React.useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (next.length < 6) { setError("Le nouveau mot de passe doit contenir au moins 6 caractères."); return; }
+    if (next !== confirm) { setError("Les mots de passe ne correspondent pas."); return; }
+    setLoading(true);
+    const result = await changePassword(current, next);
+    setLoading(false);
+    if (result.success) { setSuccess(true); setTimeout(onClose, 1500); }
+    else setError(result.error ?? "Erreur.");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Changer le mot de passe</h2>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {success ? (
+          <div className="flex flex-col items-center gap-3 py-6">
+            <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+              <Check className="h-6 w-6 text-green-600" />
+            </div>
+            <p className="text-green-700 font-medium">Mot de passe modifié avec succès !</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Mot de passe actuel</label>
+              <div className="relative">
+                <input
+                  type={showCurrent ? "text" : "password"}
+                  required
+                  value={current}
+                  onChange={e => setCurrent(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Nouveau mot de passe</label>
+              <div className="relative">
+                <input
+                  type={showNext ? "text" : "password"}
+                  required
+                  value={next}
+                  onChange={e => setNext(e.target.value)}
+                  placeholder="Minimum 6 caractères"
+                  className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button type="button" onClick={() => setShowNext(!showNext)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showNext ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirmer le nouveau mot de passe</label>
+              <input
+                type="password"
+                required
+                value={confirm}
+                onChange={e => setConfirm(e.target.value)}
+                placeholder="••••••••"
+                className="w-full pl-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
+                <X className="h-4 w-4 shrink-0" />
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                Modifier
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
   const { currentUser, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [showChangePassword, setShowChangePassword] = React.useState(false);
 
   const navItems = [
     { href: "/", label: "Tableau de Bord", icon: LayoutDashboard },
@@ -126,6 +245,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
                       <div className="p-2">
                         <button
+                          onClick={() => { setIsMenuOpen(false); setShowChangePassword(true); }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                        >
+                          <KeyRound className="h-4 w-4 text-gray-500" />
+                          Changer le mot de passe
+                        </button>
+                        <button
                           onClick={() => { setIsMenuOpen(false); handleLogout(); }}
                           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-600 hover:bg-red-50 transition-colors font-medium"
                         >
@@ -145,6 +271,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
+
+      {showChangePassword && <ChangePasswordDialog onClose={() => setShowChangePassword(false)} />}
     </div>
   );
 }
