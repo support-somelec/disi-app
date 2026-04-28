@@ -929,6 +929,18 @@ export default function PlanDetails() {
               <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4" /> {format(new Date(plan.dateDebut), "dd MMM yyyy", { locale: fr })}</span>
               <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> {plan.duree} Jours</span>
             </div>
+            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground/70 pt-1 border-t border-border/30">
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                Créé le {format(new Date(plan.createdAt), "dd MMM yyyy 'à' HH:mm", { locale: fr })}
+              </span>
+              {plan.updatedAt && plan.updatedAt !== plan.createdAt && (
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />
+                  Mis à jour le {format(new Date(plan.updatedAt), "dd MMM yyyy 'à' HH:mm", { locale: fr })}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className={cn("bg-muted/30 p-5 rounded-xl border min-w-[200px] space-y-3", isOverBudget ? "border-destructive/30 bg-destructive/5" : "border-border/50")}>
@@ -2231,14 +2243,16 @@ export default function PlanDetails() {
             </Card>
           )}
 
-          {/* Rejection note */}
-          {plan.statut === "rejete" && plan.commentaireRejet && (
-            <Card className="border-destructive/30 bg-destructive/5">
+          {/* Rejection note — shown regardless of current status so past comments remain visible */}
+          {plan.commentaireRejet && (
+            <Card className={plan.statut === "rejete" ? "border-destructive/30 bg-destructive/5" : "border-orange-200 bg-orange-50"}>
               <CardContent className="p-5">
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-destructive mt-0.5 shrink-0" />
+                  <AlertCircle className={`w-5 h-5 mt-0.5 shrink-0 ${plan.statut === "rejete" ? "text-destructive" : "text-orange-500"}`} />
                   <div>
-                    <h4 className="font-semibold text-destructive">Motif du rejet</h4>
+                    <h4 className={`font-semibold ${plan.statut === "rejete" ? "text-destructive" : "text-orange-700"}`}>
+                      {plan.statut === "rejete" ? "Motif du rejet" : "Commentaire de rejet (précédent)"}
+                    </h4>
                     <p className="text-sm text-foreground mt-1 leading-relaxed">{plan.commentaireRejet}</p>
                   </div>
                 </div>
