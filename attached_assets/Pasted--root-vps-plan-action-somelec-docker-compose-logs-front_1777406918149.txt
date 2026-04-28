@@ -1,0 +1,32 @@
+[root@vps-plan-action somelec]# docker compose logs frontend 2>&1 | tail -30
+somelec_frontend  | 2026/04/28 20:03:36 [emerg] 1#1: host not found in upstream "somelec_api" in /etc/nginx/conf.d/default.conf:7
+somelec_frontend  | nginx: [emerg] host not found in upstream "somelec_api" in /etc/nginx/conf.d/default.conf:7
+somelec_frontend  | /docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+somelec_frontend  | /docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+somelec_frontend  | /docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+somelec_frontend  | 10-listen-on-ipv6-by-default.sh: info: Getting the checksum of /etc/nginx/conf.d/default.conf
+somelec_frontend  | 10-listen-on-ipv6-by-default.sh: info: /etc/nginx/conf.d/default.conf differs from the packaged version
+somelec_frontend  | /docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+somelec_frontend  | /docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+somelec_frontend  | /docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+somelec_frontend  | /docker-entrypoint.sh: Configuration complete; ready for start up
+somelec_frontend  | 2026/04/28 20:03:39 [emerg] 1#1: host not found in upstream "somelec_api" in /etc/nginx/conf.d/default.conf:7
+somelec_frontend  | nginx: [emerg] host not found in upstream "somelec_api" in /etc/nginx/conf.d/default.conf:7
+somelec_frontend  | /docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+somelec_frontend  | /docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+somelec_frontend  | /docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+somelec_frontend  | 10-listen-on-ipv6-by-default.sh: info: Getting the checksum of /etc/nginx/conf.d/default.conf
+somelec_frontend  | 10-listen-on-ipv6-by-default.sh: info: /etc/nginx/conf.d/default.conf differs from the packaged version
+somelec_frontend  | /docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+somelec_frontend  | /docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+somelec_frontend  | /docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+somelec_frontend  | /docker-entrypoint.sh: Configuration complete; ready for start up
+somelec_frontend  | 2026/04/28 20:03:46 [notice] 1#1: using the "epoll" event method
+somelec_frontend  | 2026/04/28 20:03:46 [notice] 1#1: nginx/1.29.8
+somelec_frontend  | 2026/04/28 20:03:46 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0) 
+somelec_frontend  | 2026/04/28 20:03:46 [notice] 1#1: OS: Linux 5.14.0-654.el9.x86_64
+somelec_frontend  | 2026/04/28 20:03:46 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1024:524288
+somelec_frontend  | 2026/04/28 20:03:46 [notice] 1#1: start worker processes
+somelec_frontend  | 2026/04/28 20:03:46 [notice] 1#1: start worker process 29
+somelec_frontend  | 2026/04/28 20:03:46 [notice] 1#1: start worker process 30
+[root@vps-plan-action somelec]# 
