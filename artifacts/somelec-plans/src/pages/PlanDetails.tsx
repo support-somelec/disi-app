@@ -16,7 +16,7 @@ import {
   Calendar, Building, Clock, CheckCircle2, FileText, Activity,
   AlertCircle, FileDigit, Download, ShieldCheck, TrendingDown, Fuel,
   Package, Home, DollarSign, BadgeDollarSign, Loader2, ChevronRight,
-  Lock, FilePlus, Trash2, UploadCloud, PlayCircle, Hourglass, CheckCheck, Send, TriangleAlert, Car
+  Lock, FilePlus, Trash2, UploadCloud, PlayCircle, Hourglass, CheckCheck, Send, TriangleAlert, Car, MessageSquare
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
@@ -2259,6 +2259,50 @@ export default function PlanDetails() {
               </CardContent>
             </Card>
           )}
+
+          {/* Comment history */}
+          {(() => {
+            const comments = (plan as any).comments as Array<{ id: number; action: string; commentaire: string; userNom: string | null; statutAvant: string | null; createdAt: string }> | undefined;
+            if (!comments?.length) return null;
+            const STATUS_LABELS: Record<string, string> = {
+              brouillon: "Brouillon", en_attente_dc: "Attente DC", en_attente_ct: "Attente CT",
+              en_attente_dga: "Attente DGA", en_attente_dg: "Attente DG", approuve: "Approuvé",
+              rejete: "Rejeté", ouvert: "Ouvert", cloture: "Clôturé",
+            };
+            return (
+              <Card className="border-border/50">
+                <CardHeader className="pb-3 border-b border-border/50">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-primary" /> Historique des commentaires
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y divide-border/50">
+                    {comments.map(c => (
+                      <div key={c.id} className="p-4 flex items-start gap-3">
+                        <div className={`mt-0.5 w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold ${c.action === "rejeter" ? "bg-destructive" : "bg-success"}`}>
+                          {c.action === "rejeter" ? "✕" : "✓"}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c.action === "rejeter" ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success"}`}>
+                              {c.action === "rejeter" ? "Rejeté" : "Approuvé"}
+                            </span>
+                            {c.statutAvant && (
+                              <span className="text-xs text-muted-foreground">depuis : <span className="font-medium">{STATUS_LABELS[c.statutAvant] ?? c.statutAvant}</span></span>
+                            )}
+                            {c.userNom && <span className="text-xs text-muted-foreground">par <span className="font-medium">{c.userNom}</span></span>}
+                            <span className="text-xs text-muted-foreground ml-auto">{format(new Date(c.createdAt), "dd MMM yyyy HH:mm", { locale: fr })}</span>
+                          </div>
+                          <p className="text-sm text-foreground leading-relaxed">{c.commentaire}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
       </div>
 

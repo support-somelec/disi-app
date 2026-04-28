@@ -145,6 +145,17 @@ export const depenseDemandesTable = pgTable("depense_demandes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const planCommentsTable = pgTable("plan_comments", {
+  id: serial("id").primaryKey(),
+  planId: integer("plan_id").notNull().references(() => plansTable.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => usersTable.id),
+  userNom: text("user_nom"),
+  action: text("action").notNull(), // "approuver" | "rejeter"
+  statutAvant: text("statut_avant"),
+  commentaire: text("commentaire").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertPlanSchema = createInsertSchema(plansTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPlan = z.infer<typeof insertPlanSchema>;
 export type Plan = typeof plansTable.$inferSelect;

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable, materielItemsTable, materielDemandesTable, locationItemsTable, locationDemandesTable, carburantDemandesTable, depenseDemandesTable } from "@workspace/db/schema";
+import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable, materielItemsTable, materielDemandesTable, locationItemsTable, locationDemandesTable, carburantDemandesTable, depenseDemandesTable, planCommentsTable } from "@workspace/db/schema";
 import { eq, and, SQL, sql, inArray } from "drizzle-orm";
 import {
   CreatePlanBody,
@@ -128,12 +128,19 @@ async function getPlanWithDetails(planId: number) {
   const budgetTotal = moyens.reduce((sum, m) => sum + Number(m.budget), 0);
   const montantConsomme = moyens.reduce((sum, m) => sum + Number(m.montantConsomme), 0);
 
+  const comments = await db
+    .select()
+    .from(planCommentsTable)
+    .where(eq(planCommentsTable.planId, planId))
+    .orderBy(planCommentsTable.createdAt);
+
   return {
     ...plan,
     budgetTotal,
     montantConsomme,
     moyens: moyens.map(mapMoyen),
     attachments,
+    comments,
   };
 }
 
@@ -331,6 +338,22 @@ router.post("/plans/:id/validate", async (req, res) => {
     }
 
     await db.update(plansTable).set({ statut: newStatut, commentaireRejet, updatedAt: new Date() }).where(eq(plansTable.id, id));
+
+    // Save comment to history (any non-empty comment, for both approvals and rejections)
+    if (body.commentaire && body.commentaire.trim()) {
+      const validatorNom = body.validatedById
+        ? (await db.select({ nom: usersTable.nom }).from(usersTable).where(eq(usersTable.id, body.validatedById)))[0]?.nom ?? null
+        : null;
+      await db.insert(planCommentsTable).values({
+        planId: id,
+        userId: body.validatedById ?? null,
+        userNom: validatorNom,
+        action: body.action,
+        statutAvant: current.statut,
+        commentaire: body.commentaire.trim(),
+      });
+    }
+
     const plan = await getPlanWithDetails(id);
 
     // Send notifications (fire-and-forget)
