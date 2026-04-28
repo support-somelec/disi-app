@@ -2479,31 +2479,43 @@ export default function PlanDetails() {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Fuel className="w-5 h-5 text-orange-600" /> Demander du carburant</DialogTitle>
-            <DialogDescription>Indiquez le montant souhaité (partiel ou total du budget).</DialogDescription>
+            <DialogDescription>Indiquez le montant souhaité dans la limite du budget restant.</DialogDescription>
           </DialogHeader>
           {carburantDemandeDialog !== null && (() => {
             const m = moyens.find(mo => mo.id === carburantDemandeDialog);
-            return m ? (
+            if (!m) return null;
+            const totalDejaDemandeCarb = (carburantDemandesMap[m.id] ?? []).reduce((s, d) => s + d.montantDemande, 0);
+            const restantCarb = Math.max(0, Number(m.budget) - totalDejaDemandeCarb);
+            const montantSaisi = Number(carburantMontantInput);
+            const depasse = montantSaisi > restantCarb && restantCarb > 0;
+            return (
               <div className="space-y-3">
-                <div className="rounded-xl border bg-muted/30 p-3 text-sm">
+                <div className="rounded-xl border bg-muted/30 p-3 text-sm space-y-1">
                   <p className="font-semibold">{m.description}</p>
-                  <p className="text-muted-foreground text-xs mt-0.5">Budget : {formatCurrency(Number(m.budget))} — Consommé : {formatCurrency(Number(m.montantConsomme ?? 0))}</p>
+                  <p className="text-muted-foreground text-xs">Budget alloué : <span className="font-medium text-foreground">{formatCurrency(Number(m.budget))}</span></p>
+                  {totalDejaDemandeCarb > 0 && <p className="text-muted-foreground text-xs">Déjà demandé : <span className="font-medium text-orange-700">{formatCurrency(totalDejaDemandeCarb)}</span></p>}
+                  <p className={`text-xs font-semibold mt-1 ${restantCarb === 0 ? "text-destructive" : "text-emerald-700"}`}>Restant disponible : {formatCurrency(restantCarb)}</p>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Montant demandé (MRU)</label>
-                  <input type="number" min={0} max={Number(m.budget)} step={0.01}
-                    placeholder="Saisir le montant" value={carburantMontantInput}
-                    onChange={e => setCarburantMontantInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-                  />
-                </div>
+                {restantCarb === 0 ? (
+                  <p className="text-sm text-destructive font-medium text-center py-2">Budget entièrement utilisé pour ce moyen.</p>
+                ) : (
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Montant demandé (MRU) — max {formatCurrency(restantCarb)}</label>
+                    <input type="number" min={0} max={restantCarb} step={0.01}
+                      placeholder="Saisir le montant" value={carburantMontantInput}
+                      onChange={e => setCarburantMontantInput(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 ${depasse ? "border-destructive focus:ring-destructive/30" : "border-border focus:ring-orange-300"}`}
+                    />
+                    {depasse && <p className="text-xs text-destructive">Le montant dépasse le budget restant ({formatCurrency(restantCarb)}).</p>}
+                  </div>
+                )}
               </div>
-            ) : null;
+            );
           })()}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => { setCarburantDemandeDialog(null); setCarburantMontantInput(""); }} disabled={carburantDemLoading}>Annuler</Button>
             <Button className="bg-orange-600 hover:bg-orange-700 text-white"
-              disabled={carburantDemLoading || !Number(carburantMontantInput) || Number(carburantMontantInput) <= 0}
+              disabled={carburantDemLoading || !Number(carburantMontantInput) || Number(carburantMontantInput) <= 0 || (() => { const m = moyens.find(mo => mo.id === carburantDemandeDialog); if (!m) return true; const total = (carburantDemandesMap[m.id] ?? []).reduce((s, d) => s + d.montantDemande, 0); return Number(carburantMontantInput) > Math.max(0, Number(m.budget) - total); })()}
               onClick={() => carburantDemandeDialog !== null && handleDemanderCarburant(carburantDemandeDialog)}>
               {carburantDemLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
               Soumettre
@@ -2533,11 +2545,16 @@ export default function PlanDetails() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium flex items-center gap-1.5"><FileText className="w-4 h-4 text-orange-500" /> Décharge (facultatif)</label>
-                <label className={`flex items-center gap-3 cursor-pointer rounded-xl border-2 border-dashed px-4 py-3 transition-colors ${cadDechargeFile ? "border-orange-400 bg-orange-50" : "border-border hover:border-orange-300 bg-muted/30"}`}>
+                <label className={`block cursor-pointer rounded-xl border-2 border-dashed px-4 py-3 transition-colors ${cadDechargeFile ? "border-orange-400 bg-orange-50" : "border-border hover:border-orange-300 bg-muted/30"}`}>
                   <input type="file" className="hidden" onChange={e => setCadDechargeFile(e.target.files?.[0] ?? null)} />
-                  {cadDechargeFile ? <span className="text-sm text-orange-700 font-medium truncate flex-1">📎 {cadDechargeFile.name}</span>
-                    : <span className="text-sm text-muted-foreground">Cliquez pour joindre un fichier</span>}
-                  {cadDechargeFile && <button type="button" className="text-xs text-red-500 shrink-0" onClick={e => { e.preventDefault(); setCadDechargeFile(null); }}>✕</button>}
+                  {cadDechargeFile ? (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm text-orange-700 font-medium truncate min-w-0 flex-1">📎 {cadDechargeFile.name}</span>
+                      <button type="button" className="text-xs text-red-500 shrink-0 ml-2" onClick={e => { e.preventDefault(); setCadDechargeFile(null); }}>✕</button>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Cliquez pour joindre un fichier</span>
+                  )}
                 </label>
               </div>
             </div>
@@ -2631,19 +2648,31 @@ export default function PlanDetails() {
           </DialogHeader>
           {depenseDemandeDialog !== null && (() => {
             const m = moyens.find(mo => mo.id === depenseDemandeDialog);
-            return m ? (
+            if (!m) return null;
+            const totalDejaDemandeDep = (depenseDemandesMap[m.id] ?? []).reduce((s, d) => s + d.montantDemande, 0);
+            const restantDep = Math.max(0, Number(m.budget) - totalDejaDemandeDep);
+            const montantSaisiDep = Number(depenseMontantInput);
+            const depasseDep = montantSaisiDep > restantDep && restantDep > 0;
+            return (
               <div className="space-y-3">
-                <div className="rounded-xl border bg-muted/30 p-3 text-sm">
+                <div className="rounded-xl border bg-muted/30 p-3 text-sm space-y-1">
                   <p className="font-semibold">{m.description}</p>
-                  <p className="text-muted-foreground text-xs mt-0.5">Budget : {formatCurrency(Number(m.budget))} — Consommé : {formatCurrency(Number(m.montantConsomme ?? 0))}</p>
+                  <p className="text-muted-foreground text-xs">Budget alloué : <span className="font-medium text-foreground">{formatCurrency(Number(m.budget))}</span></p>
+                  {totalDejaDemandeDep > 0 && <p className="text-muted-foreground text-xs">Déjà demandé : <span className="font-medium text-orange-700">{formatCurrency(totalDejaDemandeDep)}</span></p>}
+                  <p className={`text-xs font-semibold ${restantDep === 0 ? "text-destructive" : "text-emerald-700"}`}>Restant disponible : {formatCurrency(restantDep)}</p>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Montant demandé (MRU)</label>
-                  <input type="number" min={0} step={0.01} placeholder="Montant" value={depenseMontantInput}
-                    onChange={e => setDepenseMontantInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                  />
-                </div>
+                {restantDep === 0 ? (
+                  <p className="text-sm text-destructive font-medium text-center py-2">Budget entièrement utilisé pour ce moyen.</p>
+                ) : (
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Montant demandé (MRU) — max {formatCurrency(restantDep)}</label>
+                    <input type="number" min={0} max={restantDep} step={0.01} placeholder="Montant" value={depenseMontantInput}
+                      onChange={e => setDepenseMontantInput(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 ${depasseDep ? "border-destructive focus:ring-destructive/30" : "border-border focus:ring-emerald-300"}`}
+                    />
+                    {depasseDep && <p className="text-xs text-destructive">Le montant dépasse le budget restant ({formatCurrency(restantDep)}).</p>}
+                  </div>
+                )}
                 <div className="space-y-1">
                   <label className="text-sm font-medium">Nom du bénéficiaire <span className="text-destructive">*</span></label>
                   <input type="text" placeholder="Nom complet" value={depenseNomBenef}
@@ -2659,12 +2688,12 @@ export default function PlanDetails() {
                   />
                 </div>
               </div>
-            ) : null;
+            );
           })()}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => { setDepenseDemandeDialog(null); setDepenseMontantInput(""); setDepenseNomBenef(""); setDepenseMatricule(""); }} disabled={depenseDemLoading}>Annuler</Button>
             <Button className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              disabled={depenseDemLoading || !Number(depenseMontantInput) || !depenseNomBenef.trim()}
+              disabled={depenseDemLoading || !Number(depenseMontantInput) || !depenseNomBenef.trim() || (() => { const m = moyens.find(mo => mo.id === depenseDemandeDialog); if (!m) return true; const total = (depenseDemandesMap[m.id] ?? []).reduce((s, d) => s + d.montantDemande, 0); return Number(depenseMontantInput) > Math.max(0, Number(m.budget) - total); })()}
               onClick={() => depenseDemandeDialog !== null && handleDemanderDepense(depenseDemandeDialog)}>
               {depenseDemLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
               Envoyer au DCGAI

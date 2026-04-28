@@ -407,6 +407,20 @@ router.post("/plans/:id/cloturer", async (req, res) => {
   }
 });
 
+// DELETE /plans/:id  (admin only — enforced client-side; server deletes unconditionally)
+router.delete("/plans/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await db.select({ id: plansTable.id }).from(plansTable).where(eq(plansTable.id, id));
+    if (!existing.length) return res.status(404).json({ error: "Plan non trouvé." });
+    await db.delete(plansTable).where(eq(plansTable.id, id));
+    res.status(204).send();
+  } catch (err) {
+    console.error(String(err));
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // GET /plans/:id/moyens
 router.get("/plans/:id/moyens", async (req, res) => {
   try {
