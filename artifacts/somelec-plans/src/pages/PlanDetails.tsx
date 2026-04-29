@@ -149,7 +149,7 @@ export default function PlanDetails() {
   const [cadMontantInput, setCadMontantInput] = useState("");
   const [cadDechargeFile, setCadDechargeFile] = useState<File | null>(null);
   const [cadLoading, setCadLoading] = useState(false);
-  const [cadDocGenerated, setCadDocGenerated] = useState(false);
+  const [cadDocGenerated, setCadDocGenerated] = useState<Set<number>>(new Set());
 
   // ── Dépenses workflow state (prime/logement/logistique/indemnite/autres) ──
   type DepenseDemande = { id: number; moyenId: number; statut: string; montantDemande: number; nomBeneficiaire: string; matriculeBeneficiaire?: string; batchRef?: string | null; montantPaye: number | null; pieceReference?: string; dcgaiValidatedAt?: string; dfcValidatedAt?: string; createdAt: string };
@@ -2029,10 +2029,25 @@ export default function PlanDetails() {
                         <div key={dem.id} className="border border-orange-200 rounded-lg bg-white p-3 space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-medium text-orange-700">Demande #{dem.id} — {dem.montantDemande.toLocaleString("fr-MR")} MRU</span>
-                            <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-orange-600 hover:bg-orange-700 text-white"
-                              onClick={() => { setCadValiderDialog({ moyenId: m.id, demandeId: dem.id, montantDemande: dem.montantDemande, createdAt: dem.createdAt }); setCadMontantInput(""); setCadDechargeFile(null); setCadDocGenerated(false); }}>
-                              <CheckCircle2 className="w-3 h-3" /> Valider
-                            </Button>
+                            <div className="flex gap-1.5 items-center">
+                              <Button size="sm"
+                                className={`h-6 text-xs gap-1 px-2 ${cadDocGenerated.has(dem.id) ? "bg-green-200 text-green-800 border border-green-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 text-white"}`}
+                                disabled={cadDocGenerated.has(dem.id)}
+                                onClick={() => generateValidationDoc({
+                                  docTitle: "Bon de Validation Carburant",
+                                  montant: dem.montantDemande,
+                                  dateRef: dem.createdAt,
+                                  docKey: `cad-carb-${dem.id}`,
+                                  onGenerated: () => setCadDocGenerated(prev => new Set([...prev, dem.id]))
+                                })}>
+                                {cadDocGenerated.has(dem.id) ? <><CheckCircle2 className="w-3 h-3" /> Généré</> : <><FileText className="w-3 h-3" /> Générer</>}
+                              </Button>
+                              <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-orange-600 hover:bg-orange-700 text-white"
+                                disabled={!cadDocGenerated.has(dem.id)}
+                                onClick={() => { setCadValiderDialog({ moyenId: m.id, demandeId: dem.id, montantDemande: dem.montantDemande, createdAt: dem.createdAt }); setCadMontantInput(""); setCadDechargeFile(null); }}>
+                                <CheckCircle2 className="w-3 h-3" /> Valider
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -2806,11 +2821,11 @@ export default function PlanDetails() {
       </Dialog>
 
       {/* ─── CAD: Valider demande carburant dialog ─── */}
-      <Dialog open={!!cadValiderDialog} onOpenChange={(open) => { if (!open) { setCadValiderDialog(null); setCadMontantInput(""); setCadDechargeFile(null); setCadDocGenerated(false); } }}>
+      <Dialog open={!!cadValiderDialog} onOpenChange={(open) => { if (!open) { setCadValiderDialog(null); setCadMontantInput(""); setCadDechargeFile(null); } }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Fuel className="w-5 h-5 text-orange-600" /> Valider — Demande carburant</DialogTitle>
-            <DialogDescription>Générez d'abord le bon carburant, puis saisissez le montant accordé.</DialogDescription>
+            <DialogDescription>Saisissez le montant accordé et joignez la décharge si disponible.</DialogDescription>
           </DialogHeader>
           {cadValiderDialog && (
             <div className="space-y-3">
@@ -2818,58 +2833,35 @@ export default function PlanDetails() {
                 <p className="text-orange-700">Montant demandé : <span className="font-bold">{cadValiderDialog.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
                 <p className="text-orange-600 text-xs mt-1">Demande #{cadValiderDialog.demandeId} — {new Date(cadValiderDialog.createdAt).toLocaleDateString("fr-FR")}</p>
               </div>
-
-              {/* ── Bouton génération document ── */}
-              <Button
-                type="button"
-                variant="outline"
-                className={`w-full gap-2 border-2 ${cadDocGenerated ? "border-green-500 text-green-700 bg-green-50 hover:bg-green-100" : "border-orange-400 text-orange-700 hover:bg-orange-50"}`}
-                onClick={generateCadBonCarburant}
-              >
-                {cadDocGenerated
-                  ? <><CheckCircle2 className="w-4 h-4" /> Bon généré — Générer à nouveau</>
-                  : <><FileText className="w-4 h-4" /> Générer le bon carburant (QR Code)</>
-                }
-              </Button>
-
-              {/* ── Formulaire de validation — visible seulement après génération ── */}
-              {cadDocGenerated && (
-                <>
-                  <div className="border-t pt-3 space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium">Montant validé (MRU)</label>
-                      <input type="number" min={0} step={0.01} placeholder="Montant accordé"
-                        value={cadMontantInput} onChange={e => setCadMontantInput(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-                      />
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Montant validé (MRU)</label>
+                <input type="number" min={0} step={0.01} placeholder="Montant accordé"
+                  value={cadMontantInput} onChange={e => setCadMontantInput(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium flex items-center gap-1.5"><FileText className="w-4 h-4 text-orange-500" /> Décharge (facultatif)</label>
+                <label className={`block cursor-pointer rounded-xl border-2 border-dashed px-4 py-3 transition-colors ${cadDechargeFile ? "border-orange-400 bg-orange-50" : "border-border hover:border-orange-300 bg-muted/30"}`}>
+                  <input type="file" className="hidden" onChange={e => setCadDechargeFile(e.target.files?.[0] ?? null)} />
+                  {cadDechargeFile ? (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm text-orange-700 font-medium truncate min-w-0 flex-1">📎 {cadDechargeFile.name}</span>
+                      <button type="button" className="text-xs text-red-500 shrink-0 ml-2" onClick={e => { e.preventDefault(); setCadDechargeFile(null); }}>✕</button>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium flex items-center gap-1.5"><FileText className="w-4 h-4 text-orange-500" /> Décharge (facultatif)</label>
-                      <label className={`block cursor-pointer rounded-xl border-2 border-dashed px-4 py-3 transition-colors ${cadDechargeFile ? "border-orange-400 bg-orange-50" : "border-border hover:border-orange-300 bg-muted/30"}`}>
-                        <input type="file" className="hidden" onChange={e => setCadDechargeFile(e.target.files?.[0] ?? null)} />
-                        {cadDechargeFile ? (
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-sm text-orange-700 font-medium truncate min-w-0 flex-1">📎 {cadDechargeFile.name}</span>
-                            <button type="button" className="text-xs text-red-500 shrink-0 ml-2" onClick={e => { e.preventDefault(); setCadDechargeFile(null); }}>✕</button>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">Cliquez pour joindre un fichier</span>
-                        )}
-                      </label>
-                    </div>
-                  </div>
-                </>
-              )}
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Cliquez pour joindre un fichier</span>
+                  )}
+                </label>
+              </div>
             </div>
           )}
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => { setCadValiderDialog(null); setCadMontantInput(""); setCadDechargeFile(null); setCadDocGenerated(false); }} disabled={cadLoading}>Annuler</Button>
-            {cadDocGenerated && (
-              <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={cadLoading || !Number(cadMontantInput)} onClick={handleCadValider}>
-                {cadLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-                Valider & Déduire du budget
-              </Button>
-            )}
+            <Button variant="outline" onClick={() => { setCadValiderDialog(null); setCadMontantInput(""); setCadDechargeFile(null); }} disabled={cadLoading}>Annuler</Button>
+            <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={cadLoading || !Number(cadMontantInput)} onClick={handleCadValider}>
+              {cadLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+              Valider & Déduire du budget
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
