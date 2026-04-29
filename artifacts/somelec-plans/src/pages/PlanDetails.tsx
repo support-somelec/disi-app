@@ -116,6 +116,7 @@ export default function PlanDetails() {
   const [daLoading, setDaLoading] = useState(false);
   // DCGAI state
   const [dcgaiValidating, setDcgaiValidating] = useState<number | null>(null);
+  const [dcgaiDocGenerated, setDcgaiDocGenerated] = useState<Set<string>>(new Set());
 
   // Location véhicule workflow state
   type LocItem = { id: number; typeEngin: string; nbJoursTotal: number; nbJoursRestants: number };
@@ -161,6 +162,7 @@ export default function PlanDetails() {
   const [dfcPayerDialog, setDfcPayerDialog] = useState<{ moyenId: number; demandeId: number; demande: DepenseDemande } | null>(null);
   const [dfcMontantInput, setDfcMontantInput] = useState("");
   const [dfcLoading, setDfcLoading] = useState(false);
+  const [dfcDocGenerated, setDfcDocGenerated] = useState(false);
   // Batch dialog (prime / indemnite_journaliere)
   const BATCH_DEPENSE_CATS = ["prime", "indemnite_journaliere"];
   const [primeBatchDialog, setPrimeBatchDialog] = useState<number | null>(null); // moyenId
@@ -170,6 +172,7 @@ export default function PlanDetails() {
   const [dfcBatchPayerDialog, setDfcBatchPayerDialog] = useState<{ moyenId: number; batchRef: string; dems: DepenseDemande[] } | null>(null);
   const [dfcBatchMontantInput, setDfcBatchMontantInput] = useState("");
   const [dfcBatchLoading, setDfcBatchLoading] = useState(false);
+  const [dfcBatchDocGenerated, setDfcBatchDocGenerated] = useState(false);
 
   const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
@@ -745,6 +748,83 @@ export default function PlanDetails() {
       if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur."); return; }
       await Promise.all([loadMaterielData(moyenId), refetchMoyens()]);
     } catch { alert("Erreur réseau."); } finally { setDcgaiValidating(null); }
+  };
+
+  const generateValidationDoc = async (opts: {
+    docTitle: string;
+    montant: number;
+    beneficiaire?: string;
+    dateRef?: string;
+    docKey: string;
+    onGenerated: () => void;
+  }) => {
+    if (!plan) return;
+    const planRef = plan.reference ?? `PLAN-${plan.id}`;
+    const qrData = `DOC-${opts.docKey}-${planRef}-${Date.now()}`;
+    const qrDataUrl = await QRCode.toDataURL(qrData, { width: 160, margin: 1, color: { dark: "#1a1a1a", light: "#ffffff" } });
+    const dateStr = opts.dateRef
+      ? new Date(opts.dateRef).toLocaleDateString("fr-FR", { year: "numeric", month: "long", day: "numeric" })
+      : new Date(plan.createdAt).toLocaleDateString("fr-FR", { year: "numeric", month: "long", day: "numeric" });
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>${opts.docTitle}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:Arial,sans-serif;background:#fff;color:#111;}
+      .page{width:21cm;min-height:18cm;margin:auto;padding:2cm;display:flex;flex-direction:column;gap:20px;}
+      .header{text-align:center;border-bottom:3px double #1a4db5;padding-bottom:14px;}
+      .header h1{font-size:18px;text-transform:uppercase;letter-spacing:2px;color:#1a4db5;}
+      .header .sub{font-size:13px;color:#555;margin-top:4px;}
+      .body{display:flex;gap:28px;align-items:flex-start;}
+      .info{flex:1;}
+      .info table{width:100%;border-collapse:collapse;}
+      .info table tr td{padding:8px 10px;font-size:13px;border-bottom:1px solid #eee;}
+      .info table tr td:first-child{font-weight:bold;color:#555;width:42%;}
+      .amount-box{background:#eff6ff;border:2px solid #1a4db5;border-radius:10px;padding:14px 18px;text-align:center;margin-top:16px;}
+      .amount-box .label{font-size:11px;text-transform:uppercase;color:#1a4db5;letter-spacing:1px;}
+      .amount-box .value{font-size:22px;font-weight:bold;color:#1e3a8a;margin-top:4px;}
+      .qr-block{display:flex;flex-direction:column;align-items:center;gap:8px;}
+      .qr-block img{width:130px;height:130px;border:1px solid #ddd;border-radius:6px;}
+      .qr-block .qr-label{font-size:10px;color:#888;text-align:center;max-width:130px;}
+      .footer{margin-top:auto;border-top:1px solid #ddd;padding-top:12px;display:flex;justify-content:space-between;font-size:11px;color:#888;}
+      .signature{border-top:1px solid #333;width:180px;text-align:center;padding-top:6px;font-size:11px;margin-top:40px;}
+      @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+    </style></head><body>
+    <div class="page">
+      <div class="header">
+        <h1>SOMELEC — ${opts.docTitle}</h1>
+        <div class="sub">Société Mauritanienne d'Électricité</div>
+      </div>
+      <div class="body">
+        <div class="info">
+          <table>
+            <tr><td>Référence plan</td><td><strong>${planRef}</strong></td></tr>
+            <tr><td>Titre du plan</td><td>${plan.titre}</td></tr>
+            <tr><td>Direction</td><td>${plan.directionNom ?? `Direction ${plan.directionId}`}</td></tr>
+            <tr><td>Date de création</td><td>${dateStr}</td></tr>
+            ${opts.beneficiaire ? `<tr><td>Bénéficiaire</td><td>${opts.beneficiaire}</td></tr>` : ""}
+          </table>
+          <div class="amount-box">
+            <div class="label">Montant demandé</div>
+            <div class="value">${opts.montant.toLocaleString("fr-MR")} MRU</div>
+          </div>
+        </div>
+        <div class="qr-block">
+          <img src="${qrDataUrl}" alt="QR Code" />
+          <div class="qr-label">Code unique de vérification<br/>${qrData}</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:24px;">
+        <div class="signature">Signature</div>
+      </div>
+      <div class="footer">
+        <span>Généré le ${new Date().toLocaleString("fr-FR")}</span>
+        <span>SOMELEC — Gestion des Plans d'Action</span>
+      </div>
+    </div>
+    <script>window.onload=()=>{window.print();}</script>
+    </body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
+    opts.onGenerated();
   };
 
   const generateCadBonCarburant = async () => {
@@ -1785,8 +1865,16 @@ export default function PlanDetails() {
                             </Button>
                             <Button
                               size="sm"
+                              className={`h-6 text-xs gap-1 px-2 ${dcgaiDocGenerated.has(`mat:${dem.id}`) ? "bg-green-200 text-green-800 border border-green-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 text-white"}`}
+                              disabled={dcgaiDocGenerated.has(`mat:${dem.id}`)}
+                              onClick={() => generateValidationDoc({ docTitle: "Bon de Validation DCGAI", montant: dem.montantTotal ?? 0, dateRef: dem.createdAt, docKey: `mat-${dem.id}`, onGenerated: () => setDcgaiDocGenerated(prev => new Set([...prev, `mat:${dem.id}`])) })}
+                            >
+                              {dcgaiDocGenerated.has(`mat:${dem.id}`) ? <><CheckCircle2 className="w-3 h-3" /> Généré</> : <><FileText className="w-3 h-3" /> Générer</>}
+                            </Button>
+                            <Button
+                              size="sm"
                               className="h-6 text-xs gap-1 px-2 bg-purple-700 hover:bg-purple-800 text-white"
-                              disabled={dcgaiValidating === dem.id}
+                              disabled={dcgaiValidating === dem.id || !dcgaiDocGenerated.has(`mat:${dem.id}`)}
                               onClick={() => handleDcgaiValider(m.id, dem.id)}
                             >
                               {dcgaiValidating === dem.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
@@ -1950,11 +2038,19 @@ export default function PlanDetails() {
                               <div className="flex items-center justify-between mb-1">
                                 <span className="text-xs font-semibold text-emerald-900">{dems.length} bénéficiaire(s) — Total : {total.toLocaleString("fr-MR")} MRU</span>
                                 {isPending ? (
-                                  <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                                    disabled={dcgaiBatchLoading === batchRef}
-                                    onClick={() => handleDcgaiBatchValider(m.id, batchRef)}>
-                                    {dcgaiBatchLoading === batchRef ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />} Valider tout
-                                  </Button>
+                                  <div className="flex gap-1.5 items-center">
+                                    <Button size="sm"
+                                      className={`h-6 text-xs gap-1 px-2 ${dcgaiDocGenerated.has(`batch:${batchRef}`) ? "bg-green-200 text-green-800 border border-green-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 text-white"}`}
+                                      disabled={dcgaiDocGenerated.has(`batch:${batchRef}`)}
+                                      onClick={() => generateValidationDoc({ docTitle: "Bon de Validation DCGAI", montant: total, docKey: `batch-${batchRef}`, onGenerated: () => setDcgaiDocGenerated(prev => new Set([...prev, `batch:${batchRef}`])) })}>
+                                      {dcgaiDocGenerated.has(`batch:${batchRef}`) ? <><CheckCircle2 className="w-3 h-3" /> Généré</> : <><FileText className="w-3 h-3" /> Générer</>}
+                                    </Button>
+                                    <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                      disabled={dcgaiBatchLoading === batchRef || !dcgaiDocGenerated.has(`batch:${batchRef}`)}
+                                      onClick={() => handleDcgaiBatchValider(m.id, batchRef)}>
+                                      {dcgaiBatchLoading === batchRef ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />} Valider tout
+                                    </Button>
+                                  </div>
                                 ) : (
                                   <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium", isDone && dems[0]?.statut === "payee" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700")}>
                                     {isDone && dems[0]?.statut === "payee" ? "Payée" : "En attente DFC"}
@@ -2005,11 +2101,19 @@ export default function PlanDetails() {
                               <p className="text-xs font-semibold text-emerald-900">{dem.nomBeneficiaire}{dem.matriculeBeneficiaire ? ` — ${dem.matriculeBeneficiaire}` : ""}</p>
                               <p className="text-xs text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
                             </div>
-                            <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                              disabled={dcgaiDepenseLoading === dem.id}
-                              onClick={() => handleDcgaiDepenseValider(m.id, dem.id)}>
-                              {dcgaiDepenseLoading === dem.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />} Valider
-                            </Button>
+                            <div className="flex gap-1.5 items-center">
+                              <Button size="sm"
+                                className={`h-6 text-xs gap-1 px-2 ${dcgaiDocGenerated.has(`dep:${dem.id}`) ? "bg-green-200 text-green-800 border border-green-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 text-white"}`}
+                                disabled={dcgaiDocGenerated.has(`dep:${dem.id}`)}
+                                onClick={() => generateValidationDoc({ docTitle: "Bon de Validation DCGAI", montant: dem.montantDemande, beneficiaire: dem.nomBeneficiaire + (dem.matriculeBeneficiaire ? ` (${dem.matriculeBeneficiaire})` : ""), dateRef: dem.createdAt, docKey: `dep-${dem.id}`, onGenerated: () => setDcgaiDocGenerated(prev => new Set([...prev, `dep:${dem.id}`])) })}>
+                                {dcgaiDocGenerated.has(`dep:${dem.id}`) ? <><CheckCircle2 className="w-3 h-3" /> Généré</> : <><FileText className="w-3 h-3" /> Générer</>}
+                              </Button>
+                              <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                disabled={dcgaiDepenseLoading === dem.id || !dcgaiDocGenerated.has(`dep:${dem.id}`)}
+                                onClick={() => handleDcgaiDepenseValider(m.id, dem.id)}>
+                                {dcgaiDepenseLoading === dem.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />} Valider
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -2854,11 +2958,11 @@ export default function PlanDetails() {
       </Dialog>
 
       {/* ─── DFC: Saisir paiement dialog ─── */}
-      <Dialog open={!!dfcPayerDialog} onOpenChange={(open) => { if (!open) { setDfcPayerDialog(null); setDfcMontantInput(""); } }}>
+      <Dialog open={!!dfcPayerDialog} onOpenChange={(open) => { if (!open) { setDfcPayerDialog(null); setDfcMontantInput(""); setDfcDocGenerated(false); } }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-blue-600" /> Saisir le paiement</DialogTitle>
-            <DialogDescription>Indiquez le montant réellement payé. Une pièce de paiement sera générée automatiquement.</DialogDescription>
+            <DialogDescription>Générez d'abord le document, puis saisissez le montant payé.</DialogDescription>
           </DialogHeader>
           {dfcPayerDialog && (
             <div className="space-y-3">
@@ -2867,18 +2971,32 @@ export default function PlanDetails() {
                 {dfcPayerDialog.demande.matriculeBeneficiaire && <p className="text-xs text-muted-foreground">Matricule : {dfcPayerDialog.demande.matriculeBeneficiaire}</p>}
                 <p className="text-xs text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dfcPayerDialog.demande.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Montant payé (MRU)</label>
-                <input type="number" min={0} step={0.01} placeholder="Montant effectivement payé"
-                  value={dfcMontantInput} onChange={e => setDfcMontantInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className={`w-full gap-2 border-2 ${dfcDocGenerated ? "border-green-500 text-green-700 bg-green-50 hover:bg-green-100" : "border-green-500 text-white bg-green-600 hover:bg-green-700"}`}
+                onClick={() => generateValidationDoc({ docTitle: "Bon de Paiement DFC", montant: dfcPayerDialog.demande.montantDemande, beneficiaire: dfcPayerDialog.demande.nomBeneficiaire + (dfcPayerDialog.demande.matriculeBeneficiaire ? ` (${dfcPayerDialog.demande.matriculeBeneficiaire})` : ""), dateRef: dfcPayerDialog.demande.createdAt, docKey: `dfc-${dfcPayerDialog.demandeId}`, onGenerated: () => setDfcDocGenerated(true) })}
+                disabled={dfcDocGenerated}
+              >
+                {dfcDocGenerated
+                  ? <><CheckCircle2 className="w-4 h-4" /> Document généré</>
+                  : <><FileText className="w-4 h-4" /> Générer le document (QR Code)</>
+                }
+              </Button>
+              {dfcDocGenerated && (
+                <div className="space-y-1 border-t pt-3">
+                  <label className="text-sm font-medium">Montant payé (MRU)</label>
+                  <input type="number" min={0} step={0.01} placeholder="Montant effectivement payé"
+                    value={dfcMontantInput} onChange={e => setDfcMontantInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  />
+                </div>
+              )}
             </div>
           )}
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => { setDfcPayerDialog(null); setDfcMontantInput(""); }} disabled={dfcLoading}>Annuler</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={dfcLoading || !Number(dfcMontantInput)} onClick={handleDfcPayer}>
+            <Button variant="outline" onClick={() => { setDfcPayerDialog(null); setDfcMontantInput(""); setDfcDocGenerated(false); }} disabled={dfcLoading}>Annuler</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={dfcLoading || !Number(dfcMontantInput) || !dfcDocGenerated} onClick={handleDfcPayer}>
               {dfcLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
               Enregistrer & Générer la pièce
             </Button>
@@ -2887,7 +3005,7 @@ export default function PlanDetails() {
       </Dialog>
 
       {/* ─── DFC: Saisir paiement BATCH (prime / indemnite) dialog ─── */}
-      <Dialog open={!!dfcBatchPayerDialog} onOpenChange={(open) => { if (!open) { setDfcBatchPayerDialog(null); setDfcBatchMontantInput(""); } }}>
+      <Dialog open={!!dfcBatchPayerDialog} onOpenChange={(open) => { if (!open) { setDfcBatchPayerDialog(null); setDfcBatchMontantInput(""); setDfcBatchDocGenerated(false); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-blue-600" /> Saisir le paiement groupé</DialogTitle>
@@ -2924,20 +3042,34 @@ export default function PlanDetails() {
                     </tfoot>
                   </table>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Montant total payé (MRU) <span className="text-destructive">*</span></label>
-                  <input type="number" min={0} step={0.01} placeholder="Montant effectivement payé"
-                    value={dfcBatchMontantInput} onChange={e => setDfcBatchMontantInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  />
-                  <p className="text-xs text-muted-foreground">Le PDF avec la liste des bénéficiaires sera généré après validation.</p>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={`w-full gap-2 border-2 ${dfcBatchDocGenerated ? "border-green-500 text-green-700 bg-green-50 hover:bg-green-100" : "border-green-500 text-white bg-green-600 hover:bg-green-700"}`}
+                  onClick={() => generateValidationDoc({ docTitle: "Bon de Paiement Groupé DFC", montant: totalDemande, docKey: `dfc-batch-${dfcBatchPayerDialog!.batchRef}`, onGenerated: () => setDfcBatchDocGenerated(true) })}
+                  disabled={dfcBatchDocGenerated}
+                >
+                  {dfcBatchDocGenerated
+                    ? <><CheckCircle2 className="w-4 h-4" /> Document généré</>
+                    : <><FileText className="w-4 h-4" /> Générer le document (QR Code)</>
+                  }
+                </Button>
+                {dfcBatchDocGenerated && (
+                  <div className="space-y-1 border-t pt-3">
+                    <label className="text-sm font-medium">Montant total payé (MRU) <span className="text-destructive">*</span></label>
+                    <input type="number" min={0} step={0.01} placeholder="Montant effectivement payé"
+                      value={dfcBatchMontantInput} onChange={e => setDfcBatchMontantInput(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                    <p className="text-xs text-muted-foreground">Le PDF avec la liste des bénéficiaires sera généré après validation.</p>
+                  </div>
+                )}
               </div>
             );
           })()}
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => { setDfcBatchPayerDialog(null); setDfcBatchMontantInput(""); }} disabled={dfcBatchLoading}>Annuler</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={dfcBatchLoading || !Number(dfcBatchMontantInput)} onClick={handleDfcBatchPayer}>
+            <Button variant="outline" onClick={() => { setDfcBatchPayerDialog(null); setDfcBatchMontantInput(""); setDfcBatchDocGenerated(false); }} disabled={dfcBatchLoading}>Annuler</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={dfcBatchLoading || !Number(dfcBatchMontantInput) || !dfcBatchDocGenerated} onClick={handleDfcBatchPayer}>
               {dfcBatchLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Download className="w-4 h-4 mr-2" />}
               Valider & Télécharger PDF
             </Button>
