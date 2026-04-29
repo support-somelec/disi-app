@@ -556,11 +556,16 @@ export default function PlanDetails() {
       setExpandedBenef(prev => ({ ...prev, [moyenId]: false }));
       return;
     }
-    try {
-      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/beneficiaires`);
-      const data = await res.json();
-      setBeneficiairesMap(prev => ({ ...prev, [moyenId]: data }));
-    } catch { /* ignore */ }
+    const moyen = moyens.find(m => m.id === moyenId);
+    if (moyen?.categorie === "prime" || moyen?.categorie === "indemnite_journaliere") {
+      await loadDepenseData(moyenId);
+    } else {
+      try {
+        const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/beneficiaires`);
+        const data = await res.json();
+        setBeneficiairesMap(prev => ({ ...prev, [moyenId]: data }));
+      } catch { /* ignore */ }
+    }
     setExpandedBenef(prev => ({ ...prev, [moyenId]: true }));
   };
 
@@ -1293,7 +1298,7 @@ export default function PlanDetails() {
                               onClick={() => toggleBeneficiaires(m.id)}
                             >
                               {expandedBenef[m.id] ? "Masquer" : "Voir"} bénéficiaires
-                              {beneficiairesMap[m.id] ? ` (${beneficiairesMap[m.id].length})` : ""}
+                              {depenseDemandesMap[m.id] ? ` (${depenseDemandesMap[m.id].length})` : ""}
                             </button>
                           )}
                           {/* Liste matériel for materiel */}
@@ -1336,26 +1341,38 @@ export default function PlanDetails() {
                               )}
                             </div>
                           )}
-                          {(m.categorie === "indemnite_journaliere" || m.categorie === "prime") && expandedBenef[m.id] && beneficiairesMap[m.id] && (
+                          {(m.categorie === "indemnite_journaliere" || m.categorie === "prime") && expandedBenef[m.id] && depenseDemandesMap[m.id] && (
                             <div className="mt-2 border rounded-lg overflow-hidden">
                               <table className="w-full text-xs">
                                 <thead className="bg-muted/40">
                                   <tr>
                                     <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">NOM</th>
                                     <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">MATRIC.</th>
-                                    <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">NNI</th>
                                     <th className="px-2 py-1.5 text-right font-semibold text-muted-foreground">MONTANT</th>
+                                    <th className="px-2 py-1.5 text-center font-semibold text-muted-foreground">STATUT</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y">
-                                  {beneficiairesMap[m.id].length === 0 ? (
-                                    <tr><td colSpan={4} className="px-2 py-2 text-center text-muted-foreground">Aucun bénéficiaire.</td></tr>
-                                  ) : beneficiairesMap[m.id].map((b, bi) => (
+                                  {depenseDemandesMap[m.id].length === 0 ? (
+                                    <tr><td colSpan={4} className="px-2 py-2 text-center text-muted-foreground">Aucune demande enregistrée.</td></tr>
+                                  ) : depenseDemandesMap[m.id].map((b, bi) => (
                                     <tr key={bi} className="bg-white">
-                                      <td className="px-2 py-1.5 font-medium">{b.nom}</td>
-                                      <td className="px-2 py-1.5 text-muted-foreground">{b.matricule ?? "—"}</td>
-                                      <td className="px-2 py-1.5 text-muted-foreground">{b.nni ?? "—"}</td>
-                                      <td className="px-2 py-1.5 text-right font-semibold text-primary">{b.montant.toLocaleString("fr-MR")} MRU</td>
+                                      <td className="px-2 py-1.5 font-medium">{b.nomBeneficiaire}</td>
+                                      <td className="px-2 py-1.5 text-muted-foreground">{b.matriculeBeneficiaire ?? "—"}</td>
+                                      <td className="px-2 py-1.5 text-right font-semibold text-primary">{b.montantDemande.toLocaleString("fr-MR")} MRU</td>
+                                      <td className="px-2 py-1.5 text-center">
+                                        <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                          b.statut === "paye" ? "bg-green-100 text-green-700" :
+                                          b.statut === "validee_dfc" ? "bg-purple-100 text-purple-700" :
+                                          b.statut === "validee_dcgai" ? "bg-blue-100 text-blue-700" :
+                                          "bg-yellow-100 text-yellow-700"
+                                        }`}>
+                                          {b.statut === "paye" ? "Payé" :
+                                           b.statut === "validee_dfc" ? "Validé DFC" :
+                                           b.statut === "validee_dcgai" ? "Validé DCGAI" :
+                                           "En attente"}
+                                        </span>
+                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
