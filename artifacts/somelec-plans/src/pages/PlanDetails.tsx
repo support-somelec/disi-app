@@ -1362,15 +1362,13 @@ export default function PlanDetails() {
                                       <td className="px-2 py-1.5 text-right font-semibold text-primary">{b.montantDemande.toLocaleString("fr-MR")} MRU</td>
                                       <td className="px-2 py-1.5 text-center">
                                         <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                                          b.statut === "paye" ? "bg-green-100 text-green-700" :
-                                          b.statut === "validee_dfc" ? "bg-purple-100 text-purple-700" :
-                                          b.statut === "validee_dcgai" ? "bg-blue-100 text-blue-700" :
+                                          b.statut === "payee" ? "bg-green-100 text-green-700" :
+                                          b.statut === "en_attente_dfc" ? "bg-blue-100 text-blue-700" :
                                           "bg-yellow-100 text-yellow-700"
                                         }`}>
-                                          {b.statut === "paye" ? "Payé" :
-                                           b.statut === "validee_dfc" ? "Validé DFC" :
-                                           b.statut === "validee_dcgai" ? "Validé DCGAI" :
-                                           "En attente"}
+                                          {b.statut === "payee" ? "Payé" :
+                                           b.statut === "en_attente_dfc" ? "Validé DCGAI" :
+                                           "En attente DCGAI"}
                                         </span>
                                       </td>
                                     </tr>
