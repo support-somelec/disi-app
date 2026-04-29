@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import * as XLSX from "xlsx";
 import QRCode from "qrcode";
 import { useRoute, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,7 +18,8 @@ import {
   Calendar, Building, Clock, CheckCircle2, FileText, Activity,
   AlertCircle, FileDigit, Download, ShieldCheck, TrendingDown, Fuel,
   Package, Home, DollarSign, BadgeDollarSign, Loader2, ChevronRight,
-  Lock, FilePlus, Trash2, UploadCloud, PlayCircle, Hourglass, CheckCheck, Send, TriangleAlert, Car, MessageSquare
+  Lock, FilePlus, Trash2, UploadCloud, PlayCircle, Hourglass, CheckCheck, Send, TriangleAlert, Car, MessageSquare,
+  Search, Users, FileSpreadsheet, X, Plus
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
@@ -165,8 +167,16 @@ export default function PlanDetails() {
   const [dfcDocGenerated, setDfcDocGenerated] = useState(false);
   // Batch dialog (prime / indemnite_journaliere)
   const BATCH_DEPENSE_CATS = ["prime", "indemnite_journaliere"];
+  type PrimeBatchBenef = { nom: string; matricule: string; montant: string };
+  type EmployeResult = { id: number; matricule: string; nni: string | null; nom: string; fonction: string | null };
   const [primeBatchDialog, setPrimeBatchDialog] = useState<number | null>(null); // moyenId
-  const [primeBatchMontants, setPrimeBatchMontants] = useState<Record<number, string>>({}); // benefId -> montant string
+  const [primeBatchBenefs, setPrimeBatchBenefs] = useState<PrimeBatchBenef[]>([]);
+  const [primeBatchNewBenef, setPrimeBatchNewBenef] = useState({ nom: "", matricule: "", montant: "" });
+  const [primeBatchEmpSearch, setPrimeBatchEmpSearch] = useState("");
+  const [primeBatchSearchResults, setPrimeBatchSearchResults] = useState<EmployeResult[]>([]);
+  const [primeBatchSearchLoading, setPrimeBatchSearchLoading] = useState(false);
+  const primeBatchSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const primeBatchExcelRef = useRef<HTMLInputElement>(null);
   const [primeBatchLoading, setPrimeBatchLoading] = useState(false);
   const [dcgaiBatchLoading, setDcgaiBatchLoading] = useState<string | null>(null); // batchRef being validated
   const [dfcBatchPayerDialog, setDfcBatchPayerDialog] = useState<{ moyenId: number; batchRef: string; dems: DepenseDemande[] } | null>(null);
@@ -305,13 +315,62 @@ export default function PlanDetails() {
     finally { setDfcLoading(false); }
   };
 
+  const searchPrimeBatchEmployees = (q: string) => {
+    if (primeBatchSearchTimer.current) clearTimeout(primeBatchSearchTimer.current);
+    if (!q.trim()) { setPrimeBatchSearchResults([]); return; }
+    primeBatchSearchTimer.current = setTimeout(async () => {
+      setPrimeBatchSearchLoading(true);
+      try {
+        const res = await fetch(`${BASE_URL}api/employes?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        setPrimeBatchSearchResults(data);
+      } catch { setPrimeBatchSearchResults([]); }
+      setPrimeBatchSearchLoading(false);
+    }, 300);
+  };
+
+  const addPrimeBatchFromEmployee = (emp: EmployeResult) => {
+    if (primeBatchBenefs.find(b => b.nom === emp.nom && b.matricule === emp.matricule)) return;
+    setPrimeBatchBenefs(prev => [...prev, { nom: emp.nom, matricule: emp.matricule, montant: "" }]);
+    setPrimeBatchEmpSearch("");
+    setPrimeBatchSearchResults([]);
+  };
+
+  const handlePrimeBatchExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(ev.target?.result, { type: "binary" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        const extracted = rows.map(r => {
+          const get = (keys: string[]) => { for (const k of keys) { const val = r[k] ?? r[k.toLowerCase()] ?? r[k.toUpperCase()]; if (val !== undefined && val !== "") return String(val); } return ""; };
+          return { nom: get(["NOM", "nom", "Nom", "NAME"]), matricule: get(["MATRICULE", "matricule", "Matricule"]), montant: get(["MONTANT", "montant", "Montant", "AMOUNT"]) };
+        }).filter(b => b.nom);
+        setPrimeBatchBenefs(prev => [...prev, ...extracted]);
+      } catch { alert("Erreur lors de la lecture du fichier Excel."); }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = "";
+  };
+
+  const resetPrimeBatchDialog = () => {
+    setPrimeBatchDialog(null);
+    setPrimeBatchBenefs([]);
+    setPrimeBatchNewBenef({ nom: "", matricule: "", montant: "" });
+    setPrimeBatchEmpSearch("");
+    setPrimeBatchSearchResults([]);
+  };
+
   const handleDemanderDepenseBatch = async (moyenId: number) => {
     if (!currentUser) return;
-    const benefs = beneficiairesMap[moyenId] ?? [];
-    const lignes = benefs.map(b => ({
+    if (primeBatchBenefs.length === 0) { alert("Ajoutez au moins un bénéficiaire."); return; }
+    const lignes = primeBatchBenefs.map(b => ({
       nomBeneficiaire: b.nom,
-      matriculeBeneficiaire: b.matricule ?? undefined,
-      montantDemande: Number(primeBatchMontants[b.id] ?? 0),
+      matriculeBeneficiaire: b.matricule || undefined,
+      montantDemande: Number(b.montant),
     }));
     if (lignes.some(l => !l.montantDemande || l.montantDemande <= 0)) { alert("Veuillez saisir un montant valide pour chaque bénéficiaire."); return; }
     setPrimeBatchLoading(true);
@@ -323,8 +382,7 @@ export default function PlanDetails() {
       });
       if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
       await loadDepenseData(moyenId);
-      setPrimeBatchDialog(null);
-      setPrimeBatchMontants({});
+      resetPrimeBatchDialog();
     } catch { alert("Erreur réseau"); }
     finally { setPrimeBatchLoading(false); }
   };
@@ -2825,24 +2883,81 @@ export default function PlanDetails() {
       </Dialog>
 
       {/* ─── Direction: Demande dépense BATCH (prime / indemnite_journaliere) dialog ─── */}
-      <Dialog open={primeBatchDialog !== null} onOpenChange={(open) => { if (!open) { setPrimeBatchDialog(null); setPrimeBatchMontants({}); } }}>
-        <DialogContent className="sm:max-w-lg">
+      <Dialog open={primeBatchDialog !== null} onOpenChange={(open) => { if (!open) resetPrimeBatchDialog(); }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-emerald-600" /> Demande de dépense — Liste des bénéficiaires</DialogTitle>
-            <DialogDescription>Saisissez le montant pour chaque bénéficiaire puis envoyez au DCGAI.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-emerald-600" /> Demande de dépense — Bénéficiaires</DialogTitle>
+            <DialogDescription>Ajoutez les bénéficiaires, saisissez leurs montants puis envoyez au DCGAI.</DialogDescription>
           </DialogHeader>
           {primeBatchDialog !== null && (() => {
             const m = moyens.find(mo => mo.id === primeBatchDialog);
-            const benefs = beneficiairesMap[primeBatchDialog] ?? [];
             return m ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="rounded-xl border bg-muted/30 p-3 text-sm">
                   <p className="font-semibold">{m.description}</p>
                   <p className="text-muted-foreground text-xs mt-0.5">{CATEGORIE_LABELS[m.categorie]?.label ?? m.categorie} — Budget : {formatCurrency(Number(m.budget))}</p>
                 </div>
-                {benefs.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic text-center py-4">Aucun bénéficiaire associé à ce moyen.</p>
-                ) : (
+
+                {/* Recherche employé */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Rechercher un employé</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      className="w-full pl-9 pr-8 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                      placeholder="Matricule, NNI ou nom..."
+                      value={primeBatchEmpSearch}
+                      onChange={e => { setPrimeBatchEmpSearch(e.target.value); searchPrimeBatchEmployees(e.target.value); }}
+                    />
+                    {primeBatchEmpSearch && (
+                      <button onClick={() => { setPrimeBatchEmpSearch(""); setPrimeBatchSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  {primeBatchSearchLoading && <p className="text-xs text-muted-foreground">Recherche...</p>}
+                  {primeBatchSearchResults.length > 0 && (
+                    <ul className="border rounded-lg overflow-hidden divide-y bg-white shadow-sm max-h-40 overflow-y-auto">
+                      {primeBatchSearchResults.map(emp => (
+                        <li key={emp.id} className="px-3 py-2 flex items-center justify-between hover:bg-muted/30 cursor-pointer" onClick={() => addPrimeBatchFromEmployee(emp)}>
+                          <div>
+                            <span className="text-sm font-medium">{emp.nom}</span>
+                            <span className="text-xs text-muted-foreground ml-2">{emp.matricule}{emp.nni ? ` · ${emp.nni}` : ""}</span>
+                            {emp.fonction && <span className="text-xs text-muted-foreground ml-2">— {emp.fonction}</span>}
+                          </div>
+                          <Plus className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Saisie manuelle */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Saisie manuelle</label>
+                  <div className="flex gap-2">
+                    <input className="flex-1 px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" placeholder="Nom *" value={primeBatchNewBenef.nom} onChange={e => setPrimeBatchNewBenef(p => ({ ...p, nom: e.target.value }))} />
+                    <input className="w-32 px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" placeholder="Matricule" value={primeBatchNewBenef.matricule} onChange={e => setPrimeBatchNewBenef(p => ({ ...p, matricule: e.target.value }))} />
+                    <input type="number" className="w-32 px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" placeholder="Montant *" value={primeBatchNewBenef.montant} onChange={e => setPrimeBatchNewBenef(p => ({ ...p, montant: e.target.value }))} />
+                    <Button type="button" size="sm" className="px-3 h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      disabled={!primeBatchNewBenef.nom || !primeBatchNewBenef.montant}
+                      onClick={() => { if (!primeBatchNewBenef.nom || !primeBatchNewBenef.montant) return; setPrimeBatchBenefs(p => [...p, { ...primeBatchNewBenef }]); setPrimeBatchNewBenef({ nom: "", matricule: "", montant: "" }); }}>
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Import Excel */}
+                <div className="flex items-center gap-2">
+                  <input ref={primeBatchExcelRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handlePrimeBatchExcel} />
+                  <Button type="button" variant="outline" size="sm" className="gap-2 text-xs" onClick={() => primeBatchExcelRef.current?.click()}>
+                    <FileSpreadsheet className="w-4 h-4" /> Importer Excel
+                  </Button>
+                  <span className="text-xs text-muted-foreground">Colonnes : NOM, MATRICULE, MONTANT</span>
+                </div>
+
+                {/* Liste des bénéficiaires ajoutés */}
+                {primeBatchBenefs.length > 0 && (
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-emerald-50">
@@ -2850,42 +2965,51 @@ export default function PlanDetails() {
                           <th className="px-3 py-2 text-left font-semibold text-emerald-800 text-xs">Bénéficiaire</th>
                           <th className="px-3 py-2 text-left font-semibold text-emerald-800 text-xs">Matricule</th>
                           <th className="px-3 py-2 text-left font-semibold text-emerald-800 text-xs w-36">Montant (MRU)</th>
+                          <th className="px-2 py-2"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
-                        {benefs.map(b => (
-                          <tr key={b.id} className="bg-white">
-                            <td className="px-3 py-2 font-medium text-sm">{b.nom}</td>
-                            <td className="px-3 py-2 text-muted-foreground text-xs">{b.matricule ?? "—"}</td>
-                            <td className="px-3 py-2">
-                              <input
-                                type="number" min={0} step={0.01} placeholder="0"
-                                value={primeBatchMontants[b.id] ?? ""}
-                                onChange={e => setPrimeBatchMontants(prev => ({ ...prev, [b.id]: e.target.value }))}
+                        {primeBatchBenefs.map((b, i) => (
+                          <tr key={i} className="bg-white">
+                            <td className="px-3 py-1.5 font-medium text-sm">{b.nom}</td>
+                            <td className="px-3 py-1.5 text-muted-foreground text-xs">{b.matricule || "—"}</td>
+                            <td className="px-3 py-1.5">
+                              <input type="number" min={0} step={0.01} placeholder="0"
+                                value={b.montant}
+                                onChange={e => setPrimeBatchBenefs(prev => prev.map((x, j) => j === i ? { ...x, montant: e.target.value } : x))}
                                 className="w-full px-2 py-1 rounded border border-border text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
                               />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <button onClick={() => setPrimeBatchBenefs(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot className="bg-emerald-50/60">
                         <tr>
-                          <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-emerald-800">Total</td>
+                          <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-emerald-800">Total ({primeBatchBenefs.length} bénéficiaire{primeBatchBenefs.length > 1 ? "s" : ""})</td>
                           <td className="px-3 py-2 text-sm font-bold text-emerald-900">
-                            {benefs.reduce((s, b) => s + (Number(primeBatchMontants[b.id] ?? 0) || 0), 0).toLocaleString("fr-MR")} MRU
+                            {primeBatchBenefs.reduce((s, b) => s + (Number(b.montant) || 0), 0).toLocaleString("fr-MR")} MRU
                           </td>
+                          <td></td>
                         </tr>
                       </tfoot>
                     </table>
                   </div>
                 )}
+                {primeBatchBenefs.length === 0 && (
+                  <p className="text-sm text-muted-foreground italic text-center py-3 border rounded-lg">Aucun bénéficiaire ajouté. Recherchez ou saisissez manuellement.</p>
+                )}
               </div>
             ) : null;
           })()}
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => { setPrimeBatchDialog(null); setPrimeBatchMontants({}); }} disabled={primeBatchLoading}>Annuler</Button>
+            <Button variant="outline" onClick={resetPrimeBatchDialog} disabled={primeBatchLoading}>Annuler</Button>
             <Button className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              disabled={primeBatchLoading || (beneficiairesMap[primeBatchDialog ?? -1] ?? []).length === 0}
+              disabled={primeBatchLoading || primeBatchBenefs.length === 0}
               onClick={() => primeBatchDialog !== null && handleDemanderDepenseBatch(primeBatchDialog)}>
               {primeBatchLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
               Envoyer au DCGAI
