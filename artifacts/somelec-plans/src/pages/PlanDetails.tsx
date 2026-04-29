@@ -1413,7 +1413,7 @@ export default function PlanDetails() {
                               <Button
                                 size="sm" variant="outline"
                                 className="h-7 text-xs gap-1 px-2 border-orange-300 text-orange-700 hover:bg-orange-50"
-                                onClick={() => { setCarburantMontantInput(""); setCarburantDemandeDialog(m.id); }}
+                                onClick={async () => { setCarburantMontantInput(""); await loadCarburantData(m.id); setCarburantDemandeDialog(m.id); }}
                               >
                                 <Fuel className="w-3 h-3" /> Dem. carburant
                               </Button>
@@ -1424,15 +1424,7 @@ export default function PlanDetails() {
                                 <Button
                                   size="sm" variant="outline"
                                   className="h-7 text-xs gap-1 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                                  onClick={async () => {
-                                    if (!beneficiairesMap[m.id]) {
-                                      try {
-                                        const r = await fetch(`${BASE_URL}api/plans/${id}/moyens/${m.id}/beneficiaires`);
-                                        const data = await r.json();
-                                        setBeneficiairesMap(prev => ({ ...prev, [m.id]: data }));
-                                      } catch { /* ignore */ }
-                                    }
-                                    setPrimeBatchMontants({});
+                                  onClick={() => {
                                     setPrimeBatchDialog(m.id);
                                   }}
                                 >
