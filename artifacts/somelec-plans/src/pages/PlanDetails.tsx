@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import QRCode from "qrcode";
 import { useRoute, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -141,10 +142,11 @@ export default function PlanDetails() {
   const [carburantDemandeDialog, setCarburantDemandeDialog] = useState<number | null>(null);
   const [carburantMontantInput, setCarburantMontantInput] = useState("");
   const [carburantDemLoading, setCarburantDemLoading] = useState(false);
-  const [cadValiderDialog, setCadValiderDialog] = useState<{ moyenId: number; demandeId: number; montantDemande: number } | null>(null);
+  const [cadValiderDialog, setCadValiderDialog] = useState<{ moyenId: number; demandeId: number; montantDemande: number; createdAt: string } | null>(null);
   const [cadMontantInput, setCadMontantInput] = useState("");
   const [cadDechargeFile, setCadDechargeFile] = useState<File | null>(null);
   const [cadLoading, setCadLoading] = useState(false);
+  const [cadDocGenerated, setCadDocGenerated] = useState(false);
 
   // ── Dépenses workflow state (prime/logement/logistique/indemnite/autres) ──
   type DepenseDemande = { id: number; moyenId: number; statut: string; montantDemande: number; nomBeneficiaire: string; matriculeBeneficiaire?: string; batchRef?: string | null; montantPaye: number | null; pieceReference?: string; dcgaiValidatedAt?: string; dfcValidatedAt?: string; createdAt: string };
@@ -743,6 +745,73 @@ export default function PlanDetails() {
       if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur."); return; }
       await Promise.all([loadMaterielData(moyenId), refetchMoyens()]);
     } catch { alert("Erreur réseau."); } finally { setDcgaiValidating(null); }
+  };
+
+  const generateCadBonCarburant = async () => {
+    if (!cadValiderDialog || !plan) return;
+    const planRef = plan.reference ?? `PLAN-${plan.id}`;
+    const qrData = `CARB-${cadValiderDialog.demandeId}-${planRef}-${Date.now()}`;
+    const qrDataUrl = await QRCode.toDataURL(qrData, { width: 160, margin: 1, color: { dark: "#1a1a1a", light: "#ffffff" } });
+    const dateStr = new Date(cadValiderDialog.createdAt).toLocaleDateString("fr-FR", { year: "numeric", month: "long", day: "numeric" });
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Bon Carburant — ${planRef}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:Arial,sans-serif;background:#fff;color:#111;}
+      .page{width:21cm;min-height:18cm;margin:auto;padding:2cm;display:flex;flex-direction:column;gap:20px;}
+      .header{text-align:center;border-bottom:3px double #e67e22;padding-bottom:14px;}
+      .header h1{font-size:18px;text-transform:uppercase;letter-spacing:2px;color:#e67e22;}
+      .header .sub{font-size:13px;color:#555;margin-top:4px;}
+      .body{display:flex;gap:28px;align-items:flex-start;}
+      .info{flex:1;}
+      .info table{width:100%;border-collapse:collapse;}
+      .info table tr td{padding:8px 10px;font-size:13px;border-bottom:1px solid #eee;}
+      .info table tr td:first-child{font-weight:bold;color:#555;width:45%;}
+      .amount-box{background:#fff7ed;border:2px solid #e67e22;border-radius:10px;padding:14px 18px;text-align:center;margin-top:16px;}
+      .amount-box .label{font-size:11px;text-transform:uppercase;color:#a86000;letter-spacing:1px;}
+      .amount-box .value{font-size:22px;font-weight:bold;color:#c05000;margin-top:4px;}
+      .qr-block{display:flex;flex-direction:column;align-items:center;gap:8px;}
+      .qr-block img{width:130px;height:130px;border:1px solid #ddd;border-radius:6px;}
+      .qr-block .qr-label{font-size:10px;color:#888;text-align:center;max-width:130px;}
+      .footer{margin-top:auto;border-top:1px solid #ddd;padding-top:12px;display:flex;justify-content:space-between;font-size:11px;color:#888;}
+      .signature{border-top:1px solid #333;width:180px;text-align:center;padding-top:6px;font-size:11px;margin-top:40px;}
+      @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+    </style></head><body>
+    <div class="page">
+      <div class="header">
+        <h1>SOMELEC — Bon de Carburant</h1>
+        <div class="sub">Société Mauritanienne d'Électricité</div>
+      </div>
+      <div class="body">
+        <div class="info">
+          <table>
+            <tr><td>Référence plan</td><td><strong>${planRef}</strong></td></tr>
+            <tr><td>Direction</td><td>${plan.directionNom ?? `Direction ${plan.directionId}`}</td></tr>
+            <tr><td>Date de la demande</td><td>${dateStr}</td></tr>
+            <tr><td>N° demande</td><td>#${cadValiderDialog.demandeId}</td></tr>
+          </table>
+          <div class="amount-box">
+            <div class="label">Montant carburant demandé</div>
+            <div class="value">${cadValiderDialog.montantDemande.toLocaleString("fr-MR")} MRU</div>
+          </div>
+        </div>
+        <div class="qr-block">
+          <img src="${qrDataUrl}" alt="QR Code" />
+          <div class="qr-label">Code unique de vérification<br/>${qrData}</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:24px;">
+        <div class="signature">Signature CAD</div>
+      </div>
+      <div class="footer">
+        <span>Généré le ${new Date().toLocaleString("fr-FR")}</span>
+        <span>SOMELEC — Gestion des Plans d'Action</span>
+      </div>
+    </div>
+    <script>window.onload=()=>{window.print();}</script>
+    </body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
+    setCadDocGenerated(true);
   };
 
   const downloadBon = (demande: { bonNumber: string | null; items: Array<{ item: string; quantiteDemandee: number; montantUnitaire?: number; montantTotal?: number }>; montantTotal: number | null }, planRef: string) => {
@@ -1823,7 +1892,7 @@ export default function PlanDetails() {
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-medium text-orange-700">Demande #{dem.id} — {dem.montantDemande.toLocaleString("fr-MR")} MRU</span>
                             <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-orange-600 hover:bg-orange-700 text-white"
-                              onClick={() => { setCadValiderDialog({ moyenId: m.id, demandeId: dem.id, montantDemande: dem.montantDemande }); setCadMontantInput(""); setCadDechargeFile(null); }}>
+                              onClick={() => { setCadValiderDialog({ moyenId: m.id, demandeId: dem.id, montantDemande: dem.montantDemande, createdAt: dem.createdAt }); setCadMontantInput(""); setCadDechargeFile(null); setCadDocGenerated(false); }}>
                               <CheckCircle2 className="w-3 h-3" /> Valider
                             </Button>
                           </div>
@@ -2583,46 +2652,70 @@ export default function PlanDetails() {
       </Dialog>
 
       {/* ─── CAD: Valider demande carburant dialog ─── */}
-      <Dialog open={!!cadValiderDialog} onOpenChange={(open) => { if (!open) { setCadValiderDialog(null); setCadMontantInput(""); setCadDechargeFile(null); } }}>
+      <Dialog open={!!cadValiderDialog} onOpenChange={(open) => { if (!open) { setCadValiderDialog(null); setCadMontantInput(""); setCadDechargeFile(null); setCadDocGenerated(false); } }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Fuel className="w-5 h-5 text-orange-600" /> Valider — Saisir le montant carburant</DialogTitle>
-            <DialogDescription>Indiquez le montant accordé et joignez la décharge si disponible.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2"><Fuel className="w-5 h-5 text-orange-600" /> Valider — Demande carburant</DialogTitle>
+            <DialogDescription>Générez d'abord le bon carburant, puis saisissez le montant accordé.</DialogDescription>
           </DialogHeader>
           {cadValiderDialog && (
             <div className="space-y-3">
               <div className="rounded-xl border bg-orange-50 p-3 text-sm">
                 <p className="text-orange-700">Montant demandé : <span className="font-bold">{cadValiderDialog.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
+                <p className="text-orange-600 text-xs mt-1">Demande #{cadValiderDialog.demandeId} — {new Date(cadValiderDialog.createdAt).toLocaleDateString("fr-FR")}</p>
               </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Montant validé (MRU)</label>
-                <input type="number" min={0} step={0.01} placeholder="Montant accordé"
-                  value={cadMontantInput} onChange={e => setCadMontantInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium flex items-center gap-1.5"><FileText className="w-4 h-4 text-orange-500" /> Décharge (facultatif)</label>
-                <label className={`block cursor-pointer rounded-xl border-2 border-dashed px-4 py-3 transition-colors ${cadDechargeFile ? "border-orange-400 bg-orange-50" : "border-border hover:border-orange-300 bg-muted/30"}`}>
-                  <input type="file" className="hidden" onChange={e => setCadDechargeFile(e.target.files?.[0] ?? null)} />
-                  {cadDechargeFile ? (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm text-orange-700 font-medium truncate min-w-0 flex-1">📎 {cadDechargeFile.name}</span>
-                      <button type="button" className="text-xs text-red-500 shrink-0 ml-2" onClick={e => { e.preventDefault(); setCadDechargeFile(null); }}>✕</button>
+
+              {/* ── Bouton génération document ── */}
+              <Button
+                type="button"
+                variant="outline"
+                className={`w-full gap-2 border-2 ${cadDocGenerated ? "border-green-500 text-green-700 bg-green-50 hover:bg-green-100" : "border-orange-400 text-orange-700 hover:bg-orange-50"}`}
+                onClick={generateCadBonCarburant}
+              >
+                {cadDocGenerated
+                  ? <><CheckCircle2 className="w-4 h-4" /> Bon généré — Générer à nouveau</>
+                  : <><FileText className="w-4 h-4" /> Générer le bon carburant (QR Code)</>
+                }
+              </Button>
+
+              {/* ── Formulaire de validation — visible seulement après génération ── */}
+              {cadDocGenerated && (
+                <>
+                  <div className="border-t pt-3 space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium">Montant validé (MRU)</label>
+                      <input type="number" min={0} step={0.01} placeholder="Montant accordé"
+                        value={cadMontantInput} onChange={e => setCadMontantInput(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                      />
                     </div>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">Cliquez pour joindre un fichier</span>
-                  )}
-                </label>
-              </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium flex items-center gap-1.5"><FileText className="w-4 h-4 text-orange-500" /> Décharge (facultatif)</label>
+                      <label className={`block cursor-pointer rounded-xl border-2 border-dashed px-4 py-3 transition-colors ${cadDechargeFile ? "border-orange-400 bg-orange-50" : "border-border hover:border-orange-300 bg-muted/30"}`}>
+                        <input type="file" className="hidden" onChange={e => setCadDechargeFile(e.target.files?.[0] ?? null)} />
+                        {cadDechargeFile ? (
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm text-orange-700 font-medium truncate min-w-0 flex-1">📎 {cadDechargeFile.name}</span>
+                            <button type="button" className="text-xs text-red-500 shrink-0 ml-2" onClick={e => { e.preventDefault(); setCadDechargeFile(null); }}>✕</button>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Cliquez pour joindre un fichier</span>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => { setCadValiderDialog(null); setCadMontantInput(""); setCadDechargeFile(null); }} disabled={cadLoading}>Annuler</Button>
-            <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={cadLoading || !Number(cadMontantInput)} onClick={handleCadValider}>
-              {cadLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-              Valider & Déduire du budget
-            </Button>
+            <Button variant="outline" onClick={() => { setCadValiderDialog(null); setCadMontantInput(""); setCadDechargeFile(null); setCadDocGenerated(false); }} disabled={cadLoading}>Annuler</Button>
+            {cadDocGenerated && (
+              <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={cadLoading || !Number(cadMontantInput)} onClick={handleCadValider}>
+                {cadLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                Valider & Déduire du budget
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
