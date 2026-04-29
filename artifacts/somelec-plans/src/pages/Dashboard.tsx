@@ -144,6 +144,14 @@ export default function Dashboard() {
             </button>
           </div>
         )}
+        {isDC && !currentUser?.directionId && (
+          <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-300 rounded-xl px-5 py-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0" />
+            <span className="text-sm font-semibold text-yellow-800">
+              Votre compte Directeur Centrale n'a pas de direction assignée — contactez un administrateur pour configurer votre direction afin de voir les plans associés.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Stats */}
