@@ -138,6 +138,8 @@ export const depenseDemandesTable = pgTable("depense_demandes", {
   statut: text("statut").notNull().default("en_attente_dcgai"),
   dcgaiValidatedById: integer("dcgai_validated_by_id").references(() => usersTable.id),
   dcgaiValidatedAt: timestamp("dcgai_validated_at"),
+  dcgaiAnnuleById: integer("dcgai_annule_by_id").references(() => usersTable.id),
+  dcgaiAnnuleAt: timestamp("dcgai_annule_at"),
   dfcValidatedById: integer("dfc_validated_by_id").references(() => usersTable.id),
   dfcValidatedAt: timestamp("dfc_validated_at"),
   montantPaye: numeric("montant_paye", { precision: 12, scale: 2 }),

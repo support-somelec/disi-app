@@ -1311,6 +1311,7 @@ const mapDepenseDemande = (d: typeof depenseDemandesTable.$inferSelect) => ({
   montantDemande: Number(d.montantDemande), nomBeneficiaire: d.nomBeneficiaire,
   matriculeBeneficiaire: d.matriculeBeneficiaire, batchRef: d.batchRef ?? null, statut: d.statut,
   dcgaiValidatedById: d.dcgaiValidatedById, dcgaiValidatedAt: d.dcgaiValidatedAt,
+  dcgaiAnnuleById: d.dcgaiAnnuleById, dcgaiAnnuleAt: d.dcgaiAnnuleAt,
   dfcValidatedById: d.dfcValidatedById, dfcValidatedAt: d.dfcValidatedAt,
   montantPaye: d.montantPaye !== null ? Number(d.montantPaye) : null,
   pieceReference: d.pieceReference, createdAt: d.createdAt,
@@ -1412,6 +1413,31 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dcgai-v
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
 });
 
+// POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dcgai-annuler
+router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dcgai-annuler", async (req, res) => {
+  try {
+    const batchRef = req.params.batchRef;
+    const { dcgaiUserId } = req.body as { dcgaiUserId: number };
+
+    const rows = await db.select().from(depenseDemandesTable)
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_dfc")));
+    if (rows.length === 0) return res.status(400).json({ error: "Aucune demande validée trouvée pour ce batch." });
+
+    const updated = await db.update(depenseDemandesTable)
+      .set({
+        statut: "en_attente_dcgai",
+        dcgaiValidatedById: null,
+        dcgaiValidatedAt: null,
+        dcgaiAnnuleById: dcgaiUserId,
+        dcgaiAnnuleAt: new Date(),
+      })
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_dfc")))
+      .returning();
+
+    res.json(updated.map(mapDepenseDemande));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
 // POST /plans/:id/moyens/:moyenId/depense-demandes
 router.post("/plans/:id/moyens/:moyenId/depense-demandes", async (req, res) => {
   try {
@@ -1472,6 +1498,29 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dcgai-valide
         });
       }
     } catch (e) { console.error("Mail error", e); }
+
+    res.json(mapDepenseDemande(updated));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dcgai-annuler
+router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dcgai-annuler", async (req, res) => {
+  try {
+    const demandeId = Number(req.params.demandeId);
+    const { dcgaiUserId } = req.body as { dcgaiUserId: number };
+
+    const [existing] = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.id, demandeId));
+    if (!existing || existing.statut !== "en_attente_dfc") return res.status(400).json({ error: "Demande introuvable ou statut incorrect." });
+
+    const [updated] = await db.update(depenseDemandesTable)
+      .set({
+        statut: "en_attente_dcgai",
+        dcgaiValidatedById: null,
+        dcgaiValidatedAt: null,
+        dcgaiAnnuleById: dcgaiUserId,
+        dcgaiAnnuleAt: new Date(),
+      })
+      .where(eq(depenseDemandesTable.id, demandeId)).returning();
 
     res.json(mapDepenseDemande(updated));
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }

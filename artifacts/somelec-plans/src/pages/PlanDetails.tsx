@@ -19,7 +19,7 @@ import {
   AlertCircle, FileDigit, Download, ShieldCheck, TrendingDown, Fuel,
   Package, Home, DollarSign, BadgeDollarSign, Loader2, ChevronRight,
   Lock, FilePlus, Trash2, UploadCloud, PlayCircle, Hourglass, CheckCheck, Send, TriangleAlert, Car, MessageSquare,
-  Search, Users, FileSpreadsheet, X, Plus
+  Search, Users, FileSpreadsheet, X, Plus, XCircle
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
@@ -152,7 +152,7 @@ export default function PlanDetails() {
   const [cadDocGenerated, setCadDocGenerated] = useState<Set<number>>(new Set());
 
   // ── Dépenses workflow state (prime/logement/logistique/indemnite/autres) ──
-  type DepenseDemande = { id: number; moyenId: number; statut: string; montantDemande: number; nomBeneficiaire: string; matriculeBeneficiaire?: string; batchRef?: string | null; montantPaye: number | null; pieceReference?: string; dcgaiValidatedAt?: string; dfcValidatedAt?: string; createdAt: string };
+  type DepenseDemande = { id: number; moyenId: number; statut: string; montantDemande: number; nomBeneficiaire: string; matriculeBeneficiaire?: string; batchRef?: string | null; montantPaye: number | null; pieceReference?: string; dcgaiValidatedAt?: string; dcgaiAnnuleById?: number | null; dcgaiAnnuleAt?: string | null; dfcValidatedAt?: string; createdAt: string };
   const [depenseDemandesMap, setDepenseDemandesMap] = useState<Record<number, DepenseDemande[]>>({});
   const [expandedDepenseMoyen, setExpandedDepenseMoyen] = useState<Record<number, boolean>>({});
   const [depenseDemandeDialog, setDepenseDemandeDialog] = useState<number | null>(null);
@@ -293,6 +293,22 @@ export default function PlanDetails() {
     finally { setDcgaiDepenseLoading(null); }
   };
 
+  const handleDcgaiDepenseAnnuler = async (moyenId: number, demandeId: number) => {
+    if (!currentUser) return;
+    if (!confirm("Annuler la validation de cette demande ? Elle reviendra à l'état « En attente DCGAI ».")) return;
+    setDcgaiDepenseLoading(demandeId);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes/${demandeId}/dcgai-annuler`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dcgaiUserId: currentUser.id }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadDepenseData(moyenId);
+    } catch { alert("Erreur réseau"); }
+    finally { setDcgaiDepenseLoading(null); }
+  };
+
   const handleDfcPayer = async () => {
     if (!dfcPayerDialog || !currentUser) return;
     const { moyenId, demandeId } = dfcPayerDialog;
@@ -392,6 +408,22 @@ export default function PlanDetails() {
     setDcgaiBatchLoading(batchRef);
     try {
       const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes-batch/${encodeURIComponent(batchRef)}/dcgai-valider`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dcgaiUserId: currentUser.id }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadDepenseData(moyenId);
+    } catch { alert("Erreur réseau"); }
+    finally { setDcgaiBatchLoading(null); }
+  };
+
+  const handleDcgaiBatchAnnuler = async (moyenId: number, batchRef: string) => {
+    if (!currentUser) return;
+    if (!confirm("Annuler la validation de ce batch ? Toutes les demandes reviendront à l'état « En attente DCGAI ».")) return;
+    setDcgaiBatchLoading(batchRef);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes-batch/${encodeURIComponent(batchRef)}/dcgai-annuler`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dcgaiUserId: currentUser.id }),
@@ -2132,9 +2164,19 @@ export default function PlanDetails() {
                                     </Button>
                                   </div>
                                 ) : (
-                                  <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium", isDone && dems[0]?.statut === "payee" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700")}>
-                                    {isDone && dems[0]?.statut === "payee" ? "Payée" : "En attente DFC"}
-                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium", isDone && dems[0]?.statut === "payee" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700")}>
+                                      {isDone && dems[0]?.statut === "payee" ? "Payée" : "En attente DFC"}
+                                    </span>
+                                    {isDone && dems[0]?.statut !== "payee" && (
+                                      <Button size="sm" variant="outline"
+                                        className="h-6 text-xs gap-1 px-2 border-red-300 text-red-600 hover:bg-red-50"
+                                        disabled={dcgaiBatchLoading === batchRef}
+                                        onClick={() => handleDcgaiBatchAnnuler(m.id, batchRef)}>
+                                        {dcgaiBatchLoading === batchRef ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />} Annuler
+                                      </Button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                               <table className="w-full text-xs border-collapse">
@@ -2200,10 +2242,20 @@ export default function PlanDetails() {
                       {rest.map(dem => (
                         <div key={dem.id} className="border rounded-lg bg-white/60 p-2 flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">{dem.nomBeneficiaire} — {dem.montantDemande.toLocaleString("fr-MR")} MRU</span>
-                          <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium",
-                            dem.statut === "payee" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700")}>
-                            {dem.statut === "payee" ? "Payée" : "En attente DFC"}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium",
+                              dem.statut === "payee" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700")}>
+                              {dem.statut === "payee" ? "Payée" : "En attente DFC"}
+                            </span>
+                            {dem.statut === "en_attente_dfc" && (
+                              <Button size="sm" variant="outline"
+                                className="h-6 text-xs gap-1 px-2 border-red-300 text-red-600 hover:bg-red-50"
+                                disabled={dcgaiDepenseLoading === dem.id}
+                                onClick={() => handleDcgaiDepenseAnnuler(m.id, dem.id)}>
+                                {dcgaiDepenseLoading === dem.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />} Annuler
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
