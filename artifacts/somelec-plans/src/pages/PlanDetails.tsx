@@ -295,7 +295,7 @@ export default function PlanDetails() {
 
   const handleDcgaiDepenseAnnuler = async (moyenId: number, demandeId: number) => {
     if (!currentUser) return;
-    if (!confirm("Annuler la validation de cette demande ? Elle reviendra à l'état « En attente DCGAI ».")) return;
+    if (!confirm("Annuler la validation de cette demande ? Elle reviendra à l'état « En attente DCGAI » et le document devra être régénéré.")) return;
     setDcgaiDepenseLoading(demandeId);
     try {
       const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes/${demandeId}/dcgai-annuler`, {
@@ -304,6 +304,7 @@ export default function PlanDetails() {
         body: JSON.stringify({ dcgaiUserId: currentUser.id }),
       });
       if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      setDcgaiDocGenerated(prev => { const next = new Set(prev); next.delete(`dep:${demandeId}`); return next; });
       await loadDepenseData(moyenId);
     } catch { alert("Erreur réseau"); }
     finally { setDcgaiDepenseLoading(null); }
@@ -420,7 +421,7 @@ export default function PlanDetails() {
 
   const handleDcgaiBatchAnnuler = async (moyenId: number, batchRef: string) => {
     if (!currentUser) return;
-    if (!confirm("Annuler la validation de ce batch ? Toutes les demandes reviendront à l'état « En attente DCGAI ».")) return;
+    if (!confirm("Annuler la validation de ce batch ? Toutes les demandes reviendront à l'état « En attente DCGAI » et le document devra être régénéré.")) return;
     setDcgaiBatchLoading(batchRef);
     try {
       const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes-batch/${encodeURIComponent(batchRef)}/dcgai-annuler`, {
@@ -429,6 +430,7 @@ export default function PlanDetails() {
         body: JSON.stringify({ dcgaiUserId: currentUser.id }),
       });
       if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      setDcgaiDocGenerated(prev => { const next = new Set(prev); next.delete(`batch:${batchRef}`); return next; });
       await loadDepenseData(moyenId);
     } catch { alert("Erreur réseau"); }
     finally { setDcgaiBatchLoading(null); }
