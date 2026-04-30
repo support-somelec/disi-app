@@ -12,3 +12,9 @@ id = "d6fwizFC6OtYrcpXKmjoi"
 uri = "file://Manuel_Utilisateur_SOMELEC.md"
 type = "text"
 title = "Manuel Utilisateur — SOMELEC Plans d'Action"
+
+[[outputs]]
+id = "IZHGuJUM6yXBrk1u_WOUj"
+uri = "file://NOTE_PROCEDURE_UTILISATION.md"
+type = "text"
+title = "Note de Procédure — SOMELEC Gestion des Plans d'Action"
