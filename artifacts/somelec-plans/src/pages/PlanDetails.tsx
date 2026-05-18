@@ -219,7 +219,7 @@ export default function PlanDetails() {
       await loadCarburantData(moyenId);
       setCarburantDemandeDialog(null);
       setCarburantMontantInput("");
-    } catch { alert("Erreur réseau"); }
+    } catch { alert("Problème réseau. Votre demande a peut-être déjà été enregistrée — fermez cette fenêtre et actualisez la page avant de réessayer."); }
     finally { setCarburantDemLoading(false); }
   };
 
@@ -274,7 +274,7 @@ export default function PlanDetails() {
       setDepenseMontantInput("");
       setDepenseNomBenef("");
       setDepenseMatricule("");
-    } catch { alert("Erreur réseau"); }
+    } catch { alert("Problème réseau. Votre demande a peut-être déjà été enregistrée — fermez cette fenêtre et actualisez la page avant de réessayer."); }
     finally { setDepenseDemLoading(false); }
   };
 
@@ -400,7 +400,7 @@ export default function PlanDetails() {
       if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
       await loadDepenseData(moyenId);
       resetPrimeBatchDialog();
-    } catch { alert("Erreur réseau"); }
+    } catch { alert("Problème réseau. Votre demande a peut-être déjà été enregistrée — fermez cette fenêtre et actualisez la page avant de réessayer."); }
     finally { setPrimeBatchLoading(false); }
   };
 
@@ -787,7 +787,7 @@ export default function PlanDetails() {
       setMaterielQtySels({});
       await loadMaterielData(moyenId);
     } catch (e) {
-      alert("Erreur réseau.");
+      alert("Problème réseau. Votre demande a peut-être déjà été enregistrée — fermez cette fenêtre et actualisez la page avant de réessayer.");
     } finally {
       setMaterielLoading(false);
     }
@@ -1116,7 +1116,7 @@ export default function PlanDetails() {
       await loadLocationData(moyenId);
       setLocationDemandeDialog(null);
       setLocationJoursSels({});
-    } catch { alert("Erreur réseau"); }
+    } catch { alert("Problème réseau. Votre demande a peut-être déjà été enregistrée — fermez cette fenêtre et actualisez la page avant de réessayer."); }
     finally { setLocationDemLoading(false); }
   };
 

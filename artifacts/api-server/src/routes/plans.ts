@@ -884,6 +884,13 @@ router.post("/plans/:id/moyens/:moyenId/materiel-demandes", async (req, res) => 
 
     if (!items || items.length === 0) return res.status(400).json({ error: "Aucun article sélectionné." });
 
+    const existingPending = await db.select().from(materielDemandesTable).where(
+      and(eq(materielDemandesTable.moyenId, moyenId), inArray(materielDemandesTable.statut, ["en_attente_da", "en_attente_dcgai"]))
+    );
+    if (existingPending.length > 0) {
+      return res.status(409).json({ error: "Une demande est déjà en cours de traitement pour ce moyen. Veuillez attendre qu'elle soit traitée avant d'en soumettre une nouvelle." });
+    }
+
     // Validate and deduct quantities
     for (const reqItem of items) {
       const [stockItem] = await db.select().from(materielItemsTable).where(eq(materielItemsTable.id, reqItem.materielItemId));
@@ -1087,6 +1094,13 @@ router.post("/plans/:id/moyens/:moyenId/location-demandes", async (req, res) => 
     };
     if (!items?.length) return res.status(400).json({ error: "Aucun item sélectionné." });
 
+    const existingPending = await db.select().from(locationDemandesTable).where(
+      and(eq(locationDemandesTable.moyenId, moyenId), eq(locationDemandesTable.statut, "en_attente_dmg"))
+    );
+    if (existingPending.length > 0) {
+      return res.status(409).json({ error: "Une demande de location est déjà en cours de traitement pour ce moyen. Veuillez attendre qu'elle soit traitée avant d'en soumettre une nouvelle." });
+    }
+
     // Validate against remaining days
     for (const sel of items) {
       const dbItem = await db.select().from(locationItemsTable).where(eq(locationItemsTable.id, sel.locationItemId));
@@ -1234,6 +1248,13 @@ router.post("/plans/:id/moyens/:moyenId/carburant-demandes", async (req, res) =>
     const { createdById, montantDemande } = req.body as { createdById: number; montantDemande: number };
     if (!montantDemande || montantDemande <= 0) return res.status(400).json({ error: "Montant invalide." });
 
+    const existing = await db.select().from(carburantDemandesTable).where(
+      and(eq(carburantDemandesTable.moyenId, moyenId), eq(carburantDemandesTable.statut, "en_attente_cad"))
+    );
+    if (existing.length > 0) {
+      return res.status(200).json(mapCarburantDemande(existing[0]));
+    }
+
     const [demande] = await db.insert(carburantDemandesTable).values({
       planId, moyenId, createdById, montantDemande: String(montantDemande), statut: "en_attente_cad",
     }).returning();
@@ -1347,6 +1368,13 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/batch", async (req, res
     if (!Array.isArray(lignes) || lignes.length === 0) return res.status(400).json({ error: "Au moins une ligne requise." });
     if (lignes.some(l => !l.montantDemande || l.montantDemande <= 0)) return res.status(400).json({ error: "Montants invalides." });
 
+    const existingPending = await db.select().from(depenseDemandesTable).where(
+      and(eq(depenseDemandesTable.moyenId, moyenId), eq(depenseDemandesTable.statut, "en_attente_dcgai"))
+    );
+    if (existingPending.length > 0) {
+      return res.status(409).json({ error: "Une demande est déjà en attente de validation pour ce moyen. Veuillez attendre qu'elle soit traitée par le DCGAI avant d'en soumettre une nouvelle." });
+    }
+
     const batchRef = `BATCH-${planId}-${moyenId}-${Date.now()}`;
 
     const inserted = await db.insert(depenseDemandesTable).values(
@@ -1448,6 +1476,17 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes", async (req, res) => {
     };
     if (!montantDemande || montantDemande <= 0) return res.status(400).json({ error: "Montant invalide." });
     if (!nomBeneficiaire?.trim()) return res.status(400).json({ error: "Nom du bénéficiaire requis." });
+
+    const existingPending = await db.select().from(depenseDemandesTable).where(
+      and(
+        eq(depenseDemandesTable.moyenId, moyenId),
+        eq(depenseDemandesTable.nomBeneficiaire, nomBeneficiaire.trim()),
+        eq(depenseDemandesTable.statut, "en_attente_dcgai")
+      )
+    );
+    if (existingPending.length > 0) {
+      return res.status(409).json({ error: `Une demande pour le bénéficiaire "${nomBeneficiaire}" est déjà en attente pour ce moyen. Elle a peut-être déjà été enregistrée malgré le problème réseau.` });
+    }
 
     const [demande] = await db.insert(depenseDemandesTable).values({
       planId, moyenId, createdById, montantDemande: String(montantDemande),
