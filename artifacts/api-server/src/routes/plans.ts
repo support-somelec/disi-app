@@ -1662,4 +1662,195 @@ router.get("/plans/:id/carburant-demandes-all", async (req, res) => {
   } catch (err) { res.status(500).json({ error: String(err) }); }
 });
 
+// ── ADMIN: duplicate demandes detection & deletion ──────────────────────────
+
+// GET /admin/doublons — detect all duplicate pending demandes across all types
+router.get("/admin/doublons", async (req, res) => {
+  try {
+    const [carburantAll, materielAll, locationAll, depenseAll] = await Promise.all([
+      db.select().from(carburantDemandesTable).where(eq(carburantDemandesTable.statut, "en_attente_cad")),
+      db.select().from(materielDemandesTable).where(inArray(materielDemandesTable.statut, ["en_attente_da", "en_attente_dcgai"])),
+      db.select().from(locationDemandesTable).where(eq(locationDemandesTable.statut, "en_attente_dmg")),
+      db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.statut, "en_attente_dcgai")),
+    ]);
+
+    const groupByMoyen = <T extends { moyenId: number }>(rows: T[]): T[][] => {
+      const map: Record<number, T[]> = {};
+      for (const r of rows) {
+        if (!map[r.moyenId]) map[r.moyenId] = [];
+        map[r.moyenId].push(r);
+      }
+      return Object.values(map).filter(g => g.length > 1);
+    };
+
+    const carburantGroups = groupByMoyen(carburantAll);
+    const materielGroups  = groupByMoyen(materielAll);
+    const locationGroups  = groupByMoyen(locationAll);
+
+    // Depense: count distinct batches (or individual records) per moyen
+    const depenseByMoyen: Record<number, typeof depenseAll> = {};
+    for (const r of depenseAll) {
+      if (!depenseByMoyen[r.moyenId]) depenseByMoyen[r.moyenId] = [];
+      depenseByMoyen[r.moyenId].push(r);
+    }
+    const depenseGroups = Object.values(depenseByMoyen).filter(g => {
+      const units = new Set(g.map(r => r.batchRef ?? `ind:${r.id}`));
+      return units.size > 1;
+    });
+
+    // Collect all relevant moyenIds
+    const allMoyenIds = new Set<number>([
+      ...carburantGroups.flatMap(g => g.map(r => r.moyenId)),
+      ...materielGroups.flatMap(g => g.map(r => r.moyenId)),
+      ...locationGroups.flatMap(g => g.map(r => r.moyenId)),
+      ...depenseGroups.flatMap(g => g.map(r => r.moyenId)),
+    ]);
+
+    if (allMoyenIds.size === 0) {
+      return res.json({ carburant: [], materiel: [], location: [], depense: [] });
+    }
+
+    const moyenInfos = await db.select({
+      id: moyensTable.id, description: moyensTable.description,
+      categorie: moyensTable.categorie, planId: moyensTable.planId,
+    }).from(moyensTable).where(inArray(moyensTable.id, [...allMoyenIds]));
+
+    const planIds = [...new Set(moyenInfos.map(m => m.planId))];
+    const planInfos = await db.select({
+      id: plansTable.id, titre: plansTable.titre, reference: plansTable.reference,
+    }).from(plansTable).where(inArray(plansTable.id, planIds));
+
+    const moyenMap = Object.fromEntries(moyenInfos.map(m => [m.id, m]));
+    const planMap  = Object.fromEntries(planInfos.map(p => [p.id, p]));
+
+    const enrichSimple = <T extends { id: number; moyenId: number; planId: number; createdAt: Date }>(
+      groups: T[][], type: string
+    ) => groups.map(g => ({
+      type,
+      moyenId: g[0].moyenId,
+      planId: g[0].planId,
+      planTitre: planMap[g[0].planId]?.titre ?? "",
+      planReference: planMap[g[0].planId]?.reference ?? "",
+      moyenDescription: moyenMap[g[0].moyenId]?.description ?? "",
+      moyenCategorie: moyenMap[g[0].moyenId]?.categorie ?? "",
+      demandes: g.map(r => ({ ...r, createdAt: r.createdAt.toISOString() })),
+    }));
+
+    const depenseResult = depenseGroups.map(g => {
+      const batches: Record<string, typeof g> = {};
+      for (const r of g) {
+        const key = r.batchRef ?? `ind:${r.id}`;
+        if (!batches[key]) batches[key] = [];
+        batches[key].push(r);
+      }
+      return {
+        type: "depense",
+        moyenId: g[0].moyenId,
+        planId: g[0].planId,
+        planTitre: planMap[g[0].planId]?.titre ?? "",
+        planReference: planMap[g[0].planId]?.reference ?? "",
+        moyenDescription: moyenMap[g[0].moyenId]?.description ?? "",
+        moyenCategorie: moyenMap[g[0].moyenId]?.categorie ?? "",
+        batches: Object.entries(batches).map(([, rows]) => ({
+          batchRef: rows[0].batchRef ?? null,
+          isIndividual: !rows[0].batchRef,
+          demandeId: rows[0].id,
+          count: rows.length,
+          montantTotal: rows.reduce((s, r) => s + Number(r.montantDemande), 0),
+          createdAt: rows[0].createdAt.toISOString(),
+        })),
+      };
+    });
+
+    res.json({
+      carburant: enrichSimple(carburantGroups, "carburant"),
+      materiel:  enrichSimple(materielGroups, "materiel"),
+      location:  enrichSimple(locationGroups, "location"),
+      depense:   depenseResult,
+    });
+  } catch (err) { console.error(String(err)); res.status(500).json({ error: String(err) }); }
+});
+
+// DELETE /admin/demandes/carburant/:id
+router.delete("/admin/demandes/carburant/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [d] = await db.select().from(carburantDemandesTable).where(eq(carburantDemandesTable.id, id));
+    if (!d) return res.status(404).json({ error: "Demande introuvable." });
+    if (d.statut !== "en_attente_cad") return res.status(400).json({ error: "Cette demande a déjà été traitée et ne peut pas être supprimée." });
+    await db.delete(carburantDemandesTable).where(eq(carburantDemandesTable.id, id));
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// DELETE /admin/demandes/materiel/:id  (restores stock quantities)
+router.delete("/admin/demandes/materiel/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [d] = await db.select().from(materielDemandesTable).where(eq(materielDemandesTable.id, id));
+    if (!d) return res.status(404).json({ error: "Demande introuvable." });
+    if (!["en_attente_da", "en_attente_dcgai"].includes(d.statut)) {
+      return res.status(400).json({ error: "Cette demande a déjà été traitée et ne peut pas être supprimée." });
+    }
+    const items: Array<{ item: string; quantiteDemandee: number }> = JSON.parse(d.itemsJson);
+    const stockItems = await db.select().from(materielItemsTable).where(eq(materielItemsTable.moyenId, d.moyenId));
+    for (const reqItem of items) {
+      const stockItem = stockItems.find(s => s.item === reqItem.item);
+      if (stockItem) {
+        await db.update(materielItemsTable)
+          .set({ quantiteRestante: stockItem.quantiteRestante + reqItem.quantiteDemandee })
+          .where(eq(materielItemsTable.id, stockItem.id));
+      }
+    }
+    await db.delete(materielDemandesTable).where(eq(materielDemandesTable.id, id));
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// DELETE /admin/demandes/location/:id  (restores remaining days)
+router.delete("/admin/demandes/location/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [d] = await db.select().from(locationDemandesTable).where(eq(locationDemandesTable.id, id));
+    if (!d) return res.status(404).json({ error: "Demande introuvable." });
+    if (d.statut !== "en_attente_dmg") {
+      return res.status(400).json({ error: "Cette demande a déjà été traitée et ne peut pas être supprimée." });
+    }
+    const items: Array<{ locationItemId: number; nbJoursDemandes: number }> = JSON.parse(d.itemsJson);
+    for (const sel of items) {
+      await db.update(locationItemsTable)
+        .set({ nbJoursRestants: sql`nb_jours_restants + ${sel.nbJoursDemandes}` })
+        .where(eq(locationItemsTable.id, sel.locationItemId));
+    }
+    await db.delete(locationDemandesTable).where(eq(locationDemandesTable.id, id));
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// DELETE /admin/demandes/depense/:id  (individual depense record)
+router.delete("/admin/demandes/depense/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [d] = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.id, id));
+    if (!d) return res.status(404).json({ error: "Demande introuvable." });
+    if (d.statut !== "en_attente_dcgai") return res.status(400).json({ error: "Cette demande a déjà été traitée et ne peut pas être supprimée." });
+    await db.delete(depenseDemandesTable).where(eq(depenseDemandesTable.id, id));
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// DELETE /admin/demandes/depense-batch/:batchRef  (all records of a batch)
+router.delete("/admin/demandes/depense-batch/:batchRef", async (req, res) => {
+  try {
+    const batchRef = req.params.batchRef;
+    const rows = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.batchRef, batchRef));
+    if (rows.length === 0) return res.status(404).json({ error: "Batch introuvable." });
+    if (rows.some(r => r.statut !== "en_attente_dcgai")) {
+      return res.status(400).json({ error: "Ce batch a déjà été partiellement ou totalement traité et ne peut pas être supprimé." });
+    }
+    await db.delete(depenseDemandesTable).where(eq(depenseDemandesTable.batchRef, batchRef));
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
 export default router;

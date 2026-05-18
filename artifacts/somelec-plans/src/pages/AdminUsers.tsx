@@ -10,6 +10,7 @@ import { useLocation } from "wouter";
 import {
   Pencil, Trash2, X, Check, Loader2, Search, UserPlus, Shield,
   Building2, Plus, AlertTriangle, Clock, Users, Upload, FileText,
+  RefreshCw, Copy, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +63,34 @@ interface DirEditState {
   code: string;
 }
 
-type Tab = "utilisateurs" | "directions" | "employes";
+type Tab = "utilisateurs" | "directions" | "employes" | "doublons";
+
+interface DoublonSimple {
+  type: string;
+  moyenId: number;
+  planId: number;
+  planTitre: string;
+  planReference: string;
+  moyenDescription: string;
+  moyenCategorie: string;
+  demandes: Array<{ id: number; createdAt: string; montantDemande?: string; montantTotal?: string; statut: string; itemsJson?: string }>;
+}
+interface DoublonDepense {
+  type: "depense";
+  moyenId: number;
+  planId: number;
+  planTitre: string;
+  planReference: string;
+  moyenDescription: string;
+  moyenCategorie: string;
+  batches: Array<{ batchRef: string | null; isIndividual: boolean; demandeId: number; count: number; montantTotal: number; createdAt: string }>;
+}
+interface DoublonsData {
+  carburant: DoublonSimple[];
+  materiel: DoublonSimple[];
+  location: DoublonSimple[];
+  depense: DoublonDepense[];
+}
 
 interface EmpEditState {
   id: number | null;
@@ -110,6 +138,11 @@ export default function AdminUsers() {
   const [deletingEmp, setDeletingEmp] = useState<number | null>(null);
   const [importStatus, setImportStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [importing, setImporting] = useState(false);
+
+  const [doublons, setDoublons] = useState<DoublonsData | null>(null);
+  const [loadingDoublons, setLoadingDoublons] = useState(false);
+  const [deletingDemande, setDeletingDemande] = useState<string | null>(null);
+  const [confirmDeleteDemande, setConfirmDeleteDemande] = useState<string | null>(null);
 
   if (currentUser?.role !== "admin") {
     return (
@@ -268,6 +301,35 @@ export default function AdminUsers() {
     }
   };
 
+  const loadDoublons = async () => {
+    setLoadingDoublons(true);
+    setDoublons(null);
+    try {
+      const res = await fetch(`${BASE_URL}api/admin/doublons`);
+      if (!res.ok) throw new Error(await res.text());
+      setDoublons(await res.json());
+    } catch (err) {
+      alert(`Erreur lors du chargement : ${String(err)}`);
+    } finally {
+      setLoadingDoublons(false);
+    }
+  };
+
+  const handleDeleteDemande = async (key: string, url: string) => {
+    setDeletingDemande(key);
+    try {
+      const res = await fetch(`${BASE_URL}${url}`, { method: "DELETE" });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      setConfirmDeleteDemande(null);
+      await loadDoublons();
+    } catch { alert("Erreur réseau."); }
+    finally { setDeletingDemande(null); }
+  };
+
+  const totalDoublons = doublons
+    ? doublons.carburant.length + doublons.materiel.length + doublons.location.length + doublons.depense.length
+    : 0;
+
   const filteredEmps = (employes ?? []).filter(e => {
     const q = empSearch.toLowerCase();
     return !q || e.nom.toLowerCase().includes(q) || e.matricule.toLowerCase().includes(q) || (e.nni ?? "").toLowerCase().includes(q) || (e.fonction ?? "").toLowerCase().includes(q);
@@ -343,6 +405,21 @@ export default function AdminUsers() {
           <Users className="h-4 w-4" />
           Employés
           <span className="ml-1 text-xs text-muted-foreground">({employes?.length ?? 0})</span>
+        </button>
+        <button
+          onClick={() => { setTab("doublons"); if (!doublons) loadDoublons(); }}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
+            tab === "doublons"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Copy className="h-4 w-4" />
+          Doublons
+          {doublons && totalDoublons > 0 && (
+            <span className="ml-1 flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold">{totalDoublons}</span>
+          )}
         </button>
       </div>
 
@@ -785,6 +862,209 @@ export default function AdminUsers() {
               </tbody>
             </table>
           </div>
+        </>
+      )}
+
+      {/* ══════════════ ONGLET DOUBLONS ══════════════ */}
+      {tab === "doublons" && (
+        <>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Demandes en doublon</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Détecte les demandes soumises plusieurs fois pour le même moyen, suite à des problèmes réseau.</p>
+            </div>
+            <button
+              onClick={loadDoublons}
+              disabled={loadingDoublons}
+              className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-60"
+            >
+              {loadingDoublons ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Actualiser
+            </button>
+          </div>
+
+          {loadingDoublons && (
+            <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span>Analyse en cours…</span>
+            </div>
+          )}
+
+          {doublons && !loadingDoublons && totalDoublons === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+              <p className="text-foreground font-medium">Aucun doublon détecté</p>
+              <p className="text-sm text-muted-foreground">Toutes les demandes en attente sont uniques.</p>
+            </div>
+          )}
+
+          {doublons && !loadingDoublons && totalDoublons > 0 && (
+            <div className="space-y-6">
+              {/* Helper: render a delete button for a demande */}
+              {(["carburant", "materiel", "location"] as const).map(type => {
+                const groups: DoublonSimple[] = doublons[type];
+                if (groups.length === 0) return null;
+                const typeLabel: Record<string, string> = { carburant: "Carburant", materiel: "Matériel", location: "Location" };
+                const typeColor: Record<string, string> = { carburant: "bg-yellow-100 text-yellow-800", materiel: "bg-teal-100 text-teal-800", location: "bg-cyan-100 text-cyan-800" };
+                const deleteUrl = (id: number) => `api/admin/demandes/${type}/${id}`;
+
+                return (
+                  <div key={type}>
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${typeColor[type]}`}>{typeLabel[type]}</span>
+                      {groups.length} moyen{groups.length > 1 ? "s" : ""} concerné{groups.length > 1 ? "s" : ""}
+                    </h3>
+                    <div className="space-y-3">
+                      {groups.map(g => (
+                        <div key={g.moyenId} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+                          <div className="px-4 py-3 bg-muted/40 border-b border-border">
+                            <div className="font-medium text-foreground text-sm">{g.planTitre}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {g.planReference && <span className="mr-2 font-mono">{g.planReference}</span>}
+                              Moyen : <span className="text-foreground">{g.moyenDescription}</span>
+                            </div>
+                          </div>
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-border bg-muted/20">
+                                <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground uppercase">#</th>
+                                <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground uppercase">Date création</th>
+                                <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground uppercase">Montant</th>
+                                <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground uppercase">Statut</th>
+                                <th className="text-right px-4 py-2 text-xs font-semibold text-muted-foreground uppercase">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                              {g.demandes.map((d, idx) => {
+                                const key = `${type}-${d.id}`;
+                                const montant = d.montantDemande ?? d.montantTotal;
+                                return (
+                                  <tr key={d.id} className="hover:bg-muted/20">
+                                    <td className="px-4 py-2.5 text-muted-foreground text-xs">#{idx + 1}</td>
+                                    <td className="px-4 py-2.5 text-xs">{new Date(d.createdAt).toLocaleString("fr-MR")}</td>
+                                    <td className="px-4 py-2.5 text-xs font-medium">{montant ? `${Number(montant).toLocaleString("fr-MR")} MRU` : "—"}</td>
+                                    <td className="px-4 py-2.5">
+                                      <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 text-xs font-medium">{d.statut.replace(/_/g, " ")}</span>
+                                    </td>
+                                    <td className="px-4 py-2.5">
+                                      <div className="flex items-center justify-end gap-2">
+                                        {confirmDeleteDemande === key ? (
+                                          <>
+                                            <span className="text-xs text-red-600 font-medium">Supprimer ?</span>
+                                            <button
+                                              onClick={() => handleDeleteDemande(key, deleteUrl(d.id))}
+                                              disabled={deletingDemande === key}
+                                              className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-md text-xs font-medium disabled:opacity-60"
+                                            >
+                                              {deletingDemande === key ? <Loader2 className="h-3 w-3 animate-spin" /> : "Oui"}
+                                            </button>
+                                            <button onClick={() => setConfirmDeleteDemande(null)} className="px-3 py-1.5 border border-border hover:bg-muted rounded-md text-xs font-medium">Non</button>
+                                          </>
+                                        ) : (
+                                          <button
+                                            onClick={() => setConfirmDeleteDemande(key)}
+                                            className="p-1.5 rounded-md hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors"
+                                            title="Supprimer ce doublon"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Dépenses doublons */}
+              {doublons.depense.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-violet-100 text-violet-800">Dépenses</span>
+                    {doublons.depense.length} moyen{doublons.depense.length > 1 ? "s" : ""} concerné{doublons.depense.length > 1 ? "s" : ""}
+                  </h3>
+                  <div className="space-y-3">
+                    {doublons.depense.map(g => (
+                      <div key={g.moyenId} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+                        <div className="px-4 py-3 bg-muted/40 border-b border-border">
+                          <div className="font-medium text-foreground text-sm">{g.planTitre}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {g.planReference && <span className="mr-2 font-mono">{g.planReference}</span>}
+                            Moyen : <span className="text-foreground">{g.moyenDescription}</span>
+                            <span className="ml-2 px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[10px] font-semibold">{g.moyenCategorie}</span>
+                          </div>
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border bg-muted/20">
+                              <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground uppercase">#</th>
+                              <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground uppercase">Type</th>
+                              <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground uppercase">Date création</th>
+                              <th className="text-left px-4 py-2 text-xs font-semibold text-muted-foreground uppercase">Montant total</th>
+                              <th className="text-right px-4 py-2 text-xs font-semibold text-muted-foreground uppercase">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {g.batches.map((b, idx) => {
+                              const key = b.batchRef ? `depense-batch-${b.batchRef}` : `depense-ind-${b.demandeId}`;
+                              const url = b.batchRef
+                                ? `api/admin/demandes/depense-batch/${encodeURIComponent(b.batchRef)}`
+                                : `api/admin/demandes/depense/${b.demandeId}`;
+                              return (
+                                <tr key={key} className="hover:bg-muted/20">
+                                  <td className="px-4 py-2.5 text-muted-foreground text-xs">#{idx + 1}</td>
+                                  <td className="px-4 py-2.5 text-xs">
+                                    {b.isIndividual
+                                      ? <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">Individuel</span>
+                                      : <span className="px-2 py-0.5 rounded bg-violet-100 text-violet-700 text-xs">Batch ({b.count} bénéf.)</span>
+                                    }
+                                  </td>
+                                  <td className="px-4 py-2.5 text-xs">{new Date(b.createdAt).toLocaleString("fr-MR")}</td>
+                                  <td className="px-4 py-2.5 text-xs font-medium">{Number(b.montantTotal).toLocaleString("fr-MR")} MRU</td>
+                                  <td className="px-4 py-2.5">
+                                    <div className="flex items-center justify-end gap-2">
+                                      {confirmDeleteDemande === key ? (
+                                        <>
+                                          <span className="text-xs text-red-600 font-medium">Supprimer ?</span>
+                                          <button
+                                            onClick={() => handleDeleteDemande(key, url)}
+                                            disabled={deletingDemande === key}
+                                            className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-md text-xs font-medium disabled:opacity-60"
+                                          >
+                                            {deletingDemande === key ? <Loader2 className="h-3 w-3 animate-spin" /> : "Oui"}
+                                          </button>
+                                          <button onClick={() => setConfirmDeleteDemande(null)} className="px-3 py-1.5 border border-border hover:bg-muted rounded-md text-xs font-medium">Non</button>
+                                        </>
+                                      ) : (
+                                        <button
+                                          onClick={() => setConfirmDeleteDemande(key)}
+                                          className="p-1.5 rounded-md hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors"
+                                          title="Supprimer ce doublon"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
