@@ -858,6 +858,14 @@ export default function PlanDetails() {
     if (!plan) return;
     const planRef = plan.reference ?? `PLAN-${plan.id}`;
     const qrData = `DOC-${opts.docKey}-${planRef}-${Date.now()}`;
+
+    // Open window BEFORE any await to avoid popup blocker
+    const w = window.open("", "_blank");
+    if (!w) {
+      alert("Veuillez autoriser les popups pour ce site afin de générer le document.");
+      return;
+    }
+
     const qrDataUrl = await QRCode.toDataURL(qrData, { width: 160, margin: 1, color: { dark: "#1a1a1a", light: "#ffffff" } });
     const dateStr = opts.dateRef
       ? new Date(opts.dateRef).toLocaleDateString("fr-FR", { year: "numeric", month: "long", day: "numeric" })
@@ -919,8 +927,8 @@ export default function PlanDetails() {
     </div>
     <script>window.onload=()=>{window.print();}</script>
     </body></html>`;
-    const w = window.open("", "_blank");
-    if (w) { w.document.write(html); w.document.close(); }
+    w.document.write(html);
+    w.document.close();
     opts.onGenerated();
   };
 
@@ -928,6 +936,14 @@ export default function PlanDetails() {
     if (!cadValiderDialog || !plan) return;
     const planRef = plan.reference ?? `PLAN-${plan.id}`;
     const qrData = `CARB-${cadValiderDialog.demandeId}-${planRef}-${Date.now()}`;
+
+    // Open the window BEFORE any await to avoid popup blocker
+    const w = window.open("", "_blank");
+    if (!w) {
+      alert("Veuillez autoriser les popups pour ce site afin de générer le document.");
+      return;
+    }
+
     const qrDataUrl = await QRCode.toDataURL(qrData, { width: 160, margin: 1, color: { dark: "#1a1a1a", light: "#ffffff" } });
     const dateStr = new Date(cadValiderDialog.createdAt).toLocaleDateString("fr-FR", { year: "numeric", month: "long", day: "numeric" });
     const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Bon Carburant — ${planRef}</title>
@@ -986,9 +1002,9 @@ export default function PlanDetails() {
     </div>
     <script>window.onload=()=>{window.print();}</script>
     </body></html>`;
-    const w = window.open("", "_blank");
-    if (w) { w.document.write(html); w.document.close(); }
-    setCadDocGenerated(true);
+    w.document.write(html);
+    w.document.close();
+    setCadDocGenerated(prev => new Set([...prev, cadValiderDialog.demandeId]));
   };
 
   const downloadBon = (demande: { bonNumber: string | null; items: Array<{ item: string; quantiteDemandee: number; montantUnitaire?: number; montantTotal?: number }>; montantTotal: number | null }, planRef: string) => {
