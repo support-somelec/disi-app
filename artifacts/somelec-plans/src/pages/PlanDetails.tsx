@@ -241,6 +241,7 @@ export default function PlanDetails() {
       });
       if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
       await Promise.all([loadCarburantData(moyenId), refetchMoyens()]);
+      queryClient.invalidateQueries({ queryKey: ["demandes-globales"] });
       setCadValiderDialog(null);
       setCadMontantInput("");
       setCadDechargeFile(null);
@@ -2865,7 +2866,9 @@ export default function PlanDetails() {
           {carburantDemandeDialog !== null && (() => {
             const m = moyens.find(mo => mo.id === carburantDemandeDialog);
             if (!m) return null;
-            const totalDejaDemandeCarb = (carburantDemandesMap[m.id] ?? []).reduce((s, d) => s + d.montantDemande, 0);
+            const allDemCarb = carburantDemandesMap[m.id] ?? [];
+            const hasPending = allDemCarb.some(d => d.statut === "en_attente_cad");
+            const totalDejaDemandeCarb = allDemCarb.reduce((s, d) => s + d.montantDemande, 0);
             const restantCarb = Math.max(0, Number(m.budget) - totalDejaDemandeCarb);
             const montantSaisi = Number(carburantMontantInput);
             const depasse = montantSaisi > restantCarb && restantCarb > 0;
@@ -2877,7 +2880,12 @@ export default function PlanDetails() {
                   {totalDejaDemandeCarb > 0 && <p className="text-muted-foreground text-xs">Déjà demandé : <span className="font-medium text-orange-700">{formatCurrency(totalDejaDemandeCarb)}</span></p>}
                   <p className={`text-xs font-semibold mt-1 ${restantCarb === 0 ? "text-destructive" : "text-emerald-700"}`}>Restant disponible : {formatCurrency(restantCarb)}</p>
                 </div>
-                {restantCarb === 0 ? (
+                {hasPending ? (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 font-medium text-center">
+                    Une demande est déjà en attente de validation par le CAD.<br />
+                    <span className="text-xs font-normal text-amber-700">Vous pourrez soumettre une nouvelle demande après validation.</span>
+                  </div>
+                ) : restantCarb === 0 ? (
                   <p className="text-sm text-destructive font-medium text-center py-2">Budget entièrement utilisé pour ce moyen.</p>
                 ) : (
                   <div className="space-y-1">
@@ -2896,7 +2904,7 @@ export default function PlanDetails() {
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => { setCarburantDemandeDialog(null); setCarburantMontantInput(""); }} disabled={carburantDemLoading}>Annuler</Button>
             <Button className="bg-orange-600 hover:bg-orange-700 text-white"
-              disabled={carburantDemLoading || !Number(carburantMontantInput) || Number(carburantMontantInput) <= 0 || (() => { const m = moyens.find(mo => mo.id === carburantDemandeDialog); if (!m) return true; const total = (carburantDemandesMap[m.id] ?? []).reduce((s, d) => s + d.montantDemande, 0); return Number(carburantMontantInput) > Math.max(0, Number(m.budget) - total); })()}
+              disabled={carburantDemLoading || !Number(carburantMontantInput) || Number(carburantMontantInput) <= 0 || (() => { const m = moyens.find(mo => mo.id === carburantDemandeDialog); if (!m) return true; if ((carburantDemandesMap[m.id] ?? []).some(d => d.statut === "en_attente_cad")) return true; const total = (carburantDemandesMap[m.id] ?? []).reduce((s, d) => s + d.montantDemande, 0); return Number(carburantMontantInput) > Math.max(0, Number(m.budget) - total); })()}
               onClick={() => carburantDemandeDialog !== null && handleDemanderCarburant(carburantDemandeDialog)}>
               {carburantDemLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
               Soumettre
