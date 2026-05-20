@@ -12,20 +12,6 @@ import {
   CloturerPlanBody,
 } from "@workspace/api-zod";
 import { z } from "zod/v4";
-import {
-  sendMail,
-  mailPlanCreated,
-  mailPlanValidated,
-  mailPlanOpened,
-  mailPlanRejected,
-  mailDemandeExecution,
-  mailDemandeExecutionRH,
-  mailDemandeExecutionBenef,
-  mailConsommationSaisie,
-  mailMaterielDemande,
-  mailBonSoumisDcgai,
-  mailBonValide,
-} from "../mailer";
 
 const router: IRouter = Router();
 
@@ -41,18 +27,6 @@ const CATEGORY_ROLE: Record<string, string> = {
   logistique: "direction_financiere",
   autres: "direction_financiere",
 };
-
-async function getUserEmailsByRole(roles: string[]): Promise<string[]> {
-  const users = await db.select({ email: usersTable.email })
-    .from(usersTable)
-    .where(inArray(usersTable.role, roles));
-  return users.map(u => u.email);
-}
-
-async function getUserEmailById(userId: number): Promise<string | null> {
-  const rows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, userId));
-  return rows[0]?.email ?? null;
-}
 
 async function generateReference(directionId: number, createdAt: Date): Promise<string> {
   const dir = await db.select({ code: directionsTable.code, id: directionsTable.id })
@@ -356,49 +330,6 @@ router.post("/plans/:id/validate", async (req, res) => {
 
     const plan = await getPlanWithDetails(id);
 
-    // Send notifications (fire-and-forget)
-    if (plan && newStatut !== current.statut) {
-      setImmediate(async () => {
-        try {
-          if (newStatut === "en_attente_dc") {
-            // Notify all directeur_centrale users in the same direction
-            const dcUsers = await db.select({ email: usersTable.email })
-              .from(usersTable)
-              .where(and(eq(usersTable.niveau, "directeur_centrale"), eq(usersTable.directionId, current.directionId)));
-            const emails = dcUsers.map(u => u.email).filter(Boolean);
-            if (emails.length) {
-              const { subject, html } = mailPlanCreated(plan);
-              await sendMail({ to: emails, subject, html });
-            }
-          } else if (newStatut === "en_attente_ct") {
-            const emails = await getUserEmailsByRole(["controle_technique"]);
-            const { subject, html } = mailPlanCreated(plan);
-            await sendMail({ to: emails, subject, html });
-          } else if (newStatut === "en_attente_dga") {
-            const emails = await getUserEmailsByRole(["dga"]);
-            const { subject, html } = mailPlanValidated(plan, "dga");
-            await sendMail({ to: emails, subject, html });
-          } else if (newStatut === "en_attente_dg") {
-            const emails = await getUserEmailsByRole(["directeur_general"]);
-            const { subject, html } = mailPlanValidated(plan, "directeur_general");
-            await sendMail({ to: emails, subject, html });
-          } else if (newStatut === "ouvert") {
-            const creatorEmail = plan.createdById ? await getUserEmailById(plan.createdById) : null;
-            if (creatorEmail) {
-              const { subject, html } = mailPlanOpened(plan);
-              await sendMail({ to: [creatorEmail], subject, html });
-            }
-          } else if (newStatut === "rejete") {
-            const creatorEmail = plan.createdById ? await getUserEmailById(plan.createdById) : null;
-            if (creatorEmail) {
-              const { subject, html } = mailPlanRejected(plan);
-              await sendMail({ to: [creatorEmail], subject, html });
-            }
-          }
-        } catch (e) { console.error("[notify]", String(e)); }
-      });
-    }
-
     res.json(plan);
   } catch (err) {
     console.error(String(err));
@@ -557,68 +488,6 @@ router.post("/plans/:id/moyens/:moyenId/demander", async (req, res) => {
       .where(eq(moyensTable.id, moyenId))
       .returning();
 
-    // Notify specialist
-    const moyen = existing[0];
-    const specialistRole = CATEGORY_ROLE[moyen.categorie];
-    const planDetails = await getPlanWithDetails(planId);
-    setImmediate(async () => {
-      try {
-        // Notify specialist (direction financière or other role)
-        if (specialistRole) {
-          const emails = await getUserEmailsByRole([specialistRole]);
-          const { subject, html } = mailDemandeExecution({
-            plan: planDetails!,
-            moyen: { description: moyen.description, categorie: moyen.categorie, budget: Number(moyen.budget) },
-            direction: planDetails?.directionNom ?? "",
-          });
-          await sendMail({ to: emails, subject, html });
-        }
-        // For prime — notify CF with beneficiaire list (stays "demandee" until CF validates)
-        if (moyen.categorie === "prime") {
-          const beneficiaires = await db.select().from(beneficiairesMoyenTable)
-            .where(eq(beneficiairesMoyenTable.moyenId, moyenId));
-          const cfEmails = await getUserEmailsByRole(["controle_financier"]);
-          const { subject, html } = mailDemandeExecutionBenef({
-            plan: planDetails!,
-            moyen: { description: moyen.description, budget: Number(moyen.budget) },
-            direction: planDetails?.directionNom ?? "",
-            role: "CF",
-            beneficiaires: beneficiaires.map(b => ({
-              nom: b.nom,
-              matricule: b.matricule,
-              nni: b.nni,
-              montant: Number(b.montant),
-            })),
-          });
-          await sendMail({ to: cfEmails, subject, html });
-        }
-        // For indemnite_journaliere — also notify RH with beneficiaire list
-        if (moyen.categorie === "indemnite_journaliere") {
-          const beneficiaires = await db.select().from(beneficiairesMoyenTable)
-            .where(eq(beneficiairesMoyenTable.moyenId, moyenId));
-          if (beneficiaires.length > 0) {
-            const rhEmails = await getUserEmailsByRole(["rh"]);
-            const { subject, html } = mailDemandeExecutionRH({
-              plan: planDetails!,
-              moyen: { description: moyen.description, budget: Number(moyen.budget) },
-              direction: planDetails?.directionNom ?? "",
-              beneficiaires: beneficiaires.map(b => ({
-                nom: b.nom,
-                matricule: b.matricule,
-                nni: b.nni,
-                montant: Number(b.montant),
-              })),
-            });
-            await sendMail({ to: rhEmails, subject, html });
-            // Mark as treated when RH is notified
-            await db.update(moyensTable)
-              .set({ demandeStatus: "consommee" })
-              .where(eq(moyensTable.id, moyenId));
-          }
-        }
-      } catch (e) { console.error("[notify]", String(e)); }
-    });
-
     res.json(mapMoyen(updated));
   } catch (err) {
     console.error(String(err));
@@ -656,41 +525,6 @@ router.post("/plans/:id/moyens/:moyenId/consommer", async (req, res) => {
       .where(eq(moyensTable.id, moyenId))
       .returning();
     await db.update(plansTable).set({ updatedAt: new Date() }).where(eq(plansTable.id, planId));
-
-    // Notify CF + DG
-    const planDetails = await getPlanWithDetails(planId);
-    setImmediate(async () => {
-      try {
-        const emails = await getUserEmailsByRole(["controle_financier", "directeur_general"]);
-        const { subject, html } = mailConsommationSaisie({
-          plan: planDetails!,
-          moyen: { description: moyen.description, categorie: moyen.categorie, montant: body.montant, budget: Number(moyen.budget) },
-        });
-        await sendMail({ to: emails, subject, html });
-
-        // For prime — after CF validates, notify RH with beneficiaire list
-        if (moyen.categorie === "prime") {
-          const beneficiaires = await db.select().from(beneficiairesMoyenTable)
-            .where(eq(beneficiairesMoyenTable.moyenId, moyenId));
-          if (beneficiaires.length > 0) {
-            const rhEmails = await getUserEmailsByRole(["rh"]);
-            const { subject: rhSubject, html: rhHtml } = mailDemandeExecutionBenef({
-              plan: planDetails!,
-              moyen: { description: moyen.description, budget: Number(moyen.budget) },
-              direction: planDetails?.directionNom ?? "",
-              role: "RH",
-              beneficiaires: beneficiaires.map(b => ({
-                nom: b.nom,
-                matricule: b.matricule,
-                nni: b.nni,
-                montant: Number(b.montant),
-              })),
-            });
-            await sendMail({ to: rhEmails, subject: rhSubject, html: rhHtml });
-          }
-        }
-      } catch (e) { console.error("[notify]", String(e)); }
-    });
 
     res.json(mapMoyen(updated));
   } catch (err) {
@@ -916,19 +750,6 @@ router.post("/plans/:id/moyens/:moyenId/materiel-demandes", async (req, res) => 
       itemsJson,
     }).returning();
 
-    // Notify DA
-    try {
-      const plan = await db.select({ id: plansTable.id, reference: plansTable.reference, titre: plansTable.titre })
-        .from(plansTable).where(eq(plansTable.id, planId));
-      const moyen = await db.select({ description: moyensTable.description }).from(moyensTable).where(eq(moyensTable.id, moyenId));
-      const daEmails = await getUserEmailsByRole(["da"]);
-      const planInfo = plan[0];
-      if (planInfo && moyen[0] && daEmails.length > 0) {
-        const mail = mailMaterielDemande({ plan: { id: planInfo.id, reference: planInfo.reference, titre: planInfo.titre }, moyen: moyen[0], items: items.map(i => ({ item: i.item, quantiteDemandee: i.quantiteDemandee })), demandeId: demande.id });
-        await sendMail({ to: daEmails, ...mail });
-      }
-    } catch (e) { console.error("Mail error", e); }
-
     res.status(201).json(mapMaterielDemande(demande));
   } catch (err) {
     console.error(String(err));
@@ -990,16 +811,6 @@ router.post("/plans/:id/moyens/:moyenId/materiel-demandes/:demandeId/da-soumettr
       });
     }
 
-    // Notify DCGAI
-    try {
-      const moyen = await db.select({ description: moyensTable.description }).from(moyensTable).where(eq(moyensTable.id, moyenId));
-      const dcgaiEmails = await getUserEmailsByRole(["dcgai"]);
-      if (plan[0] && moyen[0] && dcgaiEmails.length > 0) {
-        const mail = mailBonSoumisDcgai({ plan: { id: plan[0].id, reference: plan[0].reference, titre: plan[0].titre }, moyen: moyen[0], bonNumber, montantTotal, demandeId });
-        await sendMail({ to: dcgaiEmails, ...mail });
-      }
-    } catch (e) { console.error("Mail error", e); }
-
     res.json(mapMaterielDemande(updated));
   } catch (err) {
     console.error(String(err));
@@ -1029,19 +840,6 @@ router.post("/plans/:id/moyens/:moyenId/materiel-demandes/:demandeId/dcgai-valid
     await db.update(moyensTable)
       .set({ montantConsomme: sql`COALESCE(montant_consomme::numeric, 0) + ${montantTotal}` })
       .where(eq(moyensTable.id, moyenId));
-
-    // Notify direction (plan creator)
-    try {
-      const plan = await db.select({ id: plansTable.id, reference: plansTable.reference, titre: plansTable.titre, createdById: plansTable.createdById })
-        .from(plansTable).where(eq(plansTable.id, planId));
-      const moyen = await db.select({ description: moyensTable.description }).from(moyensTable).where(eq(moyensTable.id, moyenId));
-      if (plan[0] && moyen[0]) {
-        const dirEmail = await getUserEmailById(plan[0].createdById);
-        const bonNumber = existing.bonNumber ?? `BON-${demandeId}`;
-        const mail = mailBonValide({ plan: { id: plan[0].id, reference: plan[0].reference, titre: plan[0].titre }, moyen: moyen[0], bonNumber, montantTotal });
-        if (dirEmail) await sendMail({ to: dirEmail, ...mail });
-      }
-    } catch (e) { console.error("Mail error", e); }
 
     res.json(mapMaterielDemande(updated));
   } catch (err) {
@@ -1126,23 +924,6 @@ router.post("/plans/:id/moyens/:moyenId/location-demandes", async (req, res) => 
       itemsJson: JSON.stringify(items),
     }).returning();
 
-    // Notify DMG
-    try {
-      const plan = await db.select().from(plansTable).where(eq(plansTable.id, planId));
-      const moyen = await db.select().from(moyensTable).where(eq(moyensTable.id, moyenId));
-      const dmgEmails = await getUserEmailsByRole(["dmg"]);
-      if (plan[0] && moyen[0] && dmgEmails.length > 0) {
-        await sendMail({
-          to: dmgEmails,
-          subject: `[SOMELEC] Nouvelle demande location véhicule — ${plan[0].reference ?? plan[0].id}`,
-          html: `<p>Une nouvelle demande de location véhicule a été soumise pour le plan <strong>${plan[0].titre}</strong> (réf. ${plan[0].reference ?? plan[0].id}).</p>
-          <p>Moyen : ${moyen[0].description}</p>
-          <p>Engins demandés : ${items.map(i => `${i.typeEngin} (${i.nbJoursDemandes} jour(s))`).join(", ")}</p>
-          <p>Veuillez vous connecter pour traiter cette demande.</p>`,
-        });
-      }
-    } catch (e) { console.error("Mail error", e); }
-
     res.status(201).json(mapLocationDemande(demande));
   } catch (err) {
     console.error(String(err));
@@ -1201,20 +982,6 @@ router.post("/plans/:id/moyens/:moyenId/location-demandes/:demandeId/dmg-valider
       });
     }
 
-    // Notify direction
-    try {
-      const plan = await db.select().from(plansTable).where(eq(plansTable.id, planId));
-      const dirEmail = plan[0] ? await getUserEmailById(plan[0].createdById) : null;
-      if (dirEmail && plan[0]) {
-        await sendMail({
-          to: dirEmail,
-          subject: `[SOMELEC] Demande location véhicule validée — ${plan[0].reference ?? plan[0].id}`,
-          html: `<p>Votre demande de location véhicule pour le plan <strong>${plan[0].titre}</strong> a été validée par la DMG.</p>
-          <p>Montant total : <strong>${montantTotal.toLocaleString("fr-MR")} MRU</strong></p>`,
-        });
-      }
-    } catch (e) { console.error("Mail error", e); }
-
     res.json(mapLocationDemande(updated));
   } catch (err) {
     console.error(String(err));
@@ -1259,19 +1026,6 @@ router.post("/plans/:id/moyens/:moyenId/carburant-demandes", async (req, res) =>
       planId, moyenId, createdById, montantDemande: String(montantDemande), statut: "en_attente_cad",
     }).returning();
 
-    try {
-      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
-      const [moyen] = await db.select({ description: moyensTable.description }).from(moyensTable).where(eq(moyensTable.id, moyenId));
-      const cadEmails = await getUserEmailsByRole(["cad"]);
-      if (plan && moyen && cadEmails.length > 0) {
-        await sendMail({
-          to: cadEmails,
-          subject: `[SOMELEC] Demande carburant — ${plan.reference ?? plan.id}`,
-          html: `<p>Une demande de carburant de <strong>${Number(montantDemande).toLocaleString("fr-MR")} MRU</strong> a été soumise pour le plan <strong>${plan.titre}</strong>.<br>Moyen : ${moyen.description}<br>Connectez-vous pour valider.</p>`,
-        });
-      }
-    } catch (e) { console.error("Mail error", e); }
-
     res.status(201).json(mapCarburantDemande(demande));
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
 });
@@ -1308,18 +1062,6 @@ router.post("/plans/:id/moyens/:moyenId/carburant-demandes/:demandeId/cad-valide
         planId, moyenId, nom: decharge.nom, type: "decharge_cad", taille: decharge.taille, data: decharge.data,
       });
     }
-
-    try {
-      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
-      const dirEmail = plan ? await getUserEmailById(plan.createdById) : null;
-      if (dirEmail && plan) {
-        await sendMail({
-          to: dirEmail,
-          subject: `[SOMELEC] Demande carburant validée — ${plan.reference ?? plan.id}`,
-          html: `<p>Votre demande carburant pour le plan <strong>${plan.titre}</strong> a été validée.<br>Montant : <strong>${montantValide.toLocaleString("fr-MR")} MRU</strong></p>`,
-        });
-      }
-    } catch (e) { console.error("Mail error", e); }
 
     res.json(mapCarburantDemande(updated));
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
@@ -1388,20 +1130,6 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/batch", async (req, res
       }))
     ).returning();
 
-    try {
-      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
-      const [moyen] = await db.select({ description: moyensTable.description, categorie: moyensTable.categorie }).from(moyensTable).where(eq(moyensTable.id, moyenId));
-      const dcgaiEmails = await getUserEmailsByRole(["dcgai"]);
-      if (plan && moyen && dcgaiEmails.length > 0) {
-        const rows = lignes.map(l => `<tr><td style="border:1px solid #ccc;padding:6px 10px">${l.nomBeneficiaire}${l.matriculeBeneficiaire ? ` (${l.matriculeBeneficiaire})` : ""}</td><td style="border:1px solid #ccc;padding:6px 10px;text-align:right">${Number(l.montantDemande).toLocaleString("fr-MR")} MRU</td></tr>`).join("");
-        await sendMail({
-          to: dcgaiEmails,
-          subject: `[SOMELEC] Demande groupée ${moyen.categorie} — ${plan.reference ?? plan.id}`,
-          html: `<p>Nouvelle demande groupée (${lignes.length} bénéficiaire(s)) pour le plan <strong>${plan.titre}</strong> — ${plan.reference ?? ""}.<br>Catégorie : <strong>${moyen.categorie}</strong> — ${moyen.description}</p><table style="border-collapse:collapse;margin-top:12px"><thead><tr><th style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5">Bénéficiaire</th><th style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5">Montant</th></tr></thead><tbody>${rows}</tbody></table>`,
-        });
-      }
-    } catch (e) { console.error("Mail error", e); }
-
     res.status(201).json(inserted.map(mapDepenseDemande));
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
 });
@@ -1422,20 +1150,6 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dcgai-v
       .set({ statut: "en_attente_dfc", dcgaiValidatedById: dcgaiUserId, dcgaiValidatedAt: new Date() })
       .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_dcgai")))
       .returning();
-
-    try {
-      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
-      const [moyen] = await db.select({ description: moyensTable.description, categorie: moyensTable.categorie }).from(moyensTable).where(eq(moyensTable.id, moyenId));
-      const dfcEmails = await getUserEmailsByRole(["direction_financiere"]);
-      if (plan && moyen && dfcEmails.length > 0) {
-        const tableRows = rows.map(r => `<tr><td style="border:1px solid #ccc;padding:6px 10px">${r.nomBeneficiaire}${r.matriculeBeneficiaire ? ` (${r.matriculeBeneficiaire})` : ""}</td><td style="border:1px solid #ccc;padding:6px 10px;text-align:right">${Number(r.montantDemande).toLocaleString("fr-MR")} MRU</td></tr>`).join("");
-        await sendMail({
-          to: dfcEmails,
-          subject: `[SOMELEC] Dépense groupée validée DCGAI — paiement à effectuer — ${plan.reference ?? plan.id}`,
-          html: `<p>Une demande groupée (${rows.length} bénéficiaire(s)) a été validée par le DCGAI pour le plan <strong>${plan.titre}</strong> (${plan.reference ?? ""}).<br>Catégorie : <strong>${moyen.categorie}</strong> — ${moyen.description}<br>Un document PDF est disponible sur l'application.</p><table style="border-collapse:collapse;margin-top:12px"><thead><tr><th style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5">Bénéficiaire</th><th style="border:1px solid #ccc;padding:6px 10px;background:#f5f5f5">Montant</th></tr></thead><tbody>${tableRows}</tbody></table>`,
-        });
-      }
-    } catch (e) { console.error("Mail error", e); }
 
     res.json(updated.map(mapDepenseDemande));
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
@@ -1493,19 +1207,6 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes", async (req, res) => {
       nomBeneficiaire, matriculeBeneficiaire: matriculeBeneficiaire ?? null, statut: "en_attente_dcgai",
     }).returning();
 
-    try {
-      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
-      const [moyen] = await db.select({ description: moyensTable.description, categorie: moyensTable.categorie }).from(moyensTable).where(eq(moyensTable.id, moyenId));
-      const dcgaiEmails = await getUserEmailsByRole(["dcgai"]);
-      if (plan && moyen && dcgaiEmails.length > 0) {
-        await sendMail({
-          to: dcgaiEmails,
-          subject: `[SOMELEC] Demande dépense ${moyen.categorie} — ${plan.reference ?? plan.id}`,
-          html: `<p>Nouvelle demande de dépense de <strong>${Number(montantDemande).toLocaleString("fr-MR")} MRU</strong> pour le plan <strong>${plan.titre}</strong>.<br>Catégorie : ${moyen.categorie} — Moyen : ${moyen.description}<br>Bénéficiaire : ${nomBeneficiaire}${matriculeBeneficiaire ? ` (${matriculeBeneficiaire})` : ""}</p>`,
-        });
-      }
-    } catch (e) { console.error("Mail error", e); }
-
     res.status(201).json(mapDepenseDemande(demande));
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
 });
@@ -1524,19 +1225,6 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dcgai-valide
     const [updated] = await db.update(depenseDemandesTable)
       .set({ statut: "en_attente_dfc", dcgaiValidatedById: dcgaiUserId, dcgaiValidatedAt: new Date() })
       .where(eq(depenseDemandesTable.id, demandeId)).returning();
-
-    try {
-      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
-      const [moyen] = await db.select({ description: moyensTable.description }).from(moyensTable).where(eq(moyensTable.id, moyenId));
-      const dfcEmails = await getUserEmailsByRole(["direction_financiere"]);
-      if (plan && moyen && dfcEmails.length > 0) {
-        await sendMail({
-          to: dfcEmails,
-          subject: `[SOMELEC] Dépense validée DCGAI — paiement à effectuer — ${plan.reference ?? plan.id}`,
-          html: `<p>Une dépense a été validée par le DCGAI pour le plan <strong>${plan.titre}</strong>.<br>Moyen : ${moyen.description}<br>Bénéficiaire : ${existing.nomBeneficiaire}${existing.matriculeBeneficiaire ? ` (${existing.matriculeBeneficiaire})` : ""}<br>Montant demandé : <strong>${Number(existing.montantDemande).toLocaleString("fr-MR")} MRU</strong><br>Connectez-vous pour effectuer le paiement.</p>`,
-        });
-      }
-    } catch (e) { console.error("Mail error", e); }
 
     res.json(mapDepenseDemande(updated));
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
@@ -1593,17 +1281,6 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dfc-payer", 
         .where(eq(moyensTable.id, moyenId));
     }
 
-    try {
-      const dirEmail = plan ? await getUserEmailById(plan.createdById) : null;
-      if (dirEmail && plan) {
-        await sendMail({
-          to: dirEmail,
-          subject: `[SOMELEC] Paiement effectué — ${pieceReference}`,
-          html: `<p>Le paiement pour le plan <strong>${plan.titre}</strong> a été effectué.<br>Bénéficiaire : ${existing.nomBeneficiaire}<br>Montant payé : <strong>${montantPaye.toLocaleString("fr-MR")} MRU</strong><br>Réf. pièce : <strong>${pieceReference}</strong></p>`,
-        });
-      }
-    } catch (e) { console.error("Mail error", e); }
-
     res.json(mapDepenseDemande(updated));
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
 });
@@ -1634,20 +1311,6 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dfc-pay
         .set({ montantConsomme: String(Number(moyen.montantConsomme ?? 0) + montantTotal) })
         .where(eq(moyensTable.id, moyenId));
     }
-
-    try {
-      const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, planId));
-      if (plan) {
-        const dirEmail = await getUserEmailById(plan.createdById);
-        if (dirEmail) {
-          await sendMail({
-            to: dirEmail,
-            subject: `[SOMELEC] Paiement groupé effectué — ${pieceReference}`,
-            html: `<p>Le paiement groupé (${rows.length} bénéficiaire(s)) pour le plan <strong>${plan.titre}</strong> a été effectué.<br>Montant total : <strong>${montantTotal.toLocaleString("fr-MR")} MRU</strong><br>Réf. pièce : <strong>${pieceReference}</strong></p>`,
-          });
-        }
-      }
-    } catch (e) { console.error("Mail error", e); }
 
     res.json(updated.map(mapDepenseDemande));
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
