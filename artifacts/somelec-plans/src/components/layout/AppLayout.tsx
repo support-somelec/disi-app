@@ -1,8 +1,12 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
-import { LayoutDashboard, FilePlus, User, LogOut, Shield, ChevronDown, BarChart2, Users, KeyRound, Eye, EyeOff, Check, X, Loader2 } from "lucide-react";
+import { LayoutDashboard, FilePlus, User, LogOut, Shield, ChevronDown, BarChart2, Users, KeyRound, Eye, EyeOff, Check, X, Loader2, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { DEMANDES_ROLES } from "@/pages/DemandesDashboard";
+
+const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
 function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
   const { changePassword } = useAuth();
@@ -122,15 +126,58 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+const PENDING_STATUTS = ["en_attente_cad", "en_attente_da", "en_attente_dmg", "en_attente_dcgai", "en_attente_dfc"];
+
+function usePendingDemandesCount(role: string) {
+  const enabled = DEMANDES_ROLES.includes(role);
+  const { data = [] } = useQuery<Array<{ type: string; statut: string; moyenCategorie?: string }>>({
+    queryKey: ["demandes-globales"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE_URL}api/demandes-globales`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const roleTypeFilter = (() => {
+    switch (role) {
+      case "cad": return ["carburant"];
+      case "da": return ["materiel"];
+      case "dmg": return ["location"];
+      case "dcgai": return ["depense"];
+      case "direction_financiere": return ["depense"];
+      default: return ["carburant", "materiel", "location", "depense"];
+    }
+  })();
+
+  const roleStatutFilter = (() => {
+    if (role === "dcgai") return ["en_attente_dcgai"];
+    if (role === "direction_financiere") return ["en_attente_dfc"];
+    return null;
+  })();
+
+  return data.filter(d => {
+    if (!roleTypeFilter.includes(d.type)) return false;
+    if (roleStatutFilter) return roleStatutFilter.includes(d.statut);
+    return PENDING_STATUTS.includes(d.statut);
+  }).length;
+}
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
   const { currentUser, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [showChangePassword, setShowChangePassword] = React.useState(false);
 
+  const pendingCount = usePendingDemandesCount(currentUser?.role ?? "");
+
   const navItems = [
     { href: "/", label: "Tableau de Bord", icon: LayoutDashboard },
     { href: "/plans/nouveau", label: "Nouveau Plan", icon: FilePlus, roles: ["direction"] },
+    { href: "/demandes", label: "Demandes", icon: Layers, roles: DEMANDES_ROLES, badge: pendingCount > 0 ? pendingCount : undefined },
     { href: "/analyse", label: "Analyse", icon: BarChart2, roles: ["directeur_general", "dga"] },
     { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users, roles: ["admin"] },
   ];
@@ -182,7 +229,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         key={item.href}
                         href={item.href}
                         className={cn(
-                          "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                          "relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                           isActive
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -190,6 +237,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       >
                         <Icon className="w-4 h-4" />
                         {item.label}
+                        {(item as any).badge != null && (
+                          <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none">
+                            {(item as any).badge}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}

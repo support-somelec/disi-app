@@ -13,6 +13,7 @@ import Analytics from "@/pages/Analytics";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import AdminUsers from "@/pages/AdminUsers";
+import DemandesDashboard from "@/pages/DemandesDashboard";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +63,13 @@ function Router() {
       <Route path="/admin/utilisateurs">
         {isAuthenticated ? (
           <AppLayout><AdminUsers /></AppLayout>
+        ) : (
+          <Redirect to="/login" />
+        )}
+      </Route>
+      <Route path="/demandes">
+        {isAuthenticated ? (
+          <AppLayout><DemandesDashboard /></AppLayout>
         ) : (
           <Redirect to="/login" />
         )}

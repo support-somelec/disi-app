@@ -1853,4 +1853,170 @@ router.delete("/admin/demandes/depense-batch/:batchRef", async (req, res) => {
   } catch (err) { res.status(500).json({ error: String(err) }); }
 });
 
+// ─────────────────── TABLEAU GLOBAL DES DEMANDES ───────────────────
+
+// GET /api/demandes-globales
+// Returns unified list of all demandes across all plans (carburant, materiel, location, depense)
+router.get("/demandes-globales", async (_req, res) => {
+  try {
+    const result: object[] = [];
+
+    // 1. Carburant demandes
+    const carburantRows = await db
+      .select({
+        id: carburantDemandesTable.id,
+        planId: carburantDemandesTable.planId,
+        planReference: plansTable.reference,
+        planTitre: plansTable.titre,
+        directionNom: directionsTable.nom,
+        moyenId: carburantDemandesTable.moyenId,
+        moyenDescription: moyensTable.description,
+        moyenCategorie: moyensTable.categorie,
+        statut: carburantDemandesTable.statut,
+        montant: carburantDemandesTable.montantDemande,
+        montantValide: carburantDemandesTable.montantValide,
+        createdAt: carburantDemandesTable.createdAt,
+      })
+      .from(carburantDemandesTable)
+      .leftJoin(plansTable, eq(carburantDemandesTable.planId, plansTable.id))
+      .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+      .leftJoin(moyensTable, eq(carburantDemandesTable.moyenId, moyensTable.id));
+
+    for (const d of carburantRows) {
+      result.push({
+        type: "carburant", id: d.id, batchRef: null, isBatch: false,
+        planId: d.planId, planReference: d.planReference, planTitre: d.planTitre ?? "",
+        directionNom: d.directionNom ?? "",
+        moyenId: d.moyenId, moyenDescription: d.moyenDescription ?? "", moyenCategorie: d.moyenCategorie ?? "carburant",
+        statut: d.statut, montant: Number(d.montant), montantValide: d.montantValide ? Number(d.montantValide) : null,
+        createdAt: d.createdAt,
+      });
+    }
+
+    // 2. Matériel demandes
+    const materielRows = await db
+      .select({
+        id: materielDemandesTable.id,
+        planId: materielDemandesTable.planId,
+        planReference: plansTable.reference,
+        planTitre: plansTable.titre,
+        directionNom: directionsTable.nom,
+        moyenId: materielDemandesTable.moyenId,
+        moyenDescription: moyensTable.description,
+        moyenCategorie: moyensTable.categorie,
+        statut: materielDemandesTable.statut,
+        montantTotal: materielDemandesTable.montantTotal,
+        itemsJson: materielDemandesTable.itemsJson,
+        createdAt: materielDemandesTable.createdAt,
+      })
+      .from(materielDemandesTable)
+      .leftJoin(plansTable, eq(materielDemandesTable.planId, plansTable.id))
+      .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+      .leftJoin(moyensTable, eq(materielDemandesTable.moyenId, moyensTable.id));
+
+    for (const d of materielRows) {
+      const items: unknown[] = (() => { try { return JSON.parse(d.itemsJson ?? "[]"); } catch { return []; } })();
+      result.push({
+        type: "materiel", id: d.id, batchRef: null, isBatch: false,
+        planId: d.planId, planReference: d.planReference, planTitre: d.planTitre ?? "",
+        directionNom: d.directionNom ?? "",
+        moyenId: d.moyenId, moyenDescription: d.moyenDescription ?? "", moyenCategorie: d.moyenCategorie ?? "materiel",
+        statut: d.statut, montant: d.montantTotal ? Number(d.montantTotal) : null,
+        nbItems: items.length, createdAt: d.createdAt,
+      });
+    }
+
+    // 3. Location demandes
+    const locationRows = await db
+      .select({
+        id: locationDemandesTable.id,
+        planId: locationDemandesTable.planId,
+        planReference: plansTable.reference,
+        planTitre: plansTable.titre,
+        directionNom: directionsTable.nom,
+        moyenId: locationDemandesTable.moyenId,
+        moyenDescription: moyensTable.description,
+        moyenCategorie: moyensTable.categorie,
+        statut: locationDemandesTable.statut,
+        montantTotal: locationDemandesTable.montantTotal,
+        createdAt: locationDemandesTable.createdAt,
+      })
+      .from(locationDemandesTable)
+      .leftJoin(plansTable, eq(locationDemandesTable.planId, plansTable.id))
+      .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+      .leftJoin(moyensTable, eq(locationDemandesTable.moyenId, moyensTable.id));
+
+    for (const d of locationRows) {
+      result.push({
+        type: "location", id: d.id, batchRef: null, isBatch: false,
+        planId: d.planId, planReference: d.planReference, planTitre: d.planTitre ?? "",
+        directionNom: d.directionNom ?? "",
+        moyenId: d.moyenId, moyenDescription: d.moyenDescription ?? "", moyenCategorie: d.moyenCategorie ?? "location",
+        statut: d.statut, montant: d.montantTotal ? Number(d.montantTotal) : null,
+        createdAt: d.createdAt,
+      });
+    }
+
+    // 4. Dépense demandes — group batch (batchRef != null) by batchRef
+    const depenseRows = await db
+      .select({
+        id: depenseDemandesTable.id,
+        planId: depenseDemandesTable.planId,
+        planReference: plansTable.reference,
+        planTitre: plansTable.titre,
+        directionNom: directionsTable.nom,
+        moyenId: depenseDemandesTable.moyenId,
+        moyenDescription: moyensTable.description,
+        moyenCategorie: moyensTable.categorie,
+        statut: depenseDemandesTable.statut,
+        montantDemande: depenseDemandesTable.montantDemande,
+        montantPaye: depenseDemandesTable.montantPaye,
+        nomBeneficiaire: depenseDemandesTable.nomBeneficiaire,
+        batchRef: depenseDemandesTable.batchRef,
+        createdAt: depenseDemandesTable.createdAt,
+      })
+      .from(depenseDemandesTable)
+      .leftJoin(plansTable, eq(depenseDemandesTable.planId, plansTable.id))
+      .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+      .leftJoin(moyensTable, eq(depenseDemandesTable.moyenId, moyensTable.id));
+
+    const batchMap = new Map<string, typeof depenseRows>();
+    for (const d of depenseRows) {
+      if (d.batchRef) {
+        const arr = batchMap.get(d.batchRef) ?? [];
+        arr.push(d);
+        batchMap.set(d.batchRef, arr);
+      } else {
+        result.push({
+          type: "depense", id: d.id, batchRef: null, isBatch: false,
+          planId: d.planId, planReference: d.planReference, planTitre: d.planTitre ?? "",
+          directionNom: d.directionNom ?? "",
+          moyenId: d.moyenId, moyenDescription: d.moyenDescription ?? "", moyenCategorie: d.moyenCategorie ?? "autres",
+          statut: d.statut, montant: Number(d.montantDemande),
+          montantPaye: d.montantPaye ? Number(d.montantPaye) : null,
+          nomBeneficiaire: d.nomBeneficiaire,
+          createdAt: d.createdAt,
+        });
+      }
+    }
+    for (const [batchRef, rows] of batchMap) {
+      const first = rows[0];
+      const totalMontant = rows.reduce((s, r) => s + Number(r.montantDemande), 0);
+      result.push({
+        type: "depense", id: first.id, batchRef, isBatch: true,
+        nbBeneficiaires: rows.length,
+        planId: first.planId, planReference: first.planReference, planTitre: first.planTitre ?? "",
+        directionNom: first.directionNom ?? "",
+        moyenId: first.moyenId, moyenDescription: first.moyenDescription ?? "", moyenCategorie: first.moyenCategorie ?? "prime",
+        statut: first.statut, montant: totalMontant,
+        createdAt: first.createdAt,
+      });
+    }
+
+    result.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
 export default router;
