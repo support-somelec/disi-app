@@ -425,8 +425,6 @@ router.get("/plans/:id/certificat", async (req, res) => {
   /* HEADER */
   .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1e3a8a; padding-bottom: 20px; margin-bottom: 28px; }
   .header-logo { display: flex; align-items: center; gap: 14px; }
-  .logo-box { width: 54px; height: 54px; background: #1e3a8a; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-  .logo-box svg { width: 34px; height: 34px; }
   .org-name { font-size: 22px; font-weight: 800; color: #1e3a8a; letter-spacing: 1px; }
   .org-sub { font-size: 11px; color: #64748b; letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
   .header-right { text-align: right; }
@@ -476,11 +474,6 @@ router.get("/plans/:id/certificat", async (req, res) => {
   <!-- HEADER -->
   <div class="header">
     <div class="header-logo">
-      <div class="logo-box">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="white" stroke="white" stroke-width="1" stroke-linejoin="round"/>
-        </svg>
-      </div>
       <div>
         <div class="org-name">SOMELEC</div>
         <div class="org-sub">Plans d'Action</div>
