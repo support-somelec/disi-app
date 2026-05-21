@@ -1271,6 +1271,25 @@ export default function PlanDetails() {
             })}
           </div>
         </div>
+
+        {/* Certificate download button — visible once plan is ouvert or cloture */}
+        {(plan.statut === "ouvert" || plan.statut === "cloture") && (
+          <div className="mt-4 pt-4 border-t border-border/50 relative z-10 flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+              onClick={() => {
+                const url = `${BASE_URL}api/plans/${plan.id}/certificat`;
+                const win = window.open(url, "_blank");
+                if (win) win.focus();
+              }}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Télécharger le certificat de validation
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

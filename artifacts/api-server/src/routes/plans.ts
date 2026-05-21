@@ -313,18 +313,21 @@ router.post("/plans/:id/validate", async (req, res) => {
 
     await db.update(plansTable).set({ statut: newStatut, commentaireRejet, updatedAt: new Date() }).where(eq(plansTable.id, id));
 
-    // Save comment to history (any non-empty comment, for both approvals and rejections)
-    if (body.commentaire && body.commentaire.trim()) {
-      const validatorNom = body.validatedById
-        ? (await db.select({ nom: usersTable.nom }).from(usersTable).where(eq(usersTable.id, body.validatedById)))[0]?.nom ?? null
+    // Always record every approval/rejection in history for certificate traceability
+    {
+      const validatorRow = body.validatedById
+        ? (await db.select({ nom: usersTable.nom, prenom: usersTable.prenom, role: usersTable.role })
+            .from(usersTable).where(eq(usersTable.id, body.validatedById)))[0]
         : null;
+      const validatorNom = validatorRow ? `${validatorRow.prenom} ${validatorRow.nom}` : null;
+      const defaultComment = body.action === "approuver" ? `Approuvé (${current.statut})` : `Rejeté (${current.statut})`;
       await db.insert(planCommentsTable).values({
         planId: id,
         userId: body.validatedById ?? null,
         userNom: validatorNom,
         action: body.action,
         statutAvant: current.statut,
-        commentaire: body.commentaire.trim(),
+        commentaire: body.commentaire?.trim() || defaultComment,
       });
     }
 
@@ -334,6 +337,251 @@ router.post("/plans/:id/validate", async (req, res) => {
   } catch (err) {
     console.error(String(err));
     res.status(400).json({ error: String(err) });
+  }
+});
+
+// GET /plans/:id/certificat — HTML certificate for download
+router.get("/plans/:id/certificat", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const plan = await getPlanWithDetails(id);
+    if (!plan) return res.status(404).json({ error: "Plan not found" });
+
+    // Fetch direction info
+    const direction = plan.directionNom ?? "";
+
+    // Build validation history from plan_comments (approvals only)
+    const approvals = (plan.comments ?? []).filter(c => c.action === "approuver");
+
+    const STATUT_LABELS: Record<string, string> = {
+      brouillon: "Brouillon",
+      en_attente_dc: "Direction Centrale",
+      en_attente_ct: "Contrôle Technique",
+      en_attente_dga: "Direction Générale Adjointe",
+      en_attente_dg: "Direction Générale",
+    };
+    const ROLE_LABELS: Record<string, string> = {
+      directeur_centrale: "Directeur Central",
+      controle_technique: "Contrôle Technique",
+      dga: "Directeur Général Adjoint",
+      directeur_general: "Directeur Général",
+    };
+
+    // Compute hash for document integrity
+    const crypto = await import("crypto");
+    const hashInput = `${plan.id}-${plan.reference}-${plan.titre}-${plan.directionId}-${plan.createdAt}`;
+    const hash = crypto.createHash("sha256").update(hashInput).digest("hex").toUpperCase();
+    const shortHash = hash.slice(0, 16).match(/.{1,4}/g)!.join("-");
+
+    const budgetTotal = plan.budgetTotal ?? 0;
+    const formatMRU = (n: number) => n.toLocaleString("fr-FR") + " MRU";
+
+    const openedAt = plan.statut === "ouvert" || plan.statut === "cloture"
+      ? approvals.find(c => c.statutAvant === "en_attente_dg")?.createdAt
+      : null;
+
+    const validationRows = approvals.map(c => {
+      const statutLabel = STATUT_LABELS[c.statutAvant ?? ""] ?? c.statutAvant ?? "—";
+      const dateStr = new Date(c.createdAt).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
+      const commentHtml = (c.commentaire && !c.commentaire.startsWith("Approuvé")) ? `<br><em style="color:#555;font-size:11px">${c.commentaire}</em>` : "";
+      return `
+        <tr>
+          <td>${statutLabel}</td>
+          <td>${c.userNom ?? "—"}</td>
+          <td style="text-align:center">${dateStr}</td>
+          <td style="text-align:center">
+            <span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600">✓ Approuvé</span>
+            ${commentHtml}
+          </td>
+        </tr>`;
+    }).join("");
+
+    const moyenRows = (plan.moyens ?? []).map(m => {
+      const consomme = Number(m.montantConsomme ?? 0);
+      const budget = Number(m.budget);
+      const pct = budget > 0 ? Math.round(consomme / budget * 100) : 0;
+      return `<tr>
+        <td>${m.categorie}</td>
+        <td>${m.description}</td>
+        <td style="text-align:right">${formatMRU(budget)}</td>
+        <td style="text-align:right">${formatMRU(consomme)}</td>
+        <td style="text-align:center">${pct}%</td>
+      </tr>`;
+    }).join("");
+
+    const now = new Date().toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
+    const openedStr = openedAt ? new Date(openedAt).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }) : "—";
+
+    const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Certificat de Validation — ${plan.reference ?? plan.id}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a2e; background: #fff; font-size: 13px; }
+  .page { max-width: 900px; margin: 0 auto; padding: 40px 48px; }
+
+  /* HEADER */
+  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1e3a8a; padding-bottom: 20px; margin-bottom: 28px; }
+  .header-logo { display: flex; align-items: center; gap: 14px; }
+  .logo-box { width: 54px; height: 54px; background: #1e3a8a; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+  .logo-box svg { width: 34px; height: 34px; }
+  .org-name { font-size: 22px; font-weight: 800; color: #1e3a8a; letter-spacing: 1px; }
+  .org-sub { font-size: 11px; color: #64748b; letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+  .header-right { text-align: right; }
+  .cert-title { font-size: 14px; font-weight: 700; color: #1e3a8a; text-transform: uppercase; letter-spacing: 1px; }
+  .cert-ref { font-size: 11px; color: #64748b; margin-top: 4px; }
+
+  /* STATUS BANNER */
+  .status-banner { background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%); color: #fff; border-radius: 10px; padding: 16px 24px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; }
+  .status-banner .plan-title { font-size: 18px; font-weight: 700; }
+  .status-banner .plan-meta { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+  .status-badge { background: #22c55e; color: #fff; padding: 6px 18px; border-radius: 20px; font-weight: 700; font-size: 13px; white-space: nowrap; }
+
+  /* SECTION */
+  .section { margin-bottom: 24px; }
+  .section-title { font-size: 11px; font-weight: 700; color: #1e3a8a; text-transform: uppercase; letter-spacing: 1.5px; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; }
+
+  /* INFO GRID */
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .info-item { display: flex; flex-direction: column; }
+  .info-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+  .info-value { font-size: 13px; font-weight: 600; color: #1e293b; margin-top: 2px; }
+
+  /* TABLE */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #f1f5f9; color: #475569; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 10px; text-align: left; border-bottom: 1.5px solid #e2e8f0; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+
+  /* HASH */
+  .hash-block { background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 16px; }
+  .hash-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+  .hash-value { font-family: 'Courier New', monospace; font-size: 14px; font-weight: 700; color: #1e3a8a; letter-spacing: 2px; }
+
+  /* FOOTER */
+  .footer { margin-top: 32px; border-top: 1.5px solid #e2e8f0; padding-top: 14px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 11px; color: #94a3b8; }
+  .footer-note { max-width: 500px; }
+
+  @media print {
+    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .page { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-logo">
+      <div class="logo-box">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="white" stroke="white" stroke-width="1" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="org-name">SOMELEC</div>
+        <div class="org-sub">Plans d'Action</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="cert-title">Certificat de Validation</div>
+      <div class="cert-ref">Généré le ${now}</div>
+    </div>
+  </div>
+
+  <!-- STATUS BANNER -->
+  <div class="status-banner">
+    <div>
+      <div class="plan-title">${plan.titre}</div>
+      <div class="plan-meta">${direction} &nbsp;·&nbsp; Réf. ${plan.reference ?? `#${plan.id}`} &nbsp;·&nbsp; Ouvert le ${openedStr}</div>
+    </div>
+    <div class="status-badge">✓ Plan Validé</div>
+  </div>
+
+  <!-- PLAN INFO -->
+  <div class="section">
+    <div class="section-title">Informations du plan</div>
+    <div class="info-grid">
+      <div class="info-item"><span class="info-label">Direction</span><span class="info-value">${direction}</span></div>
+      <div class="info-item"><span class="info-label">Créé par</span><span class="info-value">${plan.createdByNom ?? "—"}</span></div>
+      <div class="info-item"><span class="info-label">Date de début</span><span class="info-value">${new Date(plan.dateDebut).toLocaleDateString("fr-FR", { dateStyle: "long" })}</span></div>
+      <div class="info-item"><span class="info-label">Durée</span><span class="info-value">${plan.duree} mois</span></div>
+      <div class="info-item"><span class="info-label">Budget total</span><span class="info-value">${formatMRU(budgetTotal)}</span></div>
+      <div class="info-item"><span class="info-label">Nombre de moyens</span><span class="info-value">${(plan.moyens ?? []).length} moyen(s)</span></div>
+      ${plan.description ? `<div class="info-item" style="grid-column:1/-1"><span class="info-label">Description</span><span class="info-value" style="font-weight:400">${plan.description}</span></div>` : ""}
+    </div>
+  </div>
+
+  <!-- VALIDATION CHAIN -->
+  <div class="section">
+    <div class="section-title">Chaîne de validation</div>
+    ${approvals.length === 0
+      ? `<p style="color:#94a3b8;font-style:italic;font-size:12px;">Aucune validation enregistrée pour ce plan.</p>`
+      : `<table>
+          <thead><tr>
+            <th>Étape</th>
+            <th>Validateur</th>
+            <th style="text-align:center">Date &amp; Heure</th>
+            <th style="text-align:center">Décision</th>
+          </tr></thead>
+          <tbody>${validationRows}</tbody>
+        </table>`
+    }
+  </div>
+
+  <!-- MOYENS SUMMARY -->
+  ${(plan.moyens ?? []).length > 0 ? `
+  <div class="section">
+    <div class="section-title">Récapitulatif des moyens</div>
+    <table>
+      <thead><tr>
+        <th>Catégorie</th>
+        <th>Description</th>
+        <th style="text-align:right">Budget</th>
+        <th style="text-align:right">Consommé</th>
+        <th style="text-align:center">%</th>
+      </tr></thead>
+      <tbody>${moyenRows}</tbody>
+    </table>
+  </div>` : ""}
+
+  <!-- INTEGRITY HASH -->
+  <div class="section">
+    <div class="section-title">Intégrité du document</div>
+    <div class="hash-block">
+      <div>
+        <div class="hash-label">Empreinte numérique (SHA-256)</div>
+        <div class="hash-value">${shortHash}</div>
+      </div>
+      <div style="font-size:11px;color:#94a3b8;max-width:340px">
+        Cette empreinte est calculée à partir des données immuables du plan. Elle permet de vérifier l'authenticité de ce document dans l'application SOMELEC Plans d'Action.
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-note">
+      Document généré automatiquement par SOMELEC Plans d'Action. Ce certificat atteste de la validation du plan d'action par la chaîne hiérarchique compétente.
+    </div>
+    <div style="text-align:right">
+      <div style="font-weight:700;color:#1e3a8a">SOMELEC — Plans d'Action</div>
+      <div>${plan.reference ?? `Plan #${plan.id}`}</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>`;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+  } catch (err) {
+    console.error(String(err));
+    res.status(500).json({ error: String(err) });
   }
 });
 
