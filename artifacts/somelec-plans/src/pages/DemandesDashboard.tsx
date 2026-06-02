@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import {
   Fuel, Package, Truck, CreditCard, ExternalLink, Trash2,
   Clock, CheckCircle2, ChevronDown, ChevronUp, Search, RefreshCw, AlertTriangle,
-  Users, Layers,
+  Users, Layers, FileWarning, Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -53,12 +53,13 @@ const STATUT_CONFIG: Record<string, { label: string; bg: string; text: string; i
   en_attente_da:    { label: "En attente DA",     bg: "bg-amber-100",   text: "text-amber-800",   icon: Clock },
   en_attente_dmg:   { label: "En attente DMG",    bg: "bg-amber-100",   text: "text-amber-800",   icon: Clock },
   en_attente_dcgai: { label: "En attente DCGAI",  bg: "bg-blue-100",    text: "text-blue-800",    icon: Clock },
-  en_attente_dfc:   { label: "En attente DFC",    bg: "bg-purple-100",  text: "text-purple-800",  icon: Clock },
-  validee:          { label: "Validée",            bg: "bg-green-100",   text: "text-green-800",   icon: CheckCircle2 },
-  payee:            { label: "Payée",              bg: "bg-green-100",   text: "text-green-800",   icon: CheckCircle2 },
+  en_attente_dfc:           { label: "En attente DFC",        bg: "bg-purple-100",  text: "text-purple-800",  icon: Clock },
+  en_attente_justificatif:  { label: "Attente justificatif",  bg: "bg-amber-100",   text: "text-amber-800",   icon: FileWarning },
+  validee:                  { label: "Validée",               bg: "bg-green-100",   text: "text-green-800",   icon: CheckCircle2 },
+  payee:                    { label: "Payée",                 bg: "bg-green-100",   text: "text-green-800",   icon: CheckCircle2 },
 };
 
-const PENDING_STATUTS = ["en_attente_cad", "en_attente_da", "en_attente_dmg", "en_attente_dcgai", "en_attente_dfc"];
+const PENDING_STATUTS = ["en_attente_cad", "en_attente_da", "en_attente_dmg", "en_attente_dcgai", "en_attente_dfc", "en_attente_justificatif"];
 const DONE_STATUTS = ["validee", "payee"];
 
 const CATEGORIE_LABELS: Record<string, string> = {
@@ -139,6 +140,7 @@ export default function DemandesDashboard() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
+  const [activeTab, setActiveTab] = useState<"demandes" | "justificatifs">("demandes");
   const [filterStatut, setFilterStatut] = useState<"all" | "pending" | "done">("pending");
   const [filterType, setFilterType] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -154,6 +156,28 @@ export default function DemandesDashboard() {
       if (!res.ok) throw new Error("Erreur chargement");
       return res.json();
     },
+    refetchInterval: 60_000,
+  });
+
+  const isDFC = currentUser?.role === "direction_financiere";
+
+  interface NonJustifieeItem {
+    id: number; planId: number; moyenId: number; batchRef: string | null;
+    nomBeneficiaire: string; matriculeBeneficiaire: string | null;
+    montantDemande: number; montantPaye: number | null; pieceReference: string | null;
+    dfcValidatedAt: string | null; createdAt: string;
+    planReference: string | null; planTitre: string | null;
+    directionNom: string | null; moyenDescription: string | null; moyenCategorie: string | null;
+  }
+
+  const { data: nonJustifiees = [], isLoading: njLoading, refetch: njRefetch } = useQuery<NonJustifieeItem[]>({
+    queryKey: ["depenses-non-justifiees"],
+    queryFn: async () => {
+      const res = await fetch(`${BASE_URL}api/depenses/non-justifiees`);
+      if (!res.ok) throw new Error("Erreur chargement");
+      return res.json();
+    },
+    enabled: isDFC,
     refetchInterval: 60_000,
   });
 
@@ -284,14 +308,140 @@ export default function DemandesDashboard() {
           </p>
         </div>
         <button
-          onClick={() => refetch()}
+          onClick={() => activeTab === "demandes" ? refetch() : njRefetch()}
           className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-600"
         >
-          <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+          <RefreshCw className={cn("w-4 h-4", (isLoading || njLoading) && "animate-spin")} />
           Actualiser
         </button>
       </div>
 
+      {/* DFC tabs */}
+      {isDFC && (
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden bg-white shadow-sm w-fit">
+          <button
+            onClick={() => setActiveTab("demandes")}
+            className={cn("px-5 py-2.5 text-sm font-medium transition-colors flex items-center gap-2",
+              activeTab === "demandes" ? "bg-primary text-white" : "text-gray-600 hover:bg-gray-50"
+            )}
+          >
+            <CreditCard className="w-4 h-4" /> Demandes
+          </button>
+          <button
+            onClick={() => setActiveTab("justificatifs")}
+            className={cn("px-5 py-2.5 text-sm font-medium transition-colors flex items-center gap-2",
+              activeTab === "justificatifs" ? "bg-amber-600 text-white" : "text-gray-600 hover:bg-gray-50"
+            )}
+          >
+            <FileWarning className="w-4 h-4" />
+            Justificatifs en attente
+            {nonJustifiees.length > 0 && (
+              <span className={cn("inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full text-xs font-bold",
+                activeTab === "justificatifs" ? "bg-white text-amber-700" : "bg-amber-500 text-white"
+              )}>
+                {nonJustifiees.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Justificatifs tab — DFC only */}
+      {isDFC && activeTab === "justificatifs" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm text-gray-600">
+              {nonJustifiees.length === 0
+                ? "Aucune dépense en attente de justificatif."
+                : `${nonJustifiees.length} dépense(s) payée(s) sans justificatif.`}
+            </p>
+            <a
+              href={`${BASE_URL}api/depenses/non-justifiees/excel`}
+              download
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Télécharger Excel
+            </a>
+          </div>
+
+          {njLoading ? (
+            <div className="flex items-center justify-center h-40 gap-3 text-muted-foreground">
+              <RefreshCw className="w-5 h-5 animate-spin" />
+              Chargement…
+            </div>
+          ) : nonJustifiees.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 gap-3 text-muted-foreground bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+              <CheckCircle2 className="w-10 h-10 text-gray-300" />
+              <p className="text-sm font-medium">Toutes les dépenses ont un justificatif</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-amber-50 border-b border-amber-200">
+                      <th className="text-left px-4 py-3 font-semibold text-amber-800">Plan</th>
+                      <th className="text-left px-4 py-3 font-semibold text-amber-800 hidden md:table-cell">Direction</th>
+                      <th className="text-left px-4 py-3 font-semibold text-amber-800 hidden lg:table-cell">Catégorie / Moyen</th>
+                      <th className="text-left px-4 py-3 font-semibold text-amber-800">Bénéficiaire</th>
+                      <th className="text-right px-4 py-3 font-semibold text-amber-800 hidden sm:table-cell">Montant payé</th>
+                      <th className="text-left px-4 py-3 font-semibold text-amber-800 hidden md:table-cell">Réf. pièce</th>
+                      <th className="text-left px-4 py-3 font-semibold text-amber-800 hidden md:table-cell">Date paiement</th>
+                      <th className="text-right px-4 py-3 font-semibold text-amber-800">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {nonJustifiees.map((item, idx) => (
+                      <tr key={`nj-${item.id}-${idx}`} className="hover:bg-amber-50/30 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-gray-900">{item.planReference ?? `Plan #${item.planId}`}</div>
+                          <div className="text-xs text-gray-500 max-w-40 truncate">{item.planTitre ?? ""}</div>
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell text-gray-600 text-xs">{item.directionNom ?? "—"}</td>
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          <div className="text-xs text-gray-700">{CATEGORIE_LABELS[item.moyenCategorie ?? ""] ?? item.moyenCategorie ?? "—"}</div>
+                          <div className="text-xs text-gray-400 truncate max-w-36">{item.moyenDescription ?? ""}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm text-gray-900">{item.nomBeneficiaire}</div>
+                          {item.matriculeBeneficiaire && <div className="text-xs text-gray-400">{item.matriculeBeneficiaire}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-right hidden sm:table-cell">
+                          <span className="font-semibold text-gray-900">{(item.montantPaye ?? 0).toLocaleString("fr-MR")}</span>
+                          <span className="text-xs text-gray-400 ml-1">MRU</span>
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell text-xs text-gray-500">{item.pieceReference ?? "—"}</td>
+                        <td className="px-4 py-3 hidden md:table-cell text-xs text-gray-500 whitespace-nowrap">
+                          {item.dfcValidatedAt ? new Date(item.dfcValidatedAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => navigate(`/plans/${item.planId}`)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors whitespace-nowrap"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Ouvrir
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
+                {nonJustifiees.length} dépense(s) non justifiée(s) — montant total payé :{" "}
+                <strong className="text-gray-700">
+                  {nonJustifiees.reduce((s, r) => s + (r.montantPaye ?? 0), 0).toLocaleString("fr-MR")} MRU
+                </strong>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Main demandes tab */}
+      {(!isDFC || activeTab === "demandes") && (<>
       <div className="flex flex-wrap gap-3 items-center">
         <div className="flex rounded-lg border border-gray-200 overflow-hidden bg-white shadow-sm">
           {(["all", "pending", "done"] as const).map(f => (
@@ -477,6 +627,7 @@ export default function DemandesDashboard() {
           </div>
         </div>
       )}
+      </>)}
 
       {deleteTarget && (
         <DeleteConfirmDialog

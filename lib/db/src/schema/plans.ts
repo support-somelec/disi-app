@@ -144,6 +144,9 @@ export const depenseDemandesTable = pgTable("depense_demandes", {
   dfcValidatedAt: timestamp("dfc_validated_at"),
   montantPaye: numeric("montant_paye", { precision: 12, scale: 2 }),
   pieceReference: text("piece_reference"),
+  justificatifNom: text("justificatif_nom"),
+  justificatifData: text("justificatif_data"),
+  justificatifAt: timestamp("justificatif_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

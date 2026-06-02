@@ -587,6 +587,15 @@ router.post("/plans/:id/cloturer", async (req, res) => {
     if (!existing.length) return res.status(404).json({ error: "Plan not found" });
     if (existing[0].statut !== "ouvert") return res.status(400).json({ error: "Le plan doit être ouvert pour être clôturé" });
 
+    // Block closure if any depense is awaiting justificatif
+    const nonJustifiees = await db.select({ id: depenseDemandesTable.id })
+      .from(depenseDemandesTable)
+      .where(and(eq(depenseDemandesTable.planId, id), eq(depenseDemandesTable.statut, "en_attente_justificatif")))
+      .limit(1);
+    if (nonJustifiees.length > 0) {
+      return res.status(400).json({ error: "Ce plan contient des dépenses payées sans justificatif. Veuillez fournir les justificatifs avant de clôturer." });
+    }
+
     await db.update(plansTable).set({
       statut: "cloture",
       rapportCloture: body.rapportCloture,
@@ -1318,7 +1327,10 @@ const mapDepenseDemande = (d: typeof depenseDemandesTable.$inferSelect) => ({
   dcgaiAnnuleById: d.dcgaiAnnuleById, dcgaiAnnuleAt: d.dcgaiAnnuleAt,
   dfcValidatedById: d.dfcValidatedById, dfcValidatedAt: d.dfcValidatedAt,
   montantPaye: d.montantPaye !== null ? Number(d.montantPaye) : null,
-  pieceReference: d.pieceReference, createdAt: d.createdAt,
+  pieceReference: d.pieceReference,
+  justificatifNom: d.justificatifNom ?? null,
+  justificatifAt: d.justificatifAt ?? null,
+  createdAt: d.createdAt,
 });
 
 // GET /plans/:id/moyens/:moyenId/depense-demandes
@@ -1511,7 +1523,7 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dfc-payer", 
     const pieceReference = `PIECE-${planRef}-${String(demandeId).padStart(4, "0")}`;
 
     const [updated] = await db.update(depenseDemandesTable)
-      .set({ statut: "payee", dfcValidatedById: dfcUserId, dfcValidatedAt: new Date(), montantPaye: String(montantPaye), pieceReference })
+      .set({ statut: "en_attente_justificatif", dfcValidatedById: dfcUserId, dfcValidatedAt: new Date(), montantPaye: String(montantPaye), pieceReference })
       .where(eq(depenseDemandesTable.id, demandeId)).returning();
 
     // Deduct from moyen budget
@@ -1521,6 +1533,22 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dfc-payer", 
         .set({ montantConsomme: String(Number(moyen.montantConsomme ?? 0) + montantPaye) })
         .where(eq(moyensTable.id, moyenId));
     }
+
+    res.json(mapDepenseDemande(updated));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/justifier
+router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/justifier", async (req, res) => {
+  try {
+    const demandeId = Number(req.params.demandeId);
+    const { justificatifNom, justificatifData } = req.body as { justificatifNom: string; justificatifData: string };
+    const [existing] = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.id, demandeId));
+    if (!existing || existing.statut !== "en_attente_justificatif") return res.status(400).json({ error: "Demande introuvable ou statut incorrect." });
+
+    const [updated] = await db.update(depenseDemandesTable)
+      .set({ statut: "payee", justificatifNom, justificatifData, justificatifAt: new Date() })
+      .where(eq(depenseDemandesTable.id, demandeId)).returning();
 
     res.json(mapDepenseDemande(updated));
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
@@ -1541,7 +1569,7 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dfc-pay
     const pieceReference = `BATCH-PIECE-${planId}-${Date.now()}`;
 
     const updated = await db.update(depenseDemandesTable)
-      .set({ statut: "payee", dfcValidatedById: dfcUserId, dfcValidatedAt: new Date(), montantPaye: String(montantTotal), pieceReference })
+      .set({ statut: "en_attente_justificatif", dfcValidatedById: dfcUserId, dfcValidatedAt: new Date(), montantPaye: String(montantTotal), pieceReference })
       .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_dfc")))
       .returning();
 
@@ -1555,6 +1583,120 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dfc-pay
 
     res.json(updated.map(mapDepenseDemande));
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/justifier
+router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/justifier", async (req, res) => {
+  try {
+    const batchRef = req.params.batchRef;
+    const { justificatifNom, justificatifData } = req.body as { justificatifNom: string; justificatifData: string };
+
+    const rows = await db.select().from(depenseDemandesTable)
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_justificatif")));
+    if (rows.length === 0) return res.status(400).json({ error: "Aucune demande en attente de justificatif pour ce batch." });
+
+    const updated = await db.update(depenseDemandesTable)
+      .set({ statut: "payee", justificatifNom, justificatifData, justificatifAt: new Date() })
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_justificatif")))
+      .returning();
+
+    res.json(updated.map(mapDepenseDemande));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// GET /depenses/non-justifiees — all depense demandes awaiting justificatif (for DFC tab)
+router.get("/depenses/non-justifiees", async (req, res) => {
+  try {
+    const rows = await db
+      .select({
+        id: depenseDemandesTable.id,
+        planId: depenseDemandesTable.planId,
+        moyenId: depenseDemandesTable.moyenId,
+        batchRef: depenseDemandesTable.batchRef,
+        nomBeneficiaire: depenseDemandesTable.nomBeneficiaire,
+        matriculeBeneficiaire: depenseDemandesTable.matriculeBeneficiaire,
+        montantDemande: depenseDemandesTable.montantDemande,
+        montantPaye: depenseDemandesTable.montantPaye,
+        pieceReference: depenseDemandesTable.pieceReference,
+        dfcValidatedAt: depenseDemandesTable.dfcValidatedAt,
+        createdAt: depenseDemandesTable.createdAt,
+        planReference: plansTable.reference,
+        planTitre: plansTable.titre,
+        directionNom: directionsTable.nom,
+        moyenDescription: moyensTable.description,
+        moyenCategorie: moyensTable.categorie,
+      })
+      .from(depenseDemandesTable)
+      .leftJoin(plansTable, eq(depenseDemandesTable.planId, plansTable.id))
+      .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+      .leftJoin(moyensTable, eq(depenseDemandesTable.moyenId, moyensTable.id))
+      .where(eq(depenseDemandesTable.statut, "en_attente_justificatif"))
+      .orderBy(depenseDemandesTable.dfcValidatedAt);
+
+    res.json(rows.map(r => ({
+      ...r,
+      montantDemande: Number(r.montantDemande),
+      montantPaye: r.montantPaye !== null ? Number(r.montantPaye) : null,
+    })));
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// GET /depenses/non-justifiees/excel — Excel export
+router.get("/depenses/non-justifiees/excel", async (req, res) => {
+  try {
+    const XLSX = await import("xlsx");
+    const rows = await db
+      .select({
+        id: depenseDemandesTable.id,
+        batchRef: depenseDemandesTable.batchRef,
+        nomBeneficiaire: depenseDemandesTable.nomBeneficiaire,
+        matriculeBeneficiaire: depenseDemandesTable.matriculeBeneficiaire,
+        montantDemande: depenseDemandesTable.montantDemande,
+        montantPaye: depenseDemandesTable.montantPaye,
+        pieceReference: depenseDemandesTable.pieceReference,
+        dfcValidatedAt: depenseDemandesTable.dfcValidatedAt,
+        createdAt: depenseDemandesTable.createdAt,
+        planReference: plansTable.reference,
+        planTitre: plansTable.titre,
+        directionNom: directionsTable.nom,
+        moyenDescription: moyensTable.description,
+        moyenCategorie: moyensTable.categorie,
+      })
+      .from(depenseDemandesTable)
+      .leftJoin(plansTable, eq(depenseDemandesTable.planId, plansTable.id))
+      .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+      .leftJoin(moyensTable, eq(depenseDemandesTable.moyenId, moyensTable.id))
+      .where(eq(depenseDemandesTable.statut, "en_attente_justificatif"))
+      .orderBy(depenseDemandesTable.dfcValidatedAt);
+
+    const data = rows.map(r => ({
+      "Réf. Plan": r.planReference ?? `Plan #${r.planId ?? ""}`,
+      "Titre Plan": r.planTitre ?? "",
+      "Direction": r.directionNom ?? "",
+      "Catégorie": r.moyenCategorie ?? "",
+      "Moyen": r.moyenDescription ?? "",
+      "Bénéficiaire": r.nomBeneficiaire ?? "",
+      "Matricule": r.matriculeBeneficiaire ?? "",
+      "Montant demandé (MRU)": Number(r.montantDemande ?? 0),
+      "Montant payé (MRU)": r.montantPaye !== null ? Number(r.montantPaye) : "",
+      "Réf. pièce": r.pieceReference ?? "",
+      "Date paiement": r.dfcValidatedAt ? new Date(r.dfcValidatedAt).toLocaleDateString("fr-FR") : "",
+      "Date demande": r.createdAt ? new Date(r.createdAt).toLocaleDateString("fr-FR") : "",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Dépenses non justifiées");
+
+    // Column widths
+    ws["!cols"] = [18,30,20,14,25,25,14,22,20,20,16,14].map(w => ({ wch: w }));
+
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const filename = `depenses_non_justifiees_${new Date().toISOString().slice(0,10)}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (err) { res.status(500).json({ error: String(err) }); }
 });
 
 // GET /plans/:id/carburant-demandes-all  (all for CAD view)

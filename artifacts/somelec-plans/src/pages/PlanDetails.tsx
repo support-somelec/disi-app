@@ -152,7 +152,7 @@ export default function PlanDetails() {
   const [cadDocGenerated, setCadDocGenerated] = useState<Set<number>>(new Set());
 
   // ── Dépenses workflow state (prime/logement/logistique/indemnite/autres) ──
-  type DepenseDemande = { id: number; moyenId: number; statut: string; montantDemande: number; nomBeneficiaire: string; matriculeBeneficiaire?: string; batchRef?: string | null; montantPaye: number | null; pieceReference?: string; dcgaiValidatedAt?: string; dcgaiAnnuleById?: number | null; dcgaiAnnuleAt?: string | null; dfcValidatedAt?: string; createdAt: string };
+  type DepenseDemande = { id: number; moyenId: number; statut: string; montantDemande: number; nomBeneficiaire: string; matriculeBeneficiaire?: string; batchRef?: string | null; montantPaye: number | null; pieceReference?: string; dcgaiValidatedAt?: string; dcgaiAnnuleById?: number | null; dcgaiAnnuleAt?: string | null; dfcValidatedAt?: string; justificatifNom?: string | null; justificatifAt?: string | null; createdAt: string };
   const [depenseDemandesMap, setDepenseDemandesMap] = useState<Record<number, DepenseDemande[]>>({});
   const [expandedDepenseMoyen, setExpandedDepenseMoyen] = useState<Record<number, boolean>>({});
   const [depenseDemandeDialog, setDepenseDemandeDialog] = useState<number | null>(null);
@@ -183,6 +183,8 @@ export default function PlanDetails() {
   const [dfcBatchMontantInput, setDfcBatchMontantInput] = useState("");
   const [dfcBatchLoading, setDfcBatchLoading] = useState(false);
   const [dfcBatchDocGenerated, setDfcBatchDocGenerated] = useState(false);
+  const [justifLoading, setJustifLoading] = useState<number | null>(null); // demandeId being justified
+  const [justifBatchLoading, setJustifBatchLoading] = useState<string | null>(null); // batchRef being justified
 
   const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
@@ -459,6 +461,38 @@ export default function PlanDetails() {
       setDfcBatchMontantInput("");
     } catch { alert("Erreur réseau"); }
     finally { setDfcBatchLoading(false); }
+  };
+
+  const handleJustifier = async (moyenId: number, demandeId: number, file: File) => {
+    const data = await toBase64(file);
+    setJustifLoading(demandeId);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes/${demandeId}/justifier`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ justificatifNom: file.name, justificatifData: data }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadDepenseData(moyenId);
+      invalidatePlans();
+    } catch { alert("Erreur réseau"); }
+    finally { setJustifLoading(null); }
+  };
+
+  const handleJustifierBatch = async (moyenId: number, batchRef: string, file: File) => {
+    const data = await toBase64(file);
+    setJustifBatchLoading(batchRef);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes-batch/${encodeURIComponent(batchRef)}/justifier`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ justificatifNom: file.name, justificatifData: data }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadDepenseData(moyenId);
+      invalidatePlans();
+    } catch { alert("Erreur réseau"); }
+    finally { setJustifBatchLoading(null); }
   };
 
   const downloadPdfListe = (planObj: typeof plan, moyen: typeof moyens[0], demandes: DepenseDemande[]) => {
@@ -2373,19 +2407,23 @@ export default function PlanDetails() {
                         })}
                         {doneBatches.map(([batchRef, dems]) => {
                           const total = dems.reduce((s, d) => s + (d.montantPaye ?? d.montantDemande), 0);
+                          const awaitingJustif = dems.some(d => d.statut === "en_attente_justificatif");
                           return (
-                            <div key={batchRef} className="border border-green-200 rounded-lg bg-green-50/40 p-3 space-y-2">
+                            <div key={batchRef} className={cn("border rounded-lg p-3 space-y-2", awaitingJustif ? "border-amber-200 bg-amber-50/40" : "border-green-200 bg-green-50/40")}>
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <p className="text-xs text-green-800 font-semibold">{dems.length} bénéficiaire(s) — Payé : {total.toLocaleString("fr-MR")} MRU</p>
-                                  {dems[0]?.pieceReference && <p className="text-xs text-green-700">Réf. : {dems[0].pieceReference}</p>}
+                                  <p className={cn("text-xs font-semibold", awaitingJustif ? "text-amber-800" : "text-green-800")}>{dems.length} bénéficiaire(s) — Payé : {total.toLocaleString("fr-MR")} MRU</p>
+                                  {dems[0]?.pieceReference && <p className={cn("text-xs", awaitingJustif ? "text-amber-700" : "text-green-700")}>Réf. : {dems[0].pieceReference}</p>}
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <Button size="sm" variant="outline" className="h-6 text-xs gap-1 px-2 border-green-300 text-green-700 hover:bg-green-50"
                                     onClick={() => downloadPdfListe(plan, m, dems)}>
                                     <Download className="w-3 h-3" /> PDF
                                   </Button>
-                                  <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Payé</span>
+                                  {awaitingJustif
+                                    ? <span className="text-xs text-amber-700 flex items-center gap-1"><Clock className="w-3 h-3" /> Attente justificatif</span>
+                                    : <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Payé + Justifié</span>
+                                  }
                                 </div>
                               </div>
                             </div>
@@ -2396,6 +2434,7 @@ export default function PlanDetails() {
                   }
                   // Non-batch: regular per-item flow
                   const pending = allDems.filter(d => d.statut === "en_attente_dfc");
+                  const awaitingJustif = allDems.filter(d => d.statut === "en_attente_justificatif");
                   const paid = allDems.filter(d => d.statut === "payee");
                   return (
                     <div key={m.id} className="space-y-2">
@@ -2404,7 +2443,7 @@ export default function PlanDetails() {
                         <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => loadDepenseData(m.id)}>
                           <Loader2 className="w-3 h-3 mr-1" /> Charger
                         </Button>
-                      ) : pending.length === 0 && paid.length === 0 ? (
+                      ) : pending.length === 0 && awaitingJustif.length === 0 && paid.length === 0 ? (
                         <p className="text-xs text-muted-foreground italic">Aucun paiement en attente.</p>
                       ) : null}
                       {pending.map(dem => (
@@ -2421,10 +2460,16 @@ export default function PlanDetails() {
                           </div>
                         </div>
                       ))}
+                      {awaitingJustif.map(dem => (
+                        <div key={dem.id} className="border border-amber-200 rounded-lg bg-amber-50/40 p-2 flex items-center justify-between">
+                          <span className="text-xs text-amber-800 font-semibold">{dem.nomBeneficiaire} — {(dem.montantPaye ?? 0).toLocaleString("fr-MR")} MRU</span>
+                          <span className="text-xs text-amber-700 flex items-center gap-1"><Clock className="w-3 h-3" /> Attente justificatif</span>
+                        </div>
+                      ))}
                       {paid.map(dem => (
                         <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
                           <span className="text-xs text-green-800 font-semibold">{dem.nomBeneficiaire} — {(dem.montantPaye ?? 0).toLocaleString("fr-MR")} MRU — {dem.pieceReference}</span>
-                          <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Payée</span>
+                          <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Payée + Justifiée</span>
                         </div>
                       ))}
                     </div>
@@ -2432,6 +2477,79 @@ export default function PlanDetails() {
                 })}
               </CardContent>
             </Card>
+          )}
+
+          {/* Direction user — upload justificatifs for depenses awaiting justification */}
+          {isOwnDirectionPlan && plan.statut === "ouvert" && depenseMoyens.length > 0 && (
+            (() => {
+              const allPendingJustif: { moyen: typeof moyens[0]; dem: DepenseDemande }[] = [];
+              for (const m of depenseMoyens) {
+                const dems = depenseDemandesMap[m.id] ?? [];
+                for (const d of dems) {
+                  if (d.statut === "en_attente_justificatif") allPendingJustif.push({ moyen: m, dem: d });
+                }
+              }
+              if (allPendingJustif.length === 0) return null;
+              return (
+                <Card className="border-amber-300 bg-amber-50/50">
+                  <CardHeader className="border-b border-amber-200/60 pb-4">
+                    <CardTitle className="text-base flex items-center gap-2 text-amber-800 font-bold">
+                      <FileText className="w-4 h-4" /> Justificatifs de paiement à fournir
+                    </CardTitle>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Ces dépenses ont été payées par la DFC. Veuillez uploader le justificatif (facture, reçu, bon…) pour finaliser chaque dépense.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="p-5 space-y-3">
+                    {allPendingJustif.map(({ moyen: m, dem }) => {
+                      const isBatch = !!dem.batchRef;
+                      const isLoading = isBatch ? justifBatchLoading === dem.batchRef : justifLoading === dem.id;
+                      return (
+                        <div key={dem.id} className="border border-amber-200 rounded-lg bg-white p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-semibold text-amber-900">
+                                {CATEGORIE_LABELS[m.categorie]?.label ?? m.categorie} — {m.description}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Bénéficiaire : <span className="font-semibold">{dem.nomBeneficiaire}</span>
+                                {dem.matriculeBeneficiaire ? ` (${dem.matriculeBeneficiaire})` : ""}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Montant payé : <span className="font-semibold text-foreground">{(dem.montantPaye ?? 0).toLocaleString("fr-MR")} MRU</span>
+                                {dem.pieceReference ? <span className="ml-2 text-muted-foreground">— Réf. {dem.pieceReference}</span> : ""}
+                              </p>
+                            </div>
+                            <label className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors whitespace-nowrap",
+                              isLoading ? "bg-gray-200 text-gray-400 pointer-events-none" : "bg-amber-600 hover:bg-amber-700 text-white"
+                            )}>
+                              {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
+                              {isLoading ? "Upload…" : "Uploader justificatif"}
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                                className="hidden"
+                                disabled={isLoading}
+                                onChange={async e => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  if (isBatch && dem.batchRef) {
+                                    await handleJustifierBatch(m.id, dem.batchRef, file);
+                                  } else {
+                                    await handleJustifier(m.id, dem.id, file);
+                                  }
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              );
+            })()
           )}
 
           {/* Specialist waiting panel — has categories but no pending demands (exclude DA when only materiel moyens; exclude DMG when only location moyens) */}

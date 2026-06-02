@@ -16,6 +16,7 @@
     "drizzle-orm": "catalog:",
     "express": "^5",
     "nodemailer": "^8.0.4",
+    "xlsx": "^0.18.5",
     "zod": "catalog:"
   },
   "devDependencies": {
