@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable, materielItemsTable, materielDemandesTable, locationItemsTable, locationDemandesTable, carburantDemandesTable, depenseDemandesTable, planCommentsTable } from "@workspace/db/schema";
-import { eq, and, SQL, sql, inArray } from "drizzle-orm";
+import { eq, and, or, SQL, sql, inArray, isNull } from "drizzle-orm";
 import {
   CreatePlanBody,
   UpdatePlanBody,
@@ -1630,7 +1630,10 @@ router.get("/depenses/non-justifiees", async (req, res) => {
       .leftJoin(plansTable, eq(depenseDemandesTable.planId, plansTable.id))
       .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
       .leftJoin(moyensTable, eq(depenseDemandesTable.moyenId, moyensTable.id))
-      .where(eq(depenseDemandesTable.statut, "en_attente_justificatif"))
+      .where(or(
+        eq(depenseDemandesTable.statut, "en_attente_justificatif"),
+        and(eq(depenseDemandesTable.statut, "payee"), isNull(depenseDemandesTable.justificatifAt))
+      ))
       .orderBy(depenseDemandesTable.dfcValidatedAt);
 
     res.json(rows.map(r => ({
@@ -1666,7 +1669,10 @@ router.get("/depenses/non-justifiees/excel", async (req, res) => {
       .leftJoin(plansTable, eq(depenseDemandesTable.planId, plansTable.id))
       .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
       .leftJoin(moyensTable, eq(depenseDemandesTable.moyenId, moyensTable.id))
-      .where(eq(depenseDemandesTable.statut, "en_attente_justificatif"))
+      .where(or(
+        eq(depenseDemandesTable.statut, "en_attente_justificatif"),
+        and(eq(depenseDemandesTable.statut, "payee"), isNull(depenseDemandesTable.justificatifAt))
+      ))
       .orderBy(depenseDemandesTable.dfcValidatedAt);
 
     const data = rows.map(r => ({
