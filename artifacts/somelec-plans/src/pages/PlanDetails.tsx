@@ -13,7 +13,7 @@ import { useAuth, CATEGORY_ROLE, ROLE_LABELS } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, fmtMRU } from "@/lib/utils";
 import {
   Calendar, Building, Clock, CheckCircle2, FileText, Activity,
   AlertCircle, FileDigit, Download, ShieldCheck, TrendingDown, Fuel,
@@ -499,7 +499,7 @@ export default function PlanDetails() {
     if (!planObj) return;
     const planRef = planObj.reference ?? `PLAN-${planObj.id}`;
     const totalMontant = demandes.reduce((s, d) => s + d.montantDemande, 0);
-    const rows = demandes.map((d, i) => `<tr><td style="border:1px solid #ccc;padding:7px 11px">${i + 1}</td><td style="border:1px solid #ccc;padding:7px 11px">${d.nomBeneficiaire}</td><td style="border:1px solid #ccc;padding:7px 11px">${d.matriculeBeneficiaire ?? "—"}</td><td style="border:1px solid #ccc;padding:7px 11px;text-align:right;font-weight:600">${d.montantDemande.toLocaleString("fr-MR")} MRU</td></tr>`).join("");
+    const rows = demandes.map((d, i) => `<tr><td style="border:1px solid #ccc;padding:7px 11px">${i + 1}</td><td style="border:1px solid #ccc;padding:7px 11px">${d.nomBeneficiaire}</td><td style="border:1px solid #ccc;padding:7px 11px">${d.matriculeBeneficiaire ?? "—"}</td><td style="border:1px solid #ccc;padding:7px 11px;text-align:right;font-weight:600">${d.montantDemande.toLocaleString("fr-FR")} MRU</td></tr>`).join("");
     const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Liste ${CATEGORIE_LABELS[moyen.categorie]?.label ?? moyen.categorie} — ${planRef}</title>
     <style>
       *{box-sizing:border-box;margin:0;padding:0;}
@@ -536,7 +536,7 @@ export default function PlanDetails() {
     <div>
       <table>
         <thead><tr><th>#</th><th>Nom complet</th><th>Matricule</th><th style="text-align:right">Montant (MRU)</th></tr></thead>
-        <tbody>${rows}<tr class="total-row"><td colspan="3">TOTAL</td><td style="text-align:right">${totalMontant.toLocaleString("fr-MR")} MRU</td></tr></tbody>
+        <tbody>${rows}<tr class="total-row"><td colspan="3">TOTAL</td><td style="text-align:right">${totalMontant.toLocaleString("fr-FR")} MRU</td></tr></tbody>
       </table>
     </div>
     <div class="qr-section">
@@ -546,7 +546,7 @@ export default function PlanDetails() {
         <div>Plan : ${planRef}</div>
         <div>Catégorie : ${CATEGORIE_LABELS[moyen.categorie]?.label ?? moyen.categorie}</div>
         <div>Nombre de bénéficiaires : ${demandes.length}</div>
-        <div>Montant total : ${totalMontant.toLocaleString("fr-MR")} MRU</div>
+        <div>Montant total : ${totalMontant.toLocaleString("fr-FR")} MRU</div>
         <div>Date d'émission : ${new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</div>
         <div style="margin-top:4px;font-size:10px;color:#999;">Scannez le QR code pour vérifier l'authenticité de ce document.</div>
       </div>
@@ -595,8 +595,8 @@ export default function PlanDetails() {
     <div>
       <div class="section-title">Détails du paiement</div>
       <table>
-        <tr><th>Montant demandé</th><td>${demande.montantDemande.toLocaleString("fr-MR")} MRU</td></tr>
-        <tr><th>Montant payé</th><td class="amount">${(demande.montantPaye ?? 0).toLocaleString("fr-MR")} MRU</td></tr>
+        <tr><th>Montant demandé</th><td>${demande.montantDemande.toLocaleString("fr-FR")} MRU</td></tr>
+        <tr><th>Montant payé</th><td class="amount">${(demande.montantPaye ?? 0).toLocaleString("fr-FR")} MRU</td></tr>
         <tr><th>Date de paiement</th><td>${new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</td></tr>
       </table>
     </div>
@@ -607,7 +607,7 @@ export default function PlanDetails() {
         <div>Référence pièce : ${demande.pieceReference ?? "—"}</div>
         <div>Plan : ${planRef}</div>
         <div>Bénéficiaire : ${demande.nomBeneficiaire}</div>
-        <div>Montant payé : ${(demande.montantPaye ?? 0).toLocaleString("fr-MR")} MRU</div>
+        <div>Montant payé : ${(demande.montantPaye ?? 0).toLocaleString("fr-FR")} MRU</div>
         <div>Date d'émission : ${new Date().toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</div>
         <div style="margin-top:4px;font-size:10px;color:#999;">Scannez le QR code pour vérifier l'authenticité de ce document.</div>
       </div>
@@ -740,7 +740,7 @@ export default function PlanDetails() {
     if (!CATS_DEPASSEMENT_OK.includes(moyen.categorie ?? "") && val > budget) {
       setConsommeErrors(prev => ({
         ...prev,
-        [moyen.id]: `Dépassement non autorisé : ${val.toLocaleString("fr-MR")} MRU saisi > ${budget.toLocaleString("fr-MR")} MRU prévu.`,
+        [moyen.id]: `Dépassement non autorisé : ${val.toLocaleString("fr-FR")} MRU saisi > ${budget.toLocaleString("fr-FR")} MRU prévu.`,
       }));
       return;
     }
@@ -944,7 +944,7 @@ export default function PlanDetails() {
           </table>
           <div class="amount-box">
             <div class="label">Montant demandé</div>
-            <div class="value">${opts.montant.toLocaleString("fr-MR")} MRU</div>
+            <div class="value">${opts.montant.toLocaleString("fr-FR")} MRU</div>
           </div>
         </div>
         <div class="qr-block">
@@ -1019,7 +1019,7 @@ export default function PlanDetails() {
           </table>
           <div class="amount-box">
             <div class="label">Montant carburant demandé</div>
-            <div class="value">${cadValiderDialog.montantDemande.toLocaleString("fr-MR")} MRU</div>
+            <div class="value">${cadValiderDialog.montantDemande.toLocaleString("fr-FR")} MRU</div>
           </div>
         </div>
         <div class="qr-block">
@@ -1463,7 +1463,7 @@ export default function PlanDetails() {
                                     <tr key={bi} className="bg-white">
                                       <td className="px-2 py-1.5 font-medium">{b.nomBeneficiaire}</td>
                                       <td className="px-2 py-1.5 text-muted-foreground">{b.matriculeBeneficiaire ?? "—"}</td>
-                                      <td className="px-2 py-1.5 text-right font-semibold text-primary">{b.montantDemande.toLocaleString("fr-MR")} MRU</td>
+                                      <td className="px-2 py-1.5 text-right font-semibold text-primary">{b.montantDemande.toLocaleString("fr-FR")} MRU</td>
                                       <td className="px-2 py-1.5 text-center">
                                         <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-medium ${
                                           b.statut === "payee" ? "bg-green-100 text-green-700" :
@@ -1613,12 +1613,12 @@ export default function PlanDetails() {
                                     </div>
                                     <ul className="list-disc list-inside text-muted-foreground space-y-0.5">
                                       {dem.items.map((it, ii) => (
-                                        <li key={ii}>{it.item} × {it.quantiteDemandee}{it.montantTotal ? ` — ${it.montantTotal.toLocaleString("fr-MR")} MRU` : ""}</li>
+                                        <li key={ii}>{it.item} × {it.quantiteDemandee}{it.montantTotal ? ` — ${it.montantTotal.toLocaleString("fr-FR")} MRU` : ""}</li>
                                       ))}
                                     </ul>
                                     {dem.statut === "validee" && dem.montantTotal && (
                                       <div className="flex items-center justify-between pt-1">
-                                        <span className="font-semibold text-success">Total : {dem.montantTotal.toLocaleString("fr-MR")} MRU</span>
+                                        <span className="font-semibold text-success">Total : {dem.montantTotal.toLocaleString("fr-FR")} MRU</span>
                                         <Button size="sm" variant="outline" className="h-6 text-xs gap-1 px-2" onClick={() => downloadBon(dem, plan.reference ?? `PLAN-${plan.id}`)}>
                                           <Download className="w-3 h-3" /> Bon
                                         </Button>
@@ -1665,11 +1665,11 @@ export default function PlanDetails() {
                                     </div>
                                     <ul className="list-disc list-inside text-muted-foreground space-y-0.5">
                                       {dem.items.map((it, ii) => (
-                                        <li key={ii}>{it.typeEngin} — {it.nbJoursDemandes} jour(s){it.montant ? ` — ${it.montant.toLocaleString("fr-MR")} MRU` : ""}</li>
+                                        <li key={ii}>{it.typeEngin} — {it.nbJoursDemandes} jour(s){it.montant ? ` — ${it.montant.toLocaleString("fr-FR")} MRU` : ""}</li>
                                       ))}
                                     </ul>
                                     {dem.statut === "validee" && dem.montantTotal && (
-                                      <div className="pt-1 font-semibold text-success">Total : {dem.montantTotal.toLocaleString("fr-MR")} MRU</div>
+                                      <div className="pt-1 font-semibold text-success">Total : {dem.montantTotal.toLocaleString("fr-FR")} MRU</div>
                                     )}
                                   </div>
                                 ))}
@@ -1708,8 +1708,8 @@ export default function PlanDetails() {
                                         {dem.statut === "validee" ? "Validée CAD" : "Attente CAD"}
                                       </span>
                                     </div>
-                                    <div className="text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-MR")} MRU</span></div>
-                                    {dem.montantValide !== null && <div className="text-success font-semibold">Montant validé : {dem.montantValide.toLocaleString("fr-MR")} MRU</div>}
+                                    <div className="text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-FR")} MRU</span></div>
+                                    {dem.montantValide !== null && <div className="text-success font-semibold">Montant validé : {dem.montantValide.toLocaleString("fr-FR")} MRU</div>}
                                   </div>
                                 ))}
                               </div>
@@ -1749,8 +1749,8 @@ export default function PlanDetails() {
                                         {dem.statut === "payee" ? "Payée" : dem.statut === "en_attente_dfc" ? "Attente DFC" : "Attente DCGAI"}
                                       </span>
                                     </div>
-                                    <div className="text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-MR")} MRU</span></div>
-                                    {dem.statut === "payee" && <div className="text-success font-semibold">Montant payé : {(dem.montantPaye ?? 0).toLocaleString("fr-MR")} MRU — Réf : {dem.pieceReference}</div>}
+                                    <div className="text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-FR")} MRU</span></div>
+                                    {dem.statut === "payee" && <div className="text-success font-semibold">Montant payé : {(dem.montantPaye ?? 0).toLocaleString("fr-FR")} MRU — Réf : {dem.pieceReference}</div>}
                                   </div>
                                 ))}
                               </div>
@@ -2021,11 +2021,11 @@ export default function PlanDetails() {
                         <div key={dem.id} className="border border-purple-200 rounded-lg bg-white p-3 space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-semibold text-purple-800">{dem.bonNumber ?? `BON-${dem.id}`}</span>
-                            <span className="text-xs font-bold text-primary">{dem.montantTotal?.toLocaleString("fr-MR") ?? "—"} MRU</span>
+                            <span className="text-xs font-bold text-primary">{dem.montantTotal?.toLocaleString("fr-FR") ?? "—"} MRU</span>
                           </div>
                           <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5">
                             {dem.items.map((it, ii) => (
-                              <li key={ii}>{it.item} × {it.quantiteDemandee} — {it.montantUnitaire?.toLocaleString("fr-MR") ?? "—"} MRU/u</li>
+                              <li key={ii}>{it.item} × {it.quantiteDemandee} — {it.montantUnitaire?.toLocaleString("fr-FR") ?? "—"} MRU/u</li>
                             ))}
                           </ul>
                           <div className="flex gap-2 pt-1">
@@ -2054,7 +2054,7 @@ export default function PlanDetails() {
                       ))}
                       {validatedBons.map(dem => (
                         <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
-                          <span className="text-xs text-green-800 font-semibold">{dem.bonNumber} — {dem.montantTotal?.toLocaleString("fr-MR") ?? "—"} MRU</span>
+                          <span className="text-xs text-green-800 font-semibold">{dem.bonNumber} — {dem.montantTotal?.toLocaleString("fr-FR") ?? "—"} MRU</span>
                           <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Validé</span>
                         </div>
                       ))}
@@ -2110,7 +2110,7 @@ export default function PlanDetails() {
                       ))}
                       {validatedDemandes.map(dem => (
                         <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
-                          <span className="text-xs text-green-800 font-semibold">Demande #{dem.id} — {dem.montantTotal?.toLocaleString("fr-MR") ?? "—"} MRU</span>
+                          <span className="text-xs text-green-800 font-semibold">Demande #{dem.id} — {dem.montantTotal?.toLocaleString("fr-FR") ?? "—"} MRU</span>
                           <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Validée</span>
                         </div>
                       ))}
@@ -2147,7 +2147,7 @@ export default function PlanDetails() {
                       {pending.map(dem => (
                         <div key={dem.id} className="border border-orange-200 rounded-lg bg-white p-3 space-y-1">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-orange-700">Demande #{dem.id} — {dem.montantDemande.toLocaleString("fr-MR")} MRU</span>
+                            <span className="text-xs font-medium text-orange-700">Demande #{dem.id} — {dem.montantDemande.toLocaleString("fr-FR")} MRU</span>
                             <div className="flex gap-1.5 items-center">
                               <Button size="sm"
                                 className={`h-6 text-xs gap-1 px-2 ${cadDocGenerated.has(dem.id) ? "bg-green-200 text-green-800 border border-green-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 text-white"}`}
@@ -2172,7 +2172,7 @@ export default function PlanDetails() {
                       ))}
                       {validated.map(dem => (
                         <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
-                          <span className="text-xs text-green-800 font-semibold">#{dem.id} — {dem.montantValide?.toLocaleString("fr-MR") ?? "—"} MRU validés</span>
+                          <span className="text-xs text-green-800 font-semibold">#{dem.id} — {dem.montantValide?.toLocaleString("fr-FR") ?? "—"} MRU validés</span>
                           <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Validée</span>
                         </div>
                       ))}
@@ -2220,7 +2220,7 @@ export default function PlanDetails() {
                           return (
                             <div key={batchRef} className={cn("border rounded-lg bg-white p-3 space-y-2", isPending ? "border-emerald-200" : "border-gray-200 opacity-70")}>
                               <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-semibold text-emerald-900">{dems.length} bénéficiaire(s) — Total : {total.toLocaleString("fr-MR")} MRU</span>
+                                <span className="text-xs font-semibold text-emerald-900">{dems.length} bénéficiaire(s) — Total : {total.toLocaleString("fr-FR")} MRU</span>
                                 {isPending ? (
                                   <div className="flex gap-1.5 items-center">
                                     <Button size="sm"
@@ -2264,7 +2264,7 @@ export default function PlanDetails() {
                                     <tr key={d.id}>
                                       <td className="border border-emerald-100 px-2 py-1">{d.nomBeneficiaire}</td>
                                       <td className="border border-emerald-100 px-2 py-1 text-muted-foreground">{d.matriculeBeneficiaire ?? "—"}</td>
-                                      <td className="border border-emerald-100 px-2 py-1 text-right font-semibold">{d.montantDemande.toLocaleString("fr-MR")} MRU</td>
+                                      <td className="border border-emerald-100 px-2 py-1 text-right font-semibold">{d.montantDemande.toLocaleString("fr-FR")} MRU</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -2293,7 +2293,7 @@ export default function PlanDetails() {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-xs font-semibold text-emerald-900">{dem.nomBeneficiaire}{dem.matriculeBeneficiaire ? ` — ${dem.matriculeBeneficiaire}` : ""}</p>
-                              <p className="text-xs text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
+                              <p className="text-xs text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-FR")} MRU</span></p>
                             </div>
                             <div className="flex gap-1.5 items-center">
                               <Button size="sm"
@@ -2313,7 +2313,7 @@ export default function PlanDetails() {
                       ))}
                       {rest.map(dem => (
                         <div key={dem.id} className="border rounded-lg bg-white/60 p-2 flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">{dem.nomBeneficiaire} — {dem.montantDemande.toLocaleString("fr-MR")} MRU</span>
+                          <span className="text-xs text-muted-foreground">{dem.nomBeneficiaire} — {dem.montantDemande.toLocaleString("fr-FR")} MRU</span>
                           <div className="flex items-center gap-1.5">
                             <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium",
                               dem.statut === "payee" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700")}>
@@ -2376,7 +2376,7 @@ export default function PlanDetails() {
                             <div key={batchRef} className="border border-blue-200 rounded-lg bg-white p-3 space-y-2">
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <p className="text-xs font-semibold text-blue-900">{dems.length} bénéficiaire(s) — Montant demandé : {total.toLocaleString("fr-MR")} MRU</p>
+                                  <p className="text-xs font-semibold text-blue-900">{dems.length} bénéficiaire(s) — Montant demandé : {total.toLocaleString("fr-FR")} MRU</p>
                                   <p className="text-xs text-muted-foreground">Validé par le DCGAI — saisir le paiement pour générer le document</p>
                                 </div>
                                 <Button size="sm" className="h-7 text-xs gap-1 px-2.5 bg-blue-600 hover:bg-blue-700 text-white"
@@ -2397,7 +2397,7 @@ export default function PlanDetails() {
                                     <tr key={d.id}>
                                       <td className="border border-blue-100 px-2 py-1">{d.nomBeneficiaire}</td>
                                       <td className="border border-blue-100 px-2 py-1 text-muted-foreground">{d.matriculeBeneficiaire ?? "—"}</td>
-                                      <td className="border border-blue-100 px-2 py-1 text-right font-semibold">{d.montantDemande.toLocaleString("fr-MR")} MRU</td>
+                                      <td className="border border-blue-100 px-2 py-1 text-right font-semibold">{d.montantDemande.toLocaleString("fr-FR")} MRU</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -2412,7 +2412,7 @@ export default function PlanDetails() {
                             <div key={batchRef} className={cn("border rounded-lg p-3 space-y-2", awaitingJustif ? "border-amber-200 bg-amber-50/40" : "border-green-200 bg-green-50/40")}>
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <p className={cn("text-xs font-semibold", awaitingJustif ? "text-amber-800" : "text-green-800")}>{dems.length} bénéficiaire(s) — Payé : {total.toLocaleString("fr-MR")} MRU</p>
+                                  <p className={cn("text-xs font-semibold", awaitingJustif ? "text-amber-800" : "text-green-800")}>{dems.length} bénéficiaire(s) — Payé : {total.toLocaleString("fr-FR")} MRU</p>
                                   {dems[0]?.pieceReference && <p className={cn("text-xs", awaitingJustif ? "text-amber-700" : "text-green-700")}>Réf. : {dems[0].pieceReference}</p>}
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -2451,7 +2451,7 @@ export default function PlanDetails() {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-xs font-semibold text-blue-900">{dem.nomBeneficiaire}{dem.matriculeBeneficiaire ? ` — ${dem.matriculeBeneficiaire}` : ""}</p>
-                              <p className="text-xs text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
+                              <p className="text-xs text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-FR")} MRU</span></p>
                             </div>
                             <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-blue-600 hover:bg-blue-700 text-white"
                               onClick={() => { setDfcPayerDialog({ moyenId: m.id, demandeId: dem.id, demande: dem }); setDfcMontantInput(""); }}>
@@ -2462,13 +2462,13 @@ export default function PlanDetails() {
                       ))}
                       {awaitingJustif.map(dem => (
                         <div key={dem.id} className="border border-amber-200 rounded-lg bg-amber-50/40 p-2 flex items-center justify-between">
-                          <span className="text-xs text-amber-800 font-semibold">{dem.nomBeneficiaire} — {(dem.montantPaye ?? 0).toLocaleString("fr-MR")} MRU</span>
+                          <span className="text-xs text-amber-800 font-semibold">{dem.nomBeneficiaire} — {(dem.montantPaye ?? 0).toLocaleString("fr-FR")} MRU</span>
                           <span className="text-xs text-amber-700 flex items-center gap-1"><Clock className="w-3 h-3" /> Attente justificatif</span>
                         </div>
                       ))}
                       {paid.map(dem => (
                         <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
-                          <span className="text-xs text-green-800 font-semibold">{dem.nomBeneficiaire} — {(dem.montantPaye ?? 0).toLocaleString("fr-MR")} MRU — {dem.pieceReference}</span>
+                          <span className="text-xs text-green-800 font-semibold">{dem.nomBeneficiaire} — {(dem.montantPaye ?? 0).toLocaleString("fr-FR")} MRU — {dem.pieceReference}</span>
                           <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Payée + Justifiée</span>
                         </div>
                       ))}
@@ -2516,7 +2516,7 @@ export default function PlanDetails() {
                                 {dem.matriculeBeneficiaire ? ` (${dem.matriculeBeneficiaire})` : ""}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                Montant payé : <span className="font-semibold text-foreground">{(dem.montantPaye ?? 0).toLocaleString("fr-MR")} MRU</span>
+                                Montant payé : <span className="font-semibold text-foreground">{(dem.montantPaye ?? 0).toLocaleString("fr-FR")} MRU</span>
                                 {dem.pieceReference ? <span className="ml-2 text-muted-foreground">— Réf. {dem.pieceReference}</span> : ""}
                               </p>
                             </div>
@@ -2838,7 +2838,7 @@ export default function PlanDetails() {
                     />
                     {daPrices[i] && Number(daPrices[i]) > 0 && (
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Total : <span className="font-semibold text-primary">{(Number(daPrices[i]) * item.quantiteDemandee).toLocaleString("fr-MR")} MRU</span>
+                        Total : <span className="font-semibold text-primary">{(Number(daPrices[i]) * item.quantiteDemandee).toLocaleString("fr-FR")} MRU</span>
                       </p>
                     )}
                   </div>
@@ -2846,7 +2846,7 @@ export default function PlanDetails() {
               ))}
               {daTraiterDialog.items.every((_, i) => daPrices[i] && Number(daPrices[i]) > 0) && (
                 <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200 text-sm font-semibold text-indigo-800 text-right">
-                  TOTAL : {daTraiterDialog.items.reduce((s, item, i) => s + Number(daPrices[i] ?? 0) * item.quantiteDemandee, 0).toLocaleString("fr-MR")} MRU
+                  TOTAL : {daTraiterDialog.items.reduce((s, item, i) => s + Number(daPrices[i] ?? 0) * item.quantiteDemandee, 0).toLocaleString("fr-FR")} MRU
                 </div>
               )}
             </div>
@@ -2958,7 +2958,7 @@ export default function PlanDetails() {
               ))}
               <div className="bg-sky-50 rounded-lg p-3 text-sm font-semibold text-sky-800 flex justify-between">
                 <span>Total</span>
-                <span>{Object.values(dmgMontants).reduce((s, v) => s + (Number(v) || 0), 0).toLocaleString("fr-MR")} MRU</span>
+                <span>{Object.values(dmgMontants).reduce((s, v) => s + (Number(v) || 0), 0).toLocaleString("fr-FR")} MRU</span>
               </div>
             </div>
           )}
@@ -3060,7 +3060,7 @@ export default function PlanDetails() {
           {cadValiderDialog && (
             <div className="space-y-3">
               <div className="rounded-xl border bg-orange-50 p-3 text-sm">
-                <p className="text-orange-700">Montant demandé : <span className="font-bold">{cadValiderDialog.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
+                <p className="text-orange-700">Montant demandé : <span className="font-bold">{cadValiderDialog.montantDemande.toLocaleString("fr-FR")} MRU</span></p>
                 <p className="text-orange-600 text-xs mt-1">Demande #{cadValiderDialog.demandeId} — {new Date(cadValiderDialog.createdAt).toLocaleDateString("fr-FR")}</p>
               </div>
               <div className="space-y-1">
@@ -3206,7 +3206,7 @@ export default function PlanDetails() {
                         <tr>
                           <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-emerald-800">Total ({primeBatchBenefs.length} bénéficiaire{primeBatchBenefs.length > 1 ? "s" : ""})</td>
                           <td className="px-3 py-2 text-sm font-bold text-emerald-900">
-                            {primeBatchBenefs.reduce((s, b) => s + (Number(b.montant) || 0), 0).toLocaleString("fr-MR")} MRU
+                            {primeBatchBenefs.reduce((s, b) => s + (Number(b.montant) || 0), 0).toLocaleString("fr-FR")} MRU
                           </td>
                           <td></td>
                         </tr>
@@ -3307,7 +3307,7 @@ export default function PlanDetails() {
               <div className="rounded-xl border bg-blue-50 p-3 text-sm space-y-1">
                 <p className="font-semibold text-blue-900">{dfcPayerDialog.demande.nomBeneficiaire}</p>
                 {dfcPayerDialog.demande.matriculeBeneficiaire && <p className="text-xs text-muted-foreground">Matricule : {dfcPayerDialog.demande.matriculeBeneficiaire}</p>}
-                <p className="text-xs text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dfcPayerDialog.demande.montantDemande.toLocaleString("fr-MR")} MRU</span></p>
+                <p className="text-xs text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dfcPayerDialog.demande.montantDemande.toLocaleString("fr-FR")} MRU</span></p>
               </div>
               <Button
                 type="button"
@@ -3368,14 +3368,14 @@ export default function PlanDetails() {
                         <tr key={d.id} className="bg-white">
                           <td className="px-3 py-2 font-medium">{d.nomBeneficiaire}</td>
                           <td className="px-3 py-2 text-muted-foreground">{d.matriculeBeneficiaire ?? "—"}</td>
-                          <td className="px-3 py-2 text-right font-semibold">{d.montantDemande.toLocaleString("fr-MR")} MRU</td>
+                          <td className="px-3 py-2 text-right font-semibold">{d.montantDemande.toLocaleString("fr-FR")} MRU</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-blue-50/60">
                       <tr>
                         <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-blue-800">Total demandé</td>
-                        <td className="px-3 py-2 text-sm font-bold text-blue-900 text-right">{totalDemande.toLocaleString("fr-MR")} MRU</td>
+                        <td className="px-3 py-2 text-sm font-bold text-blue-900 text-right">{totalDemande.toLocaleString("fr-FR")} MRU</td>
                       </tr>
                     </tfoot>
                   </table>

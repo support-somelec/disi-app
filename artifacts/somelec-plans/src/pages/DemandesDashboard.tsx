@@ -7,7 +7,7 @@ import {
   Clock, CheckCircle2, ChevronDown, ChevronUp, Search, RefreshCw, AlertTriangle,
   Users, Layers, FileWarning, Download,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, fmtMRU } from "@/lib/utils";
 
 const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
@@ -159,7 +159,7 @@ export default function DemandesDashboard() {
     refetchInterval: 60_000,
   });
 
-  const isDFC = currentUser?.role === "direction_financiere";
+  const isDFCOrAdmin = currentUser?.role === "direction_financiere" || ADMIN_ROLES.includes(currentUser?.role ?? "");
 
   interface NonJustifieeItem {
     id: number; planId: number; moyenId: number; batchRef: string | null;
@@ -177,7 +177,7 @@ export default function DemandesDashboard() {
       if (!res.ok) throw new Error("Erreur chargement");
       return res.json();
     },
-    enabled: isDFC,
+    enabled: isDFCOrAdmin,
     refetchInterval: 60_000,
   });
 
@@ -317,7 +317,7 @@ export default function DemandesDashboard() {
       </div>
 
       {/* DFC tabs */}
-      {isDFC && (
+      {isDFCOrAdmin && (
         <div className="flex rounded-lg border border-gray-200 overflow-hidden bg-white shadow-sm w-fit">
           <button
             onClick={() => setActiveTab("demandes")}
@@ -347,7 +347,7 @@ export default function DemandesDashboard() {
       )}
 
       {/* Justificatifs tab — DFC only */}
-      {isDFC && activeTab === "justificatifs" && (
+      {isDFCOrAdmin && activeTab === "justificatifs" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <p className="text-sm text-gray-600">
@@ -408,7 +408,7 @@ export default function DemandesDashboard() {
                           {item.matriculeBeneficiaire && <div className="text-xs text-gray-400">{item.matriculeBeneficiaire}</div>}
                         </td>
                         <td className="px-4 py-3 text-right hidden sm:table-cell">
-                          <span className="font-semibold text-gray-900">{(item.montantPaye ?? 0).toLocaleString("fr-MR")}</span>
+                          <span className="font-semibold text-gray-900">{(item.montantPaye ?? 0).toLocaleString("fr-FR")}</span>
                           <span className="text-xs text-gray-400 ml-1">MRU</span>
                         </td>
                         <td className="px-4 py-3 hidden md:table-cell text-xs text-gray-500">{item.pieceReference ?? "—"}</td>
@@ -432,7 +432,7 @@ export default function DemandesDashboard() {
               <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">
                 {nonJustifiees.length} dépense(s) non justifiée(s) — montant total payé :{" "}
                 <strong className="text-gray-700">
-                  {nonJustifiees.reduce((s, r) => s + (r.montantPaye ?? 0), 0).toLocaleString("fr-MR")} MRU
+                  {nonJustifiees.reduce((s, r) => s + (r.montantPaye ?? 0), 0).toLocaleString("fr-FR")} MRU
                 </strong>
               </div>
             </div>
@@ -441,7 +441,7 @@ export default function DemandesDashboard() {
       )}
 
       {/* Main demandes tab */}
-      {(!isDFC || activeTab === "demandes") && (<>
+      {(!isDFCOrAdmin || activeTab === "demandes") && (<>
       <div className="flex flex-wrap gap-3 items-center">
         <div className="flex rounded-lg border border-gray-200 overflow-hidden bg-white shadow-sm">
           {(["all", "pending", "done"] as const).map(f => (
@@ -576,16 +576,16 @@ export default function DemandesDashboard() {
                     <td className="px-4 py-3 text-right hidden sm:table-cell">
                       {item.montant != null ? (
                         <div className="font-semibold text-gray-900">
-                          {item.montant.toLocaleString("fr-MR")} <span className="text-xs font-normal text-gray-400">MRU</span>
+                          {item.montant.toLocaleString("fr-FR")} <span className="text-xs font-normal text-gray-400">MRU</span>
                         </div>
                       ) : (
                         <span className="text-gray-400 text-xs">—</span>
                       )}
                       {item.montantValide != null && item.statut === "validee" && (
-                        <div className="text-xs text-green-600">Validé : {item.montantValide.toLocaleString("fr-MR")}</div>
+                        <div className="text-xs text-green-600">Validé : {item.montantValide.toLocaleString("fr-FR")}</div>
                       )}
                       {item.montantPaye != null && item.statut === "payee" && (
-                        <div className="text-xs text-green-600">Payé : {item.montantPaye.toLocaleString("fr-MR")}</div>
+                        <div className="text-xs text-green-600">Payé : {item.montantPaye.toLocaleString("fr-FR")}</div>
                       )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-gray-500 text-xs whitespace-nowrap">

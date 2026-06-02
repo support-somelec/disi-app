@@ -6,9 +6,15 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('fr-MR', {
-    style: 'currency',
-    currency: 'MRU',
+  return new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount) + ' MRU';
+}
+
+export function fmtMRU(amount: number) {
+  return new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(amount);
 }
