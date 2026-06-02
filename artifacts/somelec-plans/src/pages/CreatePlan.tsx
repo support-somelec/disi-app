@@ -539,7 +539,7 @@ export default function CreatePlan() {
                               {m.quantite && ` • ${m.quantite} ${m.unite}`}
                             </div>
                           </div>
-                          <div className="font-semibold text-primary text-sm">{Number(m.budget).toLocaleString("fr-MR")} MRU</div>
+                          <div className="font-semibold text-primary text-sm">{Number(m.budget).toLocaleString("fr-FR")} MRU</div>
                         </li>
                       ))}
                     </ul>

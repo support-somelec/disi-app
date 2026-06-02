@@ -5,16 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount) + ' MRU';
+/** Format a number with space thousand separators: 1234567 → "1 234 567" */
+export function fmtMRU(amount: number): string {
+  return Math.round(amount)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
 }
 
-export function fmtMRU(amount: number) {
-  return new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
+/** Format a MRU amount: 1234567 → "1 234 567 MRU" */
+export function formatCurrency(amount: number): string {
+  return fmtMRU(amount) + '\u00A0MRU';
 }

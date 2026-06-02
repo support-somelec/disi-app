@@ -941,8 +941,8 @@ export default function AdminUsers() {
                                 return (
                                   <tr key={d.id} className="hover:bg-muted/20">
                                     <td className="px-4 py-2.5 text-muted-foreground text-xs">#{idx + 1}</td>
-                                    <td className="px-4 py-2.5 text-xs">{new Date(d.createdAt).toLocaleString("fr-MR")}</td>
-                                    <td className="px-4 py-2.5 text-xs font-medium">{montant ? `${Number(montant).toLocaleString("fr-MR")} MRU` : "—"}</td>
+                                    <td className="px-4 py-2.5 text-xs">{new Date(d.createdAt).toLocaleString("fr-FR")}</td>
+                                    <td className="px-4 py-2.5 text-xs font-medium">{montant ? `${Number(montant).toLocaleString("fr-FR")} MRU` : "—"}</td>
                                     <td className="px-4 py-2.5">
                                       <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 text-xs font-medium">{d.statut.replace(/_/g, " ")}</span>
                                     </td>
@@ -1026,8 +1026,8 @@ export default function AdminUsers() {
                                       : <span className="px-2 py-0.5 rounded bg-violet-100 text-violet-700 text-xs">Batch ({b.count} bénéf.)</span>
                                     }
                                   </td>
-                                  <td className="px-4 py-2.5 text-xs">{new Date(b.createdAt).toLocaleString("fr-MR")}</td>
-                                  <td className="px-4 py-2.5 text-xs font-medium">{Number(b.montantTotal).toLocaleString("fr-MR")} MRU</td>
+                                  <td className="px-4 py-2.5 text-xs">{new Date(b.createdAt).toLocaleString("fr-FR")}</td>
+                                  <td className="px-4 py-2.5 text-xs font-medium">{Number(b.montantTotal).toLocaleString("fr-FR")} MRU</td>
                                   <td className="px-4 py-2.5">
                                     <div className="flex items-center justify-end gap-2">
                                       {confirmDeleteDemande === key ? (

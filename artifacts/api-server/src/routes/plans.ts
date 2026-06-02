@@ -1606,42 +1606,48 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/justifi
 
 // GET /depenses/non-justifiees — all depense demandes awaiting justificatif (for DFC tab)
 router.get("/depenses/non-justifiees", async (req, res) => {
-  try {
-    const rows = await db
-      .select({
-        id: depenseDemandesTable.id,
-        planId: depenseDemandesTable.planId,
-        moyenId: depenseDemandesTable.moyenId,
-        batchRef: depenseDemandesTable.batchRef,
-        nomBeneficiaire: depenseDemandesTable.nomBeneficiaire,
-        matriculeBeneficiaire: depenseDemandesTable.matriculeBeneficiaire,
-        montantDemande: depenseDemandesTable.montantDemande,
-        montantPaye: depenseDemandesTable.montantPaye,
-        pieceReference: depenseDemandesTable.pieceReference,
-        dfcValidatedAt: depenseDemandesTable.dfcValidatedAt,
-        createdAt: depenseDemandesTable.createdAt,
-        planReference: plansTable.reference,
-        planTitre: plansTable.titre,
-        directionNom: directionsTable.nom,
-        moyenDescription: moyensTable.description,
-        moyenCategorie: moyensTable.categorie,
-      })
-      .from(depenseDemandesTable)
-      .leftJoin(plansTable, eq(depenseDemandesTable.planId, plansTable.id))
-      .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
-      .leftJoin(moyensTable, eq(depenseDemandesTable.moyenId, moyensTable.id))
-      .where(or(
-        eq(depenseDemandesTable.statut, "en_attente_justificatif"),
-        and(eq(depenseDemandesTable.statut, "payee"), isNull(depenseDemandesTable.justificatifAt))
-      ))
-      .orderBy(depenseDemandesTable.dfcValidatedAt);
+  const cols = {
+    id: depenseDemandesTable.id,
+    planId: depenseDemandesTable.planId,
+    moyenId: depenseDemandesTable.moyenId,
+    batchRef: depenseDemandesTable.batchRef,
+    nomBeneficiaire: depenseDemandesTable.nomBeneficiaire,
+    matriculeBeneficiaire: depenseDemandesTable.matriculeBeneficiaire,
+    montantDemande: depenseDemandesTable.montantDemande,
+    montantPaye: depenseDemandesTable.montantPaye,
+    pieceReference: depenseDemandesTable.pieceReference,
+    dfcValidatedAt: depenseDemandesTable.dfcValidatedAt,
+    createdAt: depenseDemandesTable.createdAt,
+    planReference: plansTable.reference,
+    planTitre: plansTable.titre,
+    directionNom: directionsTable.nom,
+    moyenDescription: moyensTable.description,
+    moyenCategorie: moyensTable.categorie,
+  };
+  const base = db.select(cols).from(depenseDemandesTable)
+    .leftJoin(plansTable, eq(depenseDemandesTable.planId, plansTable.id))
+    .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+    .leftJoin(moyensTable, eq(depenseDemandesTable.moyenId, moyensTable.id));
 
-    res.json(rows.map(r => ({
-      ...r,
-      montantDemande: Number(r.montantDemande),
-      montantPaye: r.montantPaye !== null ? Number(r.montantPaye) : null,
-    })));
-  } catch (err) { res.status(500).json({ error: String(err) }); }
+  try {
+    // Try with justificatif_at IS NULL check (requires migration to have run)
+    const rows = await base.where(or(
+      eq(depenseDemandesTable.statut, "en_attente_justificatif"),
+      and(eq(depenseDemandesTable.statut, "payee"), isNull(depenseDemandesTable.justificatifAt))
+    )).orderBy(depenseDemandesTable.dfcValidatedAt);
+    res.json(rows.map(r => ({ ...r, montantDemande: Number(r.montantDemande), montantPaye: r.montantPaye !== null ? Number(r.montantPaye) : null })));
+  } catch {
+    // Fallback: column justificatif_at may not exist yet — return all payee + en_attente_justificatif
+    try {
+      const rows = await db.select(cols).from(depenseDemandesTable)
+        .leftJoin(plansTable, eq(depenseDemandesTable.planId, plansTable.id))
+        .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+        .leftJoin(moyensTable, eq(depenseDemandesTable.moyenId, moyensTable.id))
+        .where(inArray(depenseDemandesTable.statut, ["en_attente_justificatif", "payee"]))
+        .orderBy(depenseDemandesTable.dfcValidatedAt);
+      res.json(rows.map(r => ({ ...r, montantDemande: Number(r.montantDemande), montantPaye: r.montantPaye !== null ? Number(r.montantPaye) : null })));
+    } catch (err2) { res.status(500).json({ error: String(err2) }); }
+  }
 });
 
 // GET /depenses/non-justifiees/excel — Excel export
@@ -1669,10 +1675,7 @@ router.get("/depenses/non-justifiees/excel", async (req, res) => {
       .leftJoin(plansTable, eq(depenseDemandesTable.planId, plansTable.id))
       .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
       .leftJoin(moyensTable, eq(depenseDemandesTable.moyenId, moyensTable.id))
-      .where(or(
-        eq(depenseDemandesTable.statut, "en_attente_justificatif"),
-        and(eq(depenseDemandesTable.statut, "payee"), isNull(depenseDemandesTable.justificatifAt))
-      ))
+      .where(inArray(depenseDemandesTable.statut, ["en_attente_justificatif", "payee"]))
       .orderBy(depenseDemandesTable.dfcValidatedAt);
 
     const data = rows.map(r => ({
