@@ -940,7 +940,7 @@ export default function PlanDetails() {
             <tr><td>Titre du plan</td><td>${plan.titre}</td></tr>
             <tr><td>Direction</td><td>${plan.directionNom ?? `Direction ${plan.directionId}`}</td></tr>
             <tr><td>Date de création</td><td>${dateStr}</td></tr>
-            ${opts.beneficiaire ? `<tr><td>Bénéficiaire</td><td>${opts.beneficiaire}</td></tr>` : ""}
+            ${opts.beneficiaire ? `<tr><td>Bénéficiaire(s)</td><td style="line-height:1.7">${opts.beneficiaire}</td></tr>` : ""}
           </table>
           <div class="amount-box">
             <div class="label">Montant demandé</div>
@@ -2226,7 +2226,7 @@ export default function PlanDetails() {
                                     <Button size="sm"
                                       className={`h-6 text-xs gap-1 px-2 ${dcgaiDocGenerated.has(`batch:${batchRef}`) ? "bg-green-200 text-green-800 border border-green-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 text-white"}`}
                                       disabled={dcgaiDocGenerated.has(`batch:${batchRef}`)}
-                                      onClick={() => generateValidationDoc({ docTitle: "Bon de Validation DCGAI", montant: total, docKey: `batch-${batchRef}`, onGenerated: () => setDcgaiDocGenerated(prev => new Set([...prev, `batch:${batchRef}`])) })}>
+                                      onClick={() => generateValidationDoc({ docTitle: "Bon de Validation DCGAI", montant: total, beneficiaire: dems.map(d => `${d.nomBeneficiaire}${d.matriculeBeneficiaire ? ` (${d.matriculeBeneficiaire})` : ""}`).join("<br/>"), docKey: `batch-${batchRef}`, onGenerated: () => setDcgaiDocGenerated(prev => new Set([...prev, `batch:${batchRef}`])) })}>
                                       {dcgaiDocGenerated.has(`batch:${batchRef}`) ? <><CheckCircle2 className="w-3 h-3" /> Généré</> : <><FileText className="w-3 h-3" /> Générer</>}
                                     </Button>
                                     <Button size="sm" className="h-6 text-xs gap-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
