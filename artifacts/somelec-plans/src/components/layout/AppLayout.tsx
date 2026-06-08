@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
-import { LayoutDashboard, FilePlus, User, LogOut, Shield, ChevronDown, BarChart2, Users, KeyRound, Eye, EyeOff, Check, X, Loader2, Layers } from "lucide-react";
+import { LayoutDashboard, FilePlus, User, LogOut, Shield, ChevronDown, BarChart2, Users, KeyRound, Eye, EyeOff, Check, X, Loader2, Layers, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { DEMANDES_ROLES } from "@/pages/DemandesDashboard";
@@ -180,6 +180,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { href: "/demandes", label: "Demandes", icon: Layers, roles: DEMANDES_ROLES, badge: pendingCount > 0 ? pendingCount : undefined },
     { href: "/analyse", label: "Analyse", icon: BarChart2, roles: ["directeur_general", "dga"] },
     { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users, roles: ["admin"] },
+    { href: "/manuel", label: "Manuel", icon: BookOpen },
   ];
 
   const getRoleLabel = (role: string) => {
