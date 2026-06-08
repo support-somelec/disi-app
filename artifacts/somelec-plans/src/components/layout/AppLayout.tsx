@@ -166,13 +166,19 @@ function usePendingDemandesCount(role: string) {
   }).length;
 }
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+export function AppLayout({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
   const [location, navigate] = useLocation();
   const { currentUser, logout } = useAuth();
+
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [showChangePassword, setShowChangePassword] = React.useState(false);
 
   const pendingCount = usePendingDemandesCount(currentUser?.role ?? "");
+
+  if (roles && currentUser && !roles.includes(currentUser.role)) {
+    navigate("/");
+    return null;
+  }
 
   const navItems = [
     { href: "/", label: "Tableau de Bord", icon: LayoutDashboard },
@@ -180,7 +186,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { href: "/demandes", label: "Demandes", icon: Layers, roles: DEMANDES_ROLES, badge: pendingCount > 0 ? pendingCount : undefined },
     { href: "/analyse", label: "Analyse", icon: BarChart2, roles: ["directeur_general", "dga"] },
     { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users, roles: ["admin"] },
-    { href: "/manuel", label: "Manuel", icon: BookOpen },
+    { href: "/manuel", label: "Manuel", icon: BookOpen, roles: ["admin"] },
   ];
 
   const getRoleLabel = (role: string) => {

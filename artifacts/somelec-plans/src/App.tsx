@@ -77,7 +77,7 @@ function Router() {
       </Route>
       <Route path="/manuel">
         {isAuthenticated ? (
-          <AppLayout><Manuel /></AppLayout>
+          <AppLayout roles={["admin"]}><Manuel /></AppLayout>
         ) : (
           <Redirect to="/login" />
         )}
