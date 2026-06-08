@@ -1,551 +1,506 @@
 import React from "react";
 
-const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
+const TODAY = "Juin 2026";
 
-const SECTIONS = [
-  {
-    id: "introduction",
-    titre: "1. Introduction",
-    contenu: `
-      <p>La plateforme <strong>SOMELEC — Gestion des Plans d'Action</strong> est un outil de pilotage et de suivi budgétaire interne destiné aux directions opérationnelles et fonctionnelles de la Société Mauritanienne d'Électricité.</p>
-      <p>Elle permet de :</p>
-      <ul>
-        <li>Créer et soumettre des plans d'action annuels ou ponctuels</li>
-        <li>Suivre le processus de validation hiérarchique</li>
-        <li>Gérer la consommation des moyens alloués (carburant, matériel, location, dépenses)</li>
-        <li>Assurer la traçabilité des paiements et des justificatifs</li>
-        <li>Produire des rapports et documents officiels (bons, certificats)</li>
-      </ul>
-      <p>Ce manuel décrit les procédures à suivre par chaque profil d'utilisateur.</p>
-    `
-  },
-  {
-    id: "connexion",
-    titre: "2. Connexion et Gestion du Compte",
-    contenu: `
-      <h3>2.1 Connexion</h3>
-      <ol>
-        <li>Accéder à l'application via l'URL fournie par l'administrateur</li>
-        <li>Saisir votre adresse e-mail et votre mot de passe</li>
-        <li>Cliquer sur <strong>Se connecter</strong></li>
-      </ol>
-      <div class="note">La session est maintenue dans le navigateur. Pensez à vous déconnecter si vous utilisez un poste partagé.</div>
-
-      <h3>2.2 Changer le mot de passe</h3>
-      <ol>
-        <li>Cliquer sur votre nom en haut à droite</li>
-        <li>Sélectionner <strong>Changer le mot de passe</strong></li>
-        <li>Saisir l'ancien puis le nouveau mot de passe (minimum 6 caractères)</li>
-        <li>Confirmer et valider</li>
-      </ol>
-
-      <h3>2.3 Déconnexion</h3>
-      <p>Cliquer sur votre nom en haut à droite puis sur <strong>Se déconnecter</strong>.</p>
-    `
-  },
-  {
-    id: "roles",
-    titre: "3. Profils et Rôles",
-    contenu: `
-      <p>Chaque utilisateur dispose d'un rôle qui détermine ses droits d'accès et ses actions disponibles dans l'application :</p>
-      <table>
-        <thead><tr><th>Rôle</th><th>Libellé</th><th>Responsabilités principales</th></tr></thead>
-        <tbody>
-          <tr><td><code>direction</code></td><td>Direction opérationnelle</td><td>Créer, modifier, soumettre des plans. Initier toutes les demandes de moyens.</td></tr>
-          <tr><td><code>controle_technique</code></td><td>Contrôle Technique</td><td>Valider techniquement les plans soumis.</td></tr>
-          <tr><td><code>dga</code></td><td>Directeur Général Adjoint</td><td>Valider les plans après le CT.</td></tr>
-          <tr><td><code>directeur_general</code></td><td>Directeur Général</td><td>Validation finale des plans avant ouverture.</td></tr>
-          <tr><td><code>cad</code></td><td>Caisse, Approv. &amp; Dist.</td><td>Traiter les demandes de carburant.</td></tr>
-          <tr><td><code>da</code></td><td>Dir. des Approvisionnements</td><td>Traiter les demandes de matériel.</td></tr>
-          <tr><td><code>dmg</code></td><td>Dir. Matériel &amp; Garage</td><td>Traiter les demandes de location d'engins.</td></tr>
-          <tr><td><code>dcgai</code></td><td>Dir. Contrôle Gestion &amp; Audit</td><td>Valider budgétairement les demandes de dépenses et matériel. Générer les bons de validation.</td></tr>
-          <tr><td><code>direction_financiere</code></td><td>Direction Financière (DFC)</td><td>Procéder aux paiements des dépenses. Gérer les justificatifs. Accéder au tableau des dépenses non justifiées.</td></tr>
-          <tr><td><code>admin</code></td><td>Administrateur</td><td>Gérer les utilisateurs, directions et paramètres. Accès complet en lecture.</td></tr>
-        </tbody>
-      </table>
-      <div class="note">Les rôles <strong>DGA</strong>, <strong>DG</strong> et <strong>Contrôle Technique</strong> ont accès en lecture seule aux demandes de moyens.</div>
-    `
-  },
-  {
-    id: "plans",
-    titre: "4. Gestion des Plans d'Action",
-    contenu: `
-      <h3>4.1 Cycle de vie d'un plan</h3>
-      <p>Un plan passe par les statuts suivants :</p>
-      <div class="workflow">
-        <span class="statut brouillon">Brouillon</span>
-        <span class="arrow">→</span>
-        <span class="statut attente">En attente DC</span>
-        <span class="arrow">→</span>
-        <span class="statut attente">En attente CT</span>
-        <span class="arrow">→</span>
-        <span class="statut attente">En attente DGA</span>
-        <span class="arrow">→</span>
-        <span class="statut attente">En attente DG</span>
-        <span class="arrow">→</span>
-        <span class="statut ouvert">Ouvert</span>
-        <span class="arrow">→</span>
-        <span class="statut cloture">Clôturé</span>
-      </div>
-      <p>Un plan peut également être <span class="statut rejete">Rejeté</span> à n'importe quelle étape de validation, avec un commentaire obligatoire.</p>
-
-      <h3>4.2 Créer un plan (rôle : Direction)</h3>
-      <ol>
-        <li>Cliquer sur <strong>Nouveau Plan</strong> dans le menu latéral</li>
-        <li>Remplir : référence, titre, description, date de début et de fin</li>
-        <li>Ajouter les moyens : pour chaque catégorie (Carburant, Matériel, Location, Dépense), cliquer sur <strong>Ajouter un moyen</strong>, définir une description et un budget</li>
-        <li>Pour les dépenses, choisir une catégorie : Prime, Logement, Indemnité journalière, Logistique, Autres</li>
-        <li>Cliquer sur <strong>Créer le Plan</strong></li>
-      </ol>
-      <div class="note">Un plan créé est d'abord en statut <strong>Brouillon</strong>. Il peut être modifié avant soumission.</div>
-
-      <h3>4.3 Soumettre un plan</h3>
-      <p>Depuis la fiche du plan (statut Brouillon), cliquer sur <strong>Soumettre pour validation</strong>. Le plan passe en <em>En attente DC</em> (ou directement <em>En attente CT</em> si soumis par un Directeur Central).</p>
-
-      <h3>4.4 Valider ou rejeter un plan</h3>
-      <p>Selon votre rôle (CT, DGA, DG), depuis la fiche du plan :</p>
-      <ul>
-        <li>Cliquer sur <strong>Valider</strong> pour passer à l'étape suivante — un commentaire est optionnel</li>
-        <li>Cliquer sur <strong>Rejeter</strong> pour renvoyer à la direction — un commentaire est obligatoire</li>
-      </ul>
-
-      <h3>4.5 Clôturer un plan</h3>
-      <p>Un plan ouvert peut être clôturé par la direction qui l'a créé. La clôture est <strong>bloquée</strong> si des demandes de dépenses sont encore en attente de justificatif.</p>
-      <p>À la clôture, un <strong>certificat de validation PDF</strong> est automatiquement généré et téléchargeable.</p>
-
-      <h3>4.6 Certificat de validation</h3>
-      <p>Pour les plans ouverts ou clôturés, cliquer sur <strong>Télécharger le certificat</strong> depuis la fiche du plan. Le certificat inclut un code d'authenticité SHA-256.</p>
-    `
-  },
-  {
-    id: "carburant",
-    titre: "5. Demandes de Carburant",
-    contenu: `
-      <h3>5.1 Flux</h3>
-      <div class="workflow">
-        <span class="statut attente">En attente CAD</span>
-        <span class="arrow">→</span>
-        <span class="statut ouvert">Validée</span>
-      </div>
-
-      <h3>5.2 Initier une demande (rôle : Direction)</h3>
-      <ol>
-        <li>Ouvrir la fiche du plan, section <strong>Carburant</strong></li>
-        <li>Cliquer sur <strong>Demander</strong> sur le moyen souhaité</li>
-        <li>Saisir le montant demandé (dans la limite du budget restant)</li>
-        <li>Confirmer</li>
-      </ol>
-
-      <h3>5.3 Traiter une demande (rôle : CAD)</h3>
-      <ol>
-        <li>Accéder au <strong>Tableau des Demandes</strong></li>
-        <li>Localiser les demandes en attente (statut <em>En attente CAD</em>)</li>
-        <li>Ouvrir la fiche du plan concerné</li>
-        <li>Valider le montant (possibilité d'ajuster) et téléverser la <strong>décharge signée</strong></li>
-        <li>Générer le bon de validation puis confirmer</li>
-      </ol>
-      <div class="note">Le montant validé par le CAD peut différer du montant demandé. La consommation budgétaire est mise à jour automatiquement.</div>
-    `
-  },
-  {
-    id: "materiel",
-    titre: "6. Demandes de Matériel",
-    contenu: `
-      <h3>6.1 Flux</h3>
-      <div class="workflow">
-        <span class="statut attente">En attente DA</span>
-        <span class="arrow">→</span>
-        <span class="statut attente">En attente DCGAI</span>
-        <span class="arrow">→</span>
-        <span class="statut ouvert">Validée</span>
-      </div>
-
-      <h3>6.2 Initier une demande (rôle : Direction)</h3>
-      <ol>
-        <li>Ouvrir la fiche du plan, section <strong>Matériel</strong></li>
-        <li>Cliquer sur <strong>Faire une demande</strong></li>
-        <li>Sélectionner les articles et saisir les quantités demandées</li>
-        <li>Soumettre la demande</li>
-      </ol>
-
-      <h3>6.3 Traitement DA</h3>
-      <ol>
-        <li>Saisir les prix unitaires pour chaque article</li>
-        <li>Générer le <strong>bon de commande</strong> (obligatoire avant validation)</li>
-        <li>Valider — la demande passe en <em>En attente DCGAI</em></li>
-      </ol>
-
-      <h3>6.4 Validation DCGAI</h3>
-      <ol>
-        <li>Générer le <strong>Bon de Validation DCGAI</strong> (obligatoire)</li>
-        <li>Valider — le montant est consommé sur le plan</li>
-      </ol>
-      <div class="note">Le DCGAI peut annuler sa validation si nécessaire. La demande repasse en <em>En attente DCGAI</em>.</div>
-    `
-  },
-  {
-    id: "location",
-    titre: "7. Demandes de Location d'Engins",
-    contenu: `
-      <h3>7.1 Flux</h3>
-      <div class="workflow">
-        <span class="statut attente">En attente DMG</span>
-        <span class="arrow">→</span>
-        <span class="statut ouvert">Validée</span>
-      </div>
-
-      <h3>7.2 Initier une demande (rôle : Direction)</h3>
-      <ol>
-        <li>Ouvrir la fiche du plan, section <strong>Location</strong></li>
-        <li>Cliquer sur <strong>Faire une demande</strong></li>
-        <li>Sélectionner le type d'engin et saisir le nombre de jours demandés</li>
-        <li>Soumettre</li>
-      </ol>
-
-      <h3>7.3 Traitement DMG</h3>
-      <ol>
-        <li>Saisir le coût journalier et le nombre de jours validés</li>
-        <li>Téléverser la <strong>décharge de location</strong></li>
-        <li>Valider la demande</li>
-      </ol>
-    `
-  },
-  {
-    id: "depenses",
-    titre: "8. Demandes de Dépenses",
-    contenu: `
-      <h3>8.1 Flux complet</h3>
-      <div class="workflow">
-        <span class="statut attente">En attente DCGAI</span>
-        <span class="arrow">→</span>
-        <span class="statut attente">En attente DFC</span>
-        <span class="arrow">→</span>
-        <span class="statut amber">Attente Justificatif</span>
-        <span class="arrow">→</span>
-        <span class="statut ouvert">Payée</span>
-      </div>
-
-      <h3>8.2 Catégories de dépenses</h3>
-      <ul>
-        <li><strong>Prime</strong> — primes versées aux agents</li>
-        <li><strong>Logement</strong> — indemnités de logement</li>
-        <li><strong>Indemnité journalière</strong> — per diem</li>
-        <li><strong>Logistique</strong> — frais divers de déplacement et fournitures</li>
-        <li><strong>Autres</strong> — toute dépense ne rentrant pas dans les catégories ci-dessus</li>
-      </ul>
-
-      <h3>8.3 Initier une demande (rôle : Direction)</h3>
-      <p>Les demandes de dépenses peuvent être <strong>individuelles</strong> ou <strong>groupées (batch)</strong> :</p>
-      <ol>
-        <li>Ouvrir la fiche du plan, section <strong>Dépenses</strong></li>
-        <li>Cliquer sur <strong>Nouvelle demande</strong></li>
-        <li>Saisir pour chaque bénéficiaire : nom, matricule (optionnel), montant demandé</li>
-        <li>Plusieurs bénéficiaires peuvent être ajoutés en une seule demande (batch)</li>
-        <li>Soumettre — la demande passe en <em>En attente DCGAI</em></li>
-      </ol>
-
-      <h3>8.4 Validation DCGAI</h3>
-      <ol>
-        <li>Accéder au <strong>Tableau des Demandes</strong> ou à la fiche du plan</li>
-        <li>Pour chaque demande (individuelle ou batch) :<br/>
-          — Générer le <strong>Bon de Validation DCGAI</strong> (obligatoire, inclut les noms des bénéficiaires)<br/>
-          — Cliquer sur <strong>Valider</strong></li>
-        <li>La demande passe en <em>En attente DFC</em></li>
-      </ol>
-      <div class="note">Le bon de validation DCGAI liste tous les bénéficiaires du batch avec leur matricule. Il est nécessaire avant de pouvoir valider.</div>
-
-      <h3>8.5 Paiement DFC</h3>
-      <ol>
-        <li>Accéder au <strong>Tableau des Demandes</strong> — onglet <strong>Demandes</strong></li>
-        <li>Localiser les demandes en <em>En attente DFC</em></li>
-        <li>Ouvrir la fiche du plan</li>
-        <li>Pour chaque demande :<br/>
-          — Générer le <strong>Bon de Paiement</strong><br/>
-          — Saisir le <strong>montant effectivement payé</strong> et la <strong>référence de pièce comptable</strong><br/>
-          — Cliquer sur <strong>Payer</strong></li>
-        <li>La demande passe en statut <em>Attente Justificatif</em></li>
-      </ol>
-      <div class="note">Pour les batches, un paiement groupé est possible via le bouton <strong>Payer tout le batch</strong>.</div>
-
-      <h3>8.6 Upload du Justificatif (rôle : Direction)</h3>
-      <p>Après paiement, la Direction opérationnelle doit fournir la preuve de paiement :</p>
-      <ol>
-        <li>Ouvrir la fiche du plan concerné</li>
-        <li>Dans la section Dépenses, localiser les demandes en statut <em>Attente Justificatif</em></li>
-        <li>Cliquer sur <strong>Joindre le justificatif</strong></li>
-        <li>Sélectionner le fichier PDF ou image</li>
-        <li>Confirmer — la demande passe en statut <em>Payée</em></li>
-      </ol>
-
-      <h3>8.7 Suivi des justificatifs manquants (rôles : DFC et Admin)</h3>
-      <ol>
-        <li>Accéder au <strong>Tableau des Demandes</strong></li>
-        <li>Cliquer sur l'onglet <strong>Justificatifs en attente</strong></li>
-        <li>La liste affiche toutes les dépenses payées sans justificatif reçu, avec le montant et la date de paiement</li>
-        <li>Cliquer sur <strong>Télécharger Excel</strong> pour exporter la liste complète</li>
-        <li>Cliquer sur <strong>Ouvrir</strong> pour accéder directement à la fiche du plan concerné</li>
-      </ol>
-      <div class="note info">Un plan ne peut pas être clôturé tant qu'il reste des dépenses en attente de justificatif.</div>
-    `
-  },
-  {
-    id: "tableau-demandes",
-    titre: "9. Tableau des Demandes",
-    contenu: `
-      <p>Le <strong>Tableau des Demandes</strong> est accessible depuis le menu latéral. Il offre une vue centralisée de toutes les demandes de moyens selon votre rôle.</p>
-
-      <h3>9.1 Filtres disponibles</h3>
-      <ul>
-        <li><strong>Statut</strong> : Toutes / En attente / Traitées</li>
-        <li><strong>Type</strong> : Carburant, Matériel, Location, Dépense</li>
-        <li><strong>Recherche</strong> : par référence de plan, direction ou moyen</li>
-        <li><strong>Tri</strong> : par type, plan, date ou statut</li>
-      </ul>
-
-      <h3>9.2 Accès filtré par rôle</h3>
-      <table>
-        <thead><tr><th>Rôle</th><th>Demandes visibles</th></tr></thead>
-        <tbody>
-          <tr><td>CAD</td><td>Carburant uniquement</td></tr>
-          <tr><td>DA</td><td>Matériel uniquement</td></tr>
-          <tr><td>DMG</td><td>Location uniquement</td></tr>
-          <tr><td>DCGAI</td><td>Dépenses uniquement</td></tr>
-          <tr><td>DFC</td><td>Dépenses + onglet Justificatifs</td></tr>
-          <tr><td>Admin / DGA / DG / CT</td><td>Toutes les demandes (lecture)</td></tr>
-        </tbody>
-      </table>
-
-      <h3>9.3 Actualisation</h3>
-      <p>Les données se rafraîchissent automatiquement toutes les 60 secondes. Le bouton <strong>Actualiser</strong> permet un rafraîchissement manuel immédiat.</p>
-    `
-  },
-  {
-    id: "analytique",
-    titre: "10. Analyse et Tableaux de Bord",
-    contenu: `
-      <h3>10.1 Tableau de bord principal</h3>
-      <p>La page d'accueil affiche :</p>
-      <ul>
-        <li>Le nombre de plans par statut</li>
-        <li>Les plans en dépassement de budget (consommé &gt; alloué)</li>
-        <li>Le budget total, consommé et disponible</li>
-        <li>La liste des plans avec leur avancement</li>
-      </ul>
-
-      <h3>10.2 Page Analyse</h3>
-      <p>Accessible via le menu <strong>Analyse</strong>, elle présente :</p>
-      <ul>
-        <li>La consommation par <strong>Direction</strong> (budget vs consommé, taux d'avancement)</li>
-        <li>La consommation par <strong>catégorie de moyen</strong> (Carburant, Matériel, etc.)</li>
-        <li>Les indicateurs globaux : budget total, total consommé, disponible</li>
-      </ul>
-    `
-  },
-  {
-    id: "admin",
-    titre: "11. Administration",
-    contenu: `
-      <h3>11.1 Gestion des utilisateurs (rôle : Admin)</h3>
-      <p>Depuis le menu <strong>Administration &gt; Utilisateurs</strong> :</p>
-      <ul>
-        <li>Créer un utilisateur : nom, e-mail, mot de passe, rôle, direction associée</li>
-        <li>Modifier le rôle ou la direction d'un utilisateur existant</li>
-        <li>Réinitialiser le mot de passe d'un utilisateur</li>
-        <li>Désactiver un compte</li>
-      </ul>
-      <div class="note">Un utilisateur de type <strong>direction</strong> doit être rattaché à une direction. Les rôles fonctionnels (DFC, DCGAI, CAD, etc.) ne sont pas rattachés à une direction.</div>
-
-      <h3>11.2 Gestion des directions</h3>
-      <p>L'administrateur peut créer, modifier et archiver les directions opérationnelles depuis le même écran.</p>
-
-      <h3>11.3 Inscription (Register)</h3>
-      <p>Un nouvel utilisateur peut s'inscrire lui-même depuis la page de connexion (lien <em>Créer un nouveau compte</em>). Le compte est actif immédiatement mais son rôle par défaut est <em>direction</em> — l'administrateur doit ensuite ajuster le rôle si nécessaire.</p>
-    `
-  },
-  {
-    id: "documents",
-    titre: "12. Documents Générés",
-    contenu: `
-      <p>L'application génère automatiquement plusieurs types de documents officiels :</p>
-      <table>
-        <thead><tr><th>Document</th><th>Émetteur</th><th>Contenu clé</th></tr></thead>
-        <tbody>
-          <tr><td>Bon de Validation Carburant</td><td>CAD</td><td>Plan, montant validé, QR code unique</td></tr>
-          <tr><td>Bon de Commande Matériel</td><td>DA</td><td>Articles, quantités, prix unitaires, total</td></tr>
-          <tr><td>Bon de Validation DCGAI</td><td>DCGAI</td><td>Plan, bénéficiaire(s), montant, QR code</td></tr>
-          <tr><td>Bon de Paiement DFC</td><td>DFC</td><td>Bénéficiaire, montant payé, référence pièce, QR code</td></tr>
-          <tr><td>Bon de Paiement Groupé DFC</td><td>DFC</td><td>Liste des bénéficiaires du batch, montant total, QR code</td></tr>
-          <tr><td>Certificat de Validation Plan</td><td>Système</td><td>Référence plan, hachage SHA-256 d'authenticité, historique validations</td></tr>
-        </tbody>
-      </table>
-      <div class="note">Tous les documents s'ouvrent dans un nouvel onglet et sont imprimables directement. Le QR code permet la vérification d'authenticité. <strong>La génération du document est obligatoire avant la validation</strong> pour les bons DCGAI et DFC.</div>
-    `
-  },
-  {
-    id: "bonnes-pratiques",
-    titre: "13. Bonnes Pratiques",
-    contenu: `
-      <ul>
-        <li>Ne jamais partager votre mot de passe — chaque action est tracée avec votre identité</li>
-        <li>Générer systématiquement les documents avant de valider — ils constituent la preuve formelle de chaque étape</li>
-        <li>Les justificatifs de dépenses doivent être uploadés rapidement après paiement pour permettre la clôture des plans</li>
-        <li>En cas de doute sur un montant, utiliser la fonction <strong>Annuler la validation</strong> plutôt que de valider une information incorrecte</li>
-        <li>Utiliser les commentaires lors des validations/rejets pour garantir la traçabilité</li>
-        <li>Vérifier régulièrement le <strong>Tableau des Demandes</strong> — les données se rafraîchissent toutes les 60 secondes mais un rafraîchissement manuel est possible</li>
-      </ul>
-    `
-  }
-];
-
-export default function Manuel() {
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const html = `<!DOCTYPE html>
+const HTML_DOC = `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Manuel de Procédure — SOMELEC Gestion des Plans d'Action</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guide Utilisateur — SOMELEC Plans d'Action</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; font-size: 12px; color: #111; background: #fff; }
-  .page { width: 21cm; margin: auto; padding: 2cm 2.2cm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 11.5pt; color: #1a1a2e; background: #fff; line-height: 1.6; }
 
-  /* Header */
-  .doc-header { text-align: center; border-bottom: 3px double #1a4db5; padding-bottom: 18px; margin-bottom: 28px; }
-  .doc-header h1 { font-size: 18px; text-transform: uppercase; letter-spacing: 2px; color: #1a4db5; margin-bottom: 4px; }
-  .doc-header .sub { font-size: 12px; color: #555; }
-  .doc-header .date { font-size: 11px; color: #888; margin-top: 6px; }
-  .doc-header .version { display: inline-block; background: #eff6ff; border: 1px solid #93c5fd; border-radius: 4px; padding: 2px 10px; font-size: 11px; color: #1e40af; margin-top: 8px; }
+  .page { width: 21cm; margin: 0 auto; padding: 2cm 2.4cm 2.5cm; }
 
-  /* TOC */
-  .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 22px; margin-bottom: 32px; }
-  .toc h2 { font-size: 13px; color: #1a4db5; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
-  .toc ul { list-style: none; columns: 2; gap: 20px; }
-  .toc ul li { padding: 3px 0; font-size: 11px; color: #374151; }
-  .toc ul li::before { content: "›"; color: #1a4db5; margin-right: 6px; font-weight: bold; }
+  /* ── Cover ── */
+  .cover { text-align: center; padding: 60px 0 50px; border-bottom: 3px solid #1e40af; margin-bottom: 40px; }
+  .cover .logo-box { display: inline-flex; align-items: center; justify-content: center; width: 72px; height: 72px; background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); border-radius: 18px; margin-bottom: 18px; }
+  .cover .logo-box svg { width: 40px; height: 40px; fill: white; }
+  .cover h1 { font-size: 24pt; color: #1e3a8a; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
+  .cover h2 { font-size: 14pt; color: #3b82f6; font-weight: 400; margin-bottom: 20px; }
+  .cover .meta { font-size: 10pt; color: #6b7280; }
+  .cover .badge { display: inline-block; background: #eff6ff; border: 1px solid #93c5fd; border-radius: 20px; padding: 4px 18px; font-size: 10pt; color: #1e40af; font-weight: 600; margin-top: 10px; }
 
-  /* Sections */
-  .section { margin-bottom: 36px; page-break-inside: avoid; }
-  .section h2 { font-size: 15px; color: #1a4db5; border-bottom: 2px solid #dbeafe; padding-bottom: 6px; margin-bottom: 14px; }
-  .section h3 { font-size: 12px; color: #1e3a8a; margin: 14px 0 8px 0; font-weight: bold; }
-  .section p { margin-bottom: 8px; line-height: 1.6; }
-  .section ul, .section ol { margin: 8px 0 10px 20px; line-height: 1.7; }
-  .section li { margin-bottom: 3px; }
+  /* ── TOC ── */
+  .toc-box { background: #f0f7ff; border-left: 5px solid #3b82f6; border-radius: 0 8px 8px 0; padding: 20px 24px; margin-bottom: 36px; }
+  .toc-box h3 { font-size: 11pt; color: #1e40af; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+  .toc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; }
+  .toc-grid a { color: #1e40af; text-decoration: none; font-size: 10.5pt; display: flex; align-items: baseline; gap: 6px; }
+  .toc-grid a::before { content: "›"; font-weight: bold; color: #93c5fd; }
 
-  /* Tables */
-  table { width: 100%; border-collapse: collapse; margin: 10px 0 14px 0; font-size: 11px; }
-  th { background: #dbeafe; color: #1e3a8a; padding: 7px 10px; text-align: left; font-weight: bold; }
-  td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  /* ── Sections ── */
+  .section { margin-bottom: 40px; page-break-inside: avoid; }
+  .section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 2px solid #dbeafe; }
+  .section-num { min-width: 34px; height: 34px; background: #1e40af; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12pt; font-weight: 700; }
+  .section-title { font-size: 15pt; font-weight: 700; color: #1e3a8a; }
+
+  h3 { font-size: 11.5pt; color: #1e40af; margin: 18px 0 8px; font-weight: 700; }
+  p { margin-bottom: 8px; }
+
+  /* ── Role cards ── */
+  .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+  .role-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; }
+  .role-card .role-name { font-weight: 700; font-size: 10.5pt; color: #1e3a8a; margin-bottom: 4px; }
+  .role-card .role-label { font-size: 9.5pt; color: #64748b; margin-bottom: 6px; }
+  .role-card .role-can { font-size: 10pt; color: #374151; }
+  .role-card.highlight { background: #eff6ff; border-color: #93c5fd; }
+
+  /* ── Steps ── */
+  .steps { counter-reset: step; margin: 10px 0 14px; }
+  .step { display: flex; gap: 12px; margin-bottom: 10px; align-items: flex-start; }
+  .step-num { counter-increment: step; min-width: 26px; height: 26px; background: #3b82f6; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10pt; font-weight: 700; flex-shrink: 0; }
+  .step-text { font-size: 10.5pt; color: #374151; padding-top: 3px; }
+  .step-text strong { color: #1e3a8a; }
+
+  /* ── Workflow pills ── */
+  .flow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 12px 0 16px; }
+  .pill { padding: 4px 12px; border-radius: 20px; font-size: 9.5pt; font-weight: 600; white-space: nowrap; }
+  .pill.draft { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+  .pill.wait  { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+  .pill.ok    { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+  .pill.done  { background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd; }
+  .pill.pay   { background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; }
+  .pill.rej   { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+  .arrow { color: #9ca3af; font-size: 14pt; font-weight: 700; }
+
+  /* ── Tip / Warning boxes ── */
+  .tip { display: flex; gap: 10px; padding: 10px 14px; border-radius: 8px; margin: 12px 0; font-size: 10.5pt; }
+  .tip.blue { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; }
+  .tip.amber { background: #fffbeb; border: 1px solid #fde68a; color: #78350f; }
+  .tip.green { background: #f0fdf4; border: 1px solid #bbf7d0; color: #14532d; }
+  .tip-icon { font-size: 14pt; flex-shrink: 0; }
+
+  /* ── Summary table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 10pt; margin: 12px 0 18px; }
+  th { background: #1e40af; color: white; padding: 8px 12px; text-align: left; font-weight: 600; }
+  td { padding: 7px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
   tr:nth-child(even) td { background: #f8fafc; }
-  code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 3px; padding: 1px 5px; font-size: 10px; font-family: monospace; color: #1e40af; }
 
-  /* Workflow */
-  .workflow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 12px 0 14px 0; }
-  .statut { padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: bold; }
-  .statut.brouillon { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
-  .statut.attente { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
-  .statut.amber { background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; }
-  .statut.ouvert { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-  .statut.cloture { background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd; }
-  .statut.rejete { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-  .arrow { color: #6b7280; font-weight: bold; font-size: 14px; }
+  /* ── Quick-ref card ── */
+  .qr-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 14px 0; }
+  .qr-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; text-align: center; }
+  .qr-card .qr-emoji { font-size: 22pt; margin-bottom: 6px; }
+  .qr-card .qr-title { font-size: 9.5pt; font-weight: 700; color: #1e3a8a; margin-bottom: 4px; }
+  .qr-card .qr-desc { font-size: 9pt; color: #6b7280; }
 
-  /* Notes */
-  .note { background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 0 6px 6px 0; padding: 8px 12px; margin: 10px 0; font-size: 11px; color: #78350f; line-height: 1.5; }
-  .note.info { background: #eff6ff; border-left-color: #3b82f6; color: #1e3a8a; }
-
-  /* Footer */
-  .doc-footer { border-top: 1px solid #e5e7eb; padding-top: 12px; margin-top: 32px; display: flex; justify-content: space-between; font-size: 10px; color: #9ca3af; }
+  /* ── Footer ── */
+  .footer { border-top: 1px solid #e5e7eb; padding-top: 12px; margin-top: 40px; display: flex; justify-content: space-between; font-size: 9pt; color: #9ca3af; }
 
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .section { page-break-inside: avoid; }
-    .no-print { display: none !important; }
-    @page { margin: 1.5cm 2cm; size: A4; }
+    @page { size: A4; margin: 1.5cm 2cm; }
   }
 </style>
 </head>
 <body>
 <div class="page">
-  <div class="doc-header">
-    <h1>SOMELEC — Manuel de Procédure</h1>
-    <div class="sub">Société Mauritanienne d'Électricité — Gestion des Plans d'Action</div>
-    <div class="date">Version 2.0 — Juin 2026</div>
-    <span class="version">Document officiel interne</span>
+
+  <!-- COVER -->
+  <div class="cover">
+    <div class="logo-box">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    </div>
+    <h1>SOMELEC</h1>
+    <h2>Guide Utilisateur — Gestion des Plans d'Action</h2>
+    <div class="meta">Société Mauritanienne d'Électricité</div>
+    <div class="badge">Version 2.0 · ${TODAY}</div>
   </div>
 
-  <div class="toc">
-    <h2>Table des Matières</h2>
-    <ul>
-      ${SECTIONS.map(s => `<li>${s.titre}</li>`).join("")}
-    </ul>
+  <!-- TABLE DES MATIÈRES -->
+  <div class="toc-box">
+    <h3>Sommaire</h3>
+    <div class="toc-grid">
+      <a href="#connexion">1. Se connecter à l'application</a>
+      <a href="#roles">2. Comprendre votre rôle</a>
+      <a href="#plans">3. Plans d'action</a>
+      <a href="#carburant">4. Demandes de carburant</a>
+      <a href="#materiel">5. Demandes de matériel</a>
+      <a href="#location">6. Demandes de location</a>
+      <a href="#depenses">7. Demandes de dépenses</a>
+      <a href="#justificatifs">8. Justificatifs de paiement</a>
+      <a href="#documents">9. Documents générés</a>
+      <a href="#conseils">10. Conseils pratiques</a>
+    </div>
   </div>
 
-  ${SECTIONS.map(s => `
-  <div class="section">
-    <h2>${s.titre}</h2>
-    ${s.contenu}
+  <!-- 1. CONNEXION -->
+  <div class="section" id="connexion">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <div class="section-title">Se connecter à l'application</div>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text">Ouvrir le navigateur et saisir l'adresse fournie par votre administrateur</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text">Saisir votre <strong>adresse e-mail</strong> et votre <strong>mot de passe</strong></div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text">Cliquer sur <strong>Se connecter</strong></div></div>
+    </div>
+    <div class="tip blue">
+      <span class="tip-icon">🔑</span>
+      <span>Pour changer votre mot de passe, cliquez sur votre nom en haut à droite puis sur <strong>Changer le mot de passe</strong>. Le nouveau mot de passe doit contenir au moins 6 caractères.</span>
+    </div>
+    <div class="tip amber">
+      <span class="tip-icon">⚠️</span>
+      <span>Si vous partagez un poste, pensez à vous <strong>déconnecter</strong> à la fin de votre session (menu en haut à droite → Se déconnecter).</span>
+    </div>
   </div>
-  `).join("")}
 
-  <div class="doc-footer">
+  <!-- 2. RÔLES -->
+  <div class="section" id="roles">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <div class="section-title">Comprendre votre rôle</div>
+    </div>
+    <p>Chaque utilisateur a un rôle qui détermine ce qu'il peut faire dans l'application :</p>
+    <div class="role-grid">
+      <div class="role-card highlight">
+        <div class="role-name">Direction</div>
+        <div class="role-label">Direction opérationnelle</div>
+        <div class="role-can">Créer des plans · Initier toutes les demandes de moyens · Uploader les justificatifs</div>
+      </div>
+      <div class="role-card">
+        <div class="role-name">Contrôle Technique (CT)</div>
+        <div class="role-label">Contrôle technique</div>
+        <div class="role-can">Valider ou rejeter les plans soumis</div>
+      </div>
+      <div class="role-card">
+        <div class="role-name">DGA / DG</div>
+        <div class="role-label">Direction Générale</div>
+        <div class="role-can">Validation finale des plans avant ouverture</div>
+      </div>
+      <div class="role-card">
+        <div class="role-name">CAD</div>
+        <div class="role-label">Caisse, Approv. &amp; Dist.</div>
+        <div class="role-can">Traiter les demandes de <strong>carburant</strong></div>
+      </div>
+      <div class="role-card">
+        <div class="role-name">DA</div>
+        <div class="role-label">Dir. des Approvisionnements</div>
+        <div class="role-can">Traiter les demandes de <strong>matériel</strong></div>
+      </div>
+      <div class="role-card">
+        <div class="role-name">DMG</div>
+        <div class="role-label">Dir. Matériel &amp; Garage</div>
+        <div class="role-can">Traiter les demandes de <strong>location d'engins</strong></div>
+      </div>
+      <div class="role-card highlight">
+        <div class="role-name">DCGAI</div>
+        <div class="role-label">Dir. Contrôle Gestion &amp; Audit</div>
+        <div class="role-can">Valider budgétairement les dépenses et le matériel · Générer les bons</div>
+      </div>
+      <div class="role-card highlight">
+        <div class="role-name">DFC</div>
+        <div class="role-label">Direction Financière</div>
+        <div class="role-can">Payer les dépenses · Suivre les justificatifs manquants</div>
+      </div>
+      <div class="role-card">
+        <div class="role-name">Admin</div>
+        <div class="role-label">Administrateur</div>
+        <div class="role-can">Gérer les utilisateurs et les directions</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. PLANS -->
+  <div class="section" id="plans">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <div class="section-title">Plans d'action</div>
+    </div>
+
+    <h3>Circuit de validation d'un plan</h3>
+    <div class="flow">
+      <span class="pill draft">Brouillon</span><span class="arrow">→</span>
+      <span class="pill wait">En attente DC</span><span class="arrow">→</span>
+      <span class="pill wait">En attente CT</span><span class="arrow">→</span>
+      <span class="pill wait">En attente DGA</span><span class="arrow">→</span>
+      <span class="pill wait">En attente DG</span><span class="arrow">→</span>
+      <span class="pill ok">Ouvert</span><span class="arrow">→</span>
+      <span class="pill done">Clôturé</span>
+    </div>
+    <p>À chaque étape, le validateur peut également <span class="pill rej" style="display:inline">Rejeter</span> le plan avec un commentaire.</p>
+
+    <h3>Créer un plan (Direction)</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text">Cliquer sur <strong>Nouveau Plan</strong> dans le menu à gauche</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text">Renseigner : référence, titre, description, dates de début et de fin</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text">Ajouter les moyens nécessaires : <strong>Carburant, Matériel, Location, Dépenses</strong> avec leur budget</div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-text">Cliquer sur <strong>Créer le Plan</strong> — le plan est en <em>Brouillon</em> et peut être modifié avant soumission</div></div>
+      <div class="step"><div class="step-num">5</div><div class="step-text">Cliquer sur <strong>Soumettre pour validation</strong> pour lancer le circuit d'approbation</div></div>
+    </div>
+
+    <h3>Valider / Rejeter un plan (CT · DGA · DG)</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text">Ouvrir le plan depuis le Tableau de Bord ou la liste des plans</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text">Lire les informations du plan et les moyens demandés</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text"><strong>Valider</strong> pour passer à l'étape suivante, ou <strong>Rejeter</strong> (un commentaire est obligatoire en cas de rejet)</div></div>
+    </div>
+
+    <h3>Clôturer un plan (Direction)</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text">S'assurer que toutes les dépenses ont un <strong>justificatif uploadé</strong> (sinon la clôture est bloquée)</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text">Cliquer sur <strong>Clôturer le plan</strong> — un certificat PDF signé est généré automatiquement</div></div>
+    </div>
+    <div class="tip green">
+      <span class="tip-icon">✅</span>
+      <span>Un <strong>certificat de validation</strong> avec code d'authenticité peut être téléchargé à tout moment depuis la fiche d'un plan ouvert ou clôturé.</span>
+    </div>
+  </div>
+
+  <!-- 4. CARBURANT -->
+  <div class="section" id="carburant">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <div class="section-title">Demandes de carburant</div>
+    </div>
+    <div class="flow">
+      <span class="pill wait">En attente CAD</span><span class="arrow">→</span><span class="pill ok">Validée</span>
+    </div>
+    <table>
+      <thead><tr><th>Qui ?</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Direction</strong></td><td>Depuis la fiche du plan → section Carburant → <strong>Demander</strong> → saisir le montant souhaité</td></tr>
+        <tr><td><strong>CAD</strong></td><td>Aller dans <strong>Demandes</strong> → ouvrir le plan → valider le montant (ajustable) → téléverser la décharge signée → générer le bon → <strong>Valider</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 5. MATÉRIEL -->
+  <div class="section" id="materiel">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <div class="section-title">Demandes de matériel</div>
+    </div>
+    <div class="flow">
+      <span class="pill wait">En attente DA</span><span class="arrow">→</span>
+      <span class="pill wait">En attente DCGAI</span><span class="arrow">→</span>
+      <span class="pill ok">Validée</span>
+    </div>
+    <table>
+      <thead><tr><th>Qui ?</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Direction</strong></td><td>Fiche du plan → section Matériel → <strong>Faire une demande</strong> → sélectionner articles &amp; quantités → Soumettre</td></tr>
+        <tr><td><strong>DA</strong></td><td>Saisir les <strong>prix unitaires</strong> → générer le <strong>bon de commande</strong> → Valider</td></tr>
+        <tr><td><strong>DCGAI</strong></td><td>Générer le <strong>bon de validation DCGAI</strong> → Valider (le montant est consommé sur le plan)</td></tr>
+      </tbody>
+    </table>
+    <div class="tip blue">
+      <span class="tip-icon">ℹ️</span>
+      <span>Le DCGAI peut annuler sa validation si une erreur est constatée. La demande repasse alors à l'étape DCGAI.</span>
+    </div>
+  </div>
+
+  <!-- 6. LOCATION -->
+  <div class="section" id="location">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <div class="section-title">Demandes de location d'engins</div>
+    </div>
+    <div class="flow">
+      <span class="pill wait">En attente DMG</span><span class="arrow">→</span><span class="pill ok">Validée</span>
+    </div>
+    <table>
+      <thead><tr><th>Qui ?</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Direction</strong></td><td>Fiche du plan → section Location → <strong>Faire une demande</strong> → choisir le type d'engin &amp; nombre de jours → Soumettre</td></tr>
+        <tr><td><strong>DMG</strong></td><td>Saisir le <strong>coût journalier</strong> et le nombre de jours validés → téléverser la décharge → Valider</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 7. DÉPENSES -->
+  <div class="section" id="depenses">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <div class="section-title">Demandes de dépenses</div>
+    </div>
+    <div class="flow">
+      <span class="pill wait">En attente DCGAI</span><span class="arrow">→</span>
+      <span class="pill wait">En attente DFC</span><span class="arrow">→</span>
+      <span class="pill pay">Attente Justificatif</span><span class="arrow">→</span>
+      <span class="pill ok">Payée</span>
+    </div>
+    <p>Les dépenses couvrent : <strong>Primes, Logement, Indemnités journalières, Logistique, Autres</strong>.</p>
+
+    <h3>Initier une demande (Direction)</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text">Fiche du plan → section Dépenses → <strong>Nouvelle demande</strong></div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text">Ajouter les bénéficiaires : nom, matricule (optionnel), montant demandé</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text">Plusieurs bénéficiaires peuvent être regroupés dans une même demande (batch)</div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-text">Soumettre — la demande passe en <em>En attente DCGAI</em></div></div>
+    </div>
+
+    <h3>Validation DCGAI</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text">Aller dans <strong>Demandes</strong> pour voir les demandes en attente</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text">Générer le <strong>Bon de Validation DCGAI</strong> (obligatoire — liste tous les bénéficiaires)</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text">Cliquer sur <strong>Valider</strong> — la demande passe en <em>En attente DFC</em></div></div>
+    </div>
+
+    <h3>Paiement (DFC)</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text">Aller dans <strong>Demandes</strong> → localiser les demandes <em>En attente DFC</em></div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text">Générer le <strong>Bon de Paiement</strong> (obligatoire)</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text">Saisir le montant effectivement payé et la <strong>référence de la pièce comptable</strong></div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-text">Cliquer sur <strong>Payer</strong> — la demande passe en <em>Attente Justificatif</em></div></div>
+    </div>
+    <div class="tip blue">
+      <span class="tip-icon">ℹ️</span>
+      <span>Pour les batches, le bouton <strong>Payer tout le batch</strong> permet de régler tous les bénéficiaires en une seule opération.</span>
+    </div>
+  </div>
+
+  <!-- 8. JUSTIFICATIFS -->
+  <div class="section" id="justificatifs">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <div class="section-title">Justificatifs de paiement</div>
+    </div>
+    <p>Après chaque paiement effectué par la DFC, la Direction opérationnelle doit joindre la <strong>preuve de paiement</strong> (reçu, bordereau, etc.).</p>
+
+    <h3>Uploader un justificatif (Direction)</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text">Ouvrir la fiche du plan concerné</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text">Dans la section Dépenses, repérer les demandes en statut <span class="pill pay" style="display:inline;padding:2px 8px;font-size:9pt">Attente Justificatif</span></div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text">Cliquer sur <strong>Joindre le justificatif</strong> → sélectionner le fichier (PDF ou image)</div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-text">Confirmer — la demande passe automatiquement en <span class="pill ok" style="display:inline;padding:2px 8px;font-size:9pt">Payée</span></div></div>
+    </div>
+
+    <h3>Suivre les justificatifs manquants (DFC / Admin)</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text">Cliquer sur <strong>Demandes</strong> dans le menu puis ouvrir l'onglet <strong>Justificatifs en attente</strong></div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text">La liste affiche toutes les dépenses payées sans justificatif reçu</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text">Cliquer sur <strong>Télécharger Excel</strong> pour exporter la liste, ou sur <strong>Ouvrir</strong> pour accéder directement au plan</div></div>
+    </div>
+    <div class="tip amber">
+      <span class="tip-icon">⚠️</span>
+      <span>Un plan ne peut <strong>pas être clôturé</strong> tant qu'il reste des dépenses en attente de justificatif.</span>
+    </div>
+  </div>
+
+  <!-- 9. DOCUMENTS -->
+  <div class="section" id="documents">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <div class="section-title">Documents générés automatiquement</div>
+    </div>
+    <p>Chaque étape clé génère un document officiel avec QR code d'authenticité :</p>
+    <div class="qr-grid">
+      <div class="qr-card"><div class="qr-emoji">⛽</div><div class="qr-title">Bon Carburant</div><div class="qr-desc">Émis par le CAD lors de la validation</div></div>
+      <div class="qr-card"><div class="qr-emoji">📦</div><div class="qr-title">Bon de Commande</div><div class="qr-desc">Émis par la DA avec articles et prix</div></div>
+      <div class="qr-card"><div class="qr-emoji">✔️</div><div class="qr-title">Bon DCGAI</div><div class="qr-desc">Validation budgétaire avec liste des bénéficiaires</div></div>
+      <div class="qr-card"><div class="qr-emoji">💳</div><div class="qr-title">Bon de Paiement</div><div class="qr-desc">Émis par la DFC avec référence comptable</div></div>
+      <div class="qr-card"><div class="qr-emoji">👥</div><div class="qr-title">Paiement Groupé</div><div class="qr-desc">Liste de tous les bénéficiaires d'un batch</div></div>
+      <div class="qr-card"><div class="qr-emoji">🏅</div><div class="qr-title">Certificat de Plan</div><div class="qr-desc">Signé avec code SHA-256 d'authenticité</div></div>
+    </div>
+    <div class="tip blue">
+      <span class="tip-icon">🖨️</span>
+      <span>Tous les documents s'ouvrent dans un nouvel onglet et sont directement imprimables. La <strong>génération du document est obligatoire</strong> avant la validation pour les bons DCGAI et DFC.</span>
+    </div>
+  </div>
+
+  <!-- 10. CONSEILS -->
+  <div class="section" id="conseils">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <div class="section-title">Conseils pratiques</div>
+    </div>
+    <table>
+      <thead><tr><th>Situation</th><th>Que faire ?</th></tr></thead>
+      <tbody>
+        <tr><td>Je ne vois pas un plan dans la liste</td><td>Vérifier le filtre de statut (Tous / En cours / Clôturés) en haut de la liste</td></tr>
+        <tr><td>Le bouton Valider est grisé</td><td>Générer d'abord le bon correspondant (bouton <em>Générer le bon</em>)</td></tr>
+        <tr><td>Je ne peux pas clôturer le plan</td><td>Des dépenses sont en attente de justificatif — les uploader d'abord</td></tr>
+        <tr><td>Les données semblent anciennes</td><td>Cliquer sur <strong>Actualiser</strong> ou attendre 60 secondes (rafraîchissement automatique)</td></tr>
+        <tr><td>J'ai validé par erreur (DCGAI)</td><td>Utiliser le bouton <strong>Annuler la validation</strong> pour repasser en attente</td></tr>
+        <tr><td>Je ne retrouve pas une demande</td><td>Utiliser les filtres (Type, Statut) et la barre de recherche dans Demandes</td></tr>
+        <tr><td>Mon mot de passe ne fonctionne pas</td><td>Contacter l'administrateur pour réinitialisation</td></tr>
+      </tbody>
+    </table>
+    <div class="tip green">
+      <span class="tip-icon">💡</span>
+      <span>Chaque action est tracée avec votre identité. Générez toujours les documents officiels avant de valider — ils constituent la preuve formelle de chaque étape du circuit.</span>
+    </div>
+  </div>
+
+  <div class="footer">
     <span>SOMELEC — Document interne confidentiel</span>
-    <span>Gestion des Plans d'Action v2.0 — Juin 2026</span>
+    <span>Gestion des Plans d'Action · v2.0 · ${TODAY}</span>
   </div>
+
 </div>
-<script>window.onload = () => { window.print(); }</script>
+<script>window.onload = () => window.print();</script>
 </body>
 </html>`;
 
-  const handleDownload = () => {
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+export default function Manuel() {
+  const handleOpen = () => {
+    const blob = new Blob([HTML_DOC], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, "_blank");
-    if (!w) {
-      alert("Veuillez autoriser les popups pour télécharger le manuel.");
-    }
+    if (!w) alert("Veuillez autoriser les popups pour ouvrir le document.");
   };
 
+  const sections = [
+    { num: "1", title: "Se connecter", desc: "Accès et gestion du compte" },
+    { num: "2", title: "Votre rôle", desc: "Ce que vous pouvez faire" },
+    { num: "3", title: "Plans d'action", desc: "Création, validation, clôture" },
+    { num: "4", title: "Carburant", desc: "Flux Direction → CAD" },
+    { num: "5", title: "Matériel", desc: "Flux Direction → DA → DCGAI" },
+    { num: "6", title: "Location", desc: "Flux Direction → DMG" },
+    { num: "7", title: "Dépenses", desc: "Flux Direction → DCGAI → DFC" },
+    { num: "8", title: "Justificatifs", desc: "Upload et suivi" },
+    { num: "9", title: "Documents", desc: "Bons et certificats générés" },
+    { num: "10", title: "Conseils pratiques", desc: "Résolution des problèmes courants" },
+  ];
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Manuel de Procédure</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Guide Utilisateur</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            SOMELEC — Gestion des Plans d'Action · Version 2.0 · Juin 2026
+            SOMELEC — Gestion des Plans d'Action · Version 2.0 · {TODAY}
           </p>
         </div>
         <button
-          onClick={handleDownload}
+          onClick={handleOpen}
           className="flex items-center gap-2 px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg shadow transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
           </svg>
-          Télécharger / Imprimer PDF
+          Imprimer / Sauvegarder en PDF
         </button>
       </div>
 
+      {/* Info */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-        Ce manuel décrit toutes les procédures de l'application. Cliquer sur <strong>Télécharger / Imprimer PDF</strong> pour obtenir le document imprimable.
+        Ce guide explique, étape par étape, comment utiliser chaque fonctionnalité de l'application selon votre profil.
+        Cliquez sur <strong>Imprimer / Sauvegarder en PDF</strong> pour obtenir le document complet formaté A4.
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm divide-y divide-gray-100">
-        {SECTIONS.map((s) => (
-          <div key={s.id} className="px-6 py-5">
-            <h2 className="text-base font-bold text-blue-800 mb-3">{s.titre}</h2>
-            <div
-              className="prose prose-sm max-w-none text-gray-700 [&_h3]:font-semibold [&_h3]:text-gray-900 [&_h3]:mt-4 [&_h3]:mb-2 [&_table]:text-xs [&_th]:bg-blue-50 [&_th]:text-blue-800 [&_th]:font-semibold [&_th]:px-3 [&_th]:py-2 [&_td]:px-3 [&_td]:py-1.5 [&_td]:border-b [&_td]:border-gray-100 [&_table]:border-collapse [&_table]:w-full [&_.note]:bg-amber-50 [&_.note]:border-l-4 [&_.note]:border-amber-400 [&_.note]:px-3 [&_.note]:py-2 [&_.note]:text-amber-800 [&_.note.info]:bg-blue-50 [&_.note.info]:border-blue-400 [&_.note.info]:text-blue-800 [&_.workflow]:flex [&_.workflow]:flex-wrap [&_.workflow]:items-center [&_.workflow]:gap-2 [&_.statut]:px-2.5 [&_.statut]:py-0.5 [&_.statut]:rounded-full [&_.statut]:text-xs [&_.statut]:font-semibold [&_.arrow]:text-gray-400 [&_.arrow]:font-bold [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_code]:text-blue-700"
-              dangerouslySetInnerHTML={{ __html: s.contenu }}
-            />
+      {/* Sommaire visuel */}
+      <div className="grid grid-cols-2 gap-3">
+        {sections.map((s) => (
+          <div key={s.num} className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+            <div className="w-9 h-9 rounded-lg bg-blue-700 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+              {s.num}
+            </div>
+            <div>
+              <div className="font-semibold text-sm text-gray-900">{s.title}</div>
+              <div className="text-xs text-gray-500">{s.desc}</div>
+            </div>
           </div>
         ))}
       </div>
 
       <p className="text-xs text-center text-gray-400 pb-4">
-        SOMELEC — Document interne confidentiel · Gestion des Plans d'Action v2.0 · Juin 2026
+        SOMELEC — Document interne confidentiel · Gestion des Plans d'Action v2.0 · {TODAY}
       </p>
     </div>
   );
