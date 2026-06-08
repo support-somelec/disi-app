@@ -5,7 +5,7 @@ generated = []
 id = "dW_VcmB0i3D68EfsKd5EV"
 uri = "file://Manuel_Utilisateur_SOMELEC.pdf"
 type = "pdf"
-title = "Manuel d'Utilisateur — SOMELEC Plans d'Action"
+title = "Manuel_Utilisateur_SOMELEC.pdf (version actuelle)"
 
 [[outputs]]
 id = "d6fwizFC6OtYrcpXKmjoi"
@@ -18,3 +18,9 @@ id = "IZHGuJUM6yXBrk1u_WOUj"
 uri = "file://NOTE_PROCEDURE_UTILISATION.md"
 type = "text"
 title = "Note de Procédure — SOMELEC Gestion des Plans d'Action"
+
+[[outputs]]
+id = "VurhjX8GPXvxihWdPee51"
+uri = "file://Manuel_Utilisateur_SOMELEC.docx"
+type = "word_document"
+title = "Guide Utilisateur SOMELEC — Version 2.0 (Juin 2026)"
