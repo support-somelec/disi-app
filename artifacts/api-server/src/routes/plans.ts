@@ -1364,10 +1364,13 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/batch", async (req, res
     if (lignes.some(l => !l.montantDemande || l.montantDemande <= 0)) return res.status(400).json({ error: "Montants invalides." });
 
     const existingPending = await db.select().from(depenseDemandesTable).where(
-      and(eq(depenseDemandesTable.moyenId, moyenId), eq(depenseDemandesTable.statut, "en_attente_dcgai"))
+      and(
+        eq(depenseDemandesTable.moyenId, moyenId),
+        inArray(depenseDemandesTable.statut, ["en_attente_dcgai", "en_attente_dfc", "en_attente_justificatif"])
+      )
     );
     if (existingPending.length > 0) {
-      return res.status(409).json({ error: "Une demande est déjà en attente de validation pour ce moyen. Veuillez attendre qu'elle soit traitée par le DCGAI avant d'en soumettre une nouvelle." });
+      return res.status(409).json({ error: "Une demande est déjà en cours pour ce moyen. Attendez qu'elle soit entièrement traitée (payée et justifiée) avant d'en soumettre une nouvelle." });
     }
 
     const batchRef = `BATCH-${planId}-${moyenId}-${Date.now()}`;
@@ -1447,12 +1450,11 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes", async (req, res) => {
     const existingPending = await db.select().from(depenseDemandesTable).where(
       and(
         eq(depenseDemandesTable.moyenId, moyenId),
-        eq(depenseDemandesTable.nomBeneficiaire, nomBeneficiaire.trim()),
-        eq(depenseDemandesTable.statut, "en_attente_dcgai")
+        inArray(depenseDemandesTable.statut, ["en_attente_dcgai", "en_attente_dfc", "en_attente_justificatif"])
       )
     );
     if (existingPending.length > 0) {
-      return res.status(409).json({ error: `Une demande pour le bénéficiaire "${nomBeneficiaire}" est déjà en attente pour ce moyen. Elle a peut-être déjà été enregistrée malgré le problème réseau.` });
+      return res.status(409).json({ error: "Une demande est déjà en cours pour ce moyen. Attendez qu'elle soit entièrement traitée (payée et justifiée) avant d'en soumettre une nouvelle." });
     }
 
     const [demande] = await db.insert(depenseDemandesTable).values({

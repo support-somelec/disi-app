@@ -1538,27 +1538,32 @@ export default function PlanDetails() {
                               </Button>
                             ) : <span className="text-muted-foreground text-xs">—</span>
                           ) : DEPENSE_CATS.includes(m.categorie) ? (
-                            canDemanderExecution ? (
-                              BATCH_DEPENSE_CATS.includes(m.categorie) ? (
+                            canDemanderExecution ? (() => {
+                              const hasPendingDepense = (depenseDemandesMap[m.id] ?? []).some(d =>
+                                ["en_attente_dcgai", "en_attente_dfc", "en_attente_justificatif"].includes(d.statut)
+                              );
+                              return BATCH_DEPENSE_CATS.includes(m.categorie) ? (
                                 <Button
                                   size="sm" variant="outline"
-                                  className="h-7 text-xs gap-1 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                                  onClick={() => {
-                                    setPrimeBatchDialog(m.id);
-                                  }}
+                                  className="h-7 text-xs gap-1 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  disabled={hasPendingDepense}
+                                  title={hasPendingDepense ? "Une demande est déjà en cours pour ce moyen" : undefined}
+                                  onClick={() => { setPrimeBatchDialog(m.id); }}
                                 >
                                   <DollarSign className="w-3 h-3" /> Dem. dépense
                                 </Button>
                               ) : (
                                 <Button
                                   size="sm" variant="outline"
-                                  className="h-7 text-xs gap-1 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                                  className="h-7 text-xs gap-1 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  disabled={hasPendingDepense}
+                                  title={hasPendingDepense ? "Une demande est déjà en cours pour ce moyen" : undefined}
                                   onClick={() => { setDepenseMontantInput(""); setDepenseNomBenef(""); setDepenseMatricule(""); setDepenseDemandeDialog(m.id); }}
                                 >
                                   <DollarSign className="w-3 h-3" /> Dem. dépense
                                 </Button>
-                              )
-                            ) : <span className="text-muted-foreground text-xs">—</span>
+                              );
+                            })() : <span className="text-muted-foreground text-xs">—</span>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
                           )}
