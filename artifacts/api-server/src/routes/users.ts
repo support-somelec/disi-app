@@ -46,6 +46,22 @@ router.post("/login", async (req, res) => {
   }
 });
 
+router.put("/users/:id/admin-reset-password", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { newPassword } = req.body as { newPassword?: string };
+    if (!newPassword) return res.status(400).json({ error: "Nouveau mot de passe requis." });
+    if (newPassword.length < 6) return res.status(400).json({ error: "Le mot de passe doit contenir au moins 6 caractères." });
+    const rows = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, id));
+    if (!rows[0]) return res.status(404).json({ error: "Utilisateur non trouvé." });
+    await db.update(usersTable).set({ password: newPassword }).where(eq(usersTable.id, id));
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
 router.put("/users/:id/password", async (req, res) => {
   try {
     const id = Number(req.params.id);

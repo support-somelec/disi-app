@@ -10,7 +10,7 @@ import { useLocation } from "wouter";
 import {
   Pencil, Trash2, X, Check, Loader2, Search, UserPlus, Shield,
   Building2, Plus, AlertTriangle, Clock, Users, Upload, FileText,
-  RefreshCw, Copy, CheckCircle2,
+  RefreshCw, Copy, CheckCircle2, KeyRound, Eye, EyeOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -144,6 +144,14 @@ export default function AdminUsers() {
   const [deletingDemande, setDeletingDemande] = useState<string | null>(null);
   const [confirmDeleteDemande, setConfirmDeleteDemande] = useState<string | null>(null);
 
+  const [resetPwdDialog, setResetPwdDialog] = useState<{ userId: number; userName: string } | null>(null);
+  const [resetPwdValue, setResetPwdValue] = useState("");
+  const [resetPwdConfirm, setResetPwdConfirm] = useState("");
+  const [resetPwdShow, setResetPwdShow] = useState(false);
+  const [resetPwdLoading, setResetPwdLoading] = useState(false);
+  const [resetPwdError, setResetPwdError] = useState("");
+  const [resetPwdSuccess, setResetPwdSuccess] = useState(false);
+
   if (currentUser?.role !== "admin") {
     return (
       <div className="flex items-center justify-center h-64">
@@ -191,6 +199,36 @@ export default function AdminUsers() {
     } finally {
       setDeletingUser(null);
     }
+  };
+
+  const openResetPwd = (user: User) => {
+    setResetPwdDialog({ userId: user.id, userName: `${user.prenom} ${user.nom}`.trim() });
+    setResetPwdValue("");
+    setResetPwdConfirm("");
+    setResetPwdShow(false);
+    setResetPwdError("");
+    setResetPwdSuccess(false);
+    setUserEdit(null);
+    setConfirmDeleteUser(null);
+  };
+
+  const handleResetPwd = async () => {
+    if (!resetPwdDialog) return;
+    setResetPwdError("");
+    if (resetPwdValue.length < 6) { setResetPwdError("Le mot de passe doit contenir au moins 6 caractères."); return; }
+    if (resetPwdValue !== resetPwdConfirm) { setResetPwdError("Les mots de passe ne correspondent pas."); return; }
+    setResetPwdLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/users/${resetPwdDialog.userId}/admin-reset-password`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword: resetPwdValue }),
+      });
+      if (!res.ok) { const e = await res.json(); setResetPwdError(e.error ?? "Erreur"); return; }
+      setResetPwdSuccess(true);
+      setTimeout(() => setResetPwdDialog(null), 1800);
+    } catch { setResetPwdError("Erreur réseau."); }
+    finally { setResetPwdLoading(false); }
   };
 
   /* ── Direction handlers ── */
@@ -336,6 +374,7 @@ export default function AdminUsers() {
   });
 
   return (
+    <>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -559,6 +598,10 @@ export default function AdminUsers() {
                                 className={cn("p-1.5 rounded-md transition-colors", isPending ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "hover:bg-blue-50 text-blue-600 hover:text-blue-700")}
                                 title={isPending ? "Affecter un rôle" : "Modifier"}>
                                 {isPending ? <Shield className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                              </button>
+                              <button onClick={() => openResetPwd(user)}
+                                className="p-1.5 rounded-md hover:bg-violet-50 text-violet-600 hover:text-violet-700 transition-colors" title="Changer le mot de passe">
+                                <KeyRound className="h-4 w-4" />
                               </button>
                               {!isCurrentUser && (
                                 <button onClick={() => { setConfirmDeleteUser(user.id); setUserEdit(null); }}
@@ -1068,5 +1111,81 @@ export default function AdminUsers() {
         </>
       )}
     </div>
+
+      {/* ══ DIALOGUE RÉINITIALISATION MOT DE PASSE ══ */}
+      {resetPwdDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-5 w-5 text-violet-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Changer le mot de passe</h2>
+              </div>
+              <button onClick={() => setResetPwdDialog(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-500 mb-5">
+              Définir un nouveau mot de passe pour <span className="font-semibold text-gray-800">{resetPwdDialog.userName}</span>
+            </p>
+
+            {resetPwdSuccess ? (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <Check className="h-6 w-6 text-green-600" />
+                </div>
+                <p className="text-green-700 font-medium">Mot de passe modifié avec succès !</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Nouveau mot de passe</label>
+                  <div className="relative">
+                    <input
+                      type={resetPwdShow ? "text" : "password"}
+                      value={resetPwdValue}
+                      onChange={e => setResetPwdValue(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pr-10 pl-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                    />
+                    <button type="button" onClick={() => setResetPwdShow(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      {resetPwdShow ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirmer le mot de passe</label>
+                  <input
+                    type={resetPwdShow ? "text" : "password"}
+                    value={resetPwdConfirm}
+                    onChange={e => setResetPwdConfirm(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleResetPwd()}
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  />
+                </div>
+                {resetPwdError && (
+                  <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
+                    <X className="h-4 w-4 shrink-0" /> {resetPwdError}
+                  </div>
+                )}
+                <div className="flex gap-3 pt-1">
+                  <button onClick={() => setResetPwdDialog(null)}
+                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                    Annuler
+                  </button>
+                  <button onClick={handleResetPwd} disabled={resetPwdLoading || !resetPwdValue || !resetPwdConfirm}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors">
+                    {resetPwdLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                    Enregistrer
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
