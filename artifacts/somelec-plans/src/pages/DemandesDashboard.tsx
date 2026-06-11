@@ -13,10 +13,10 @@ const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
 export const DEMANDES_ROLES = [
   "cad", "da", "dmg", "dcgai", "direction_financiere",
-  "admin", "dga", "directeur_general", "controle_technique",
+  "admin", "dga", "directeur_general", "controle_technique", "consultant",
 ];
 
-const READ_ONLY_ROLES = ["dga", "directeur_general", "controle_technique"];
+const READ_ONLY_ROLES = ["dga", "directeur_general", "controle_technique", "consultant"];
 const ADMIN_ROLES = ["admin"];
 
 interface DemandeItem {

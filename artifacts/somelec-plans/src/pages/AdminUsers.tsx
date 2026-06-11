@@ -30,6 +30,7 @@ const ALL_ROLES = [
   "cad",
   "rh",
   "admin",
+  "consultant",
 ];
 
 const ROLES_WITH_DIRECTION = ["direction", "direction_financiere", "dga", "directeur_general", "controle_technique"];

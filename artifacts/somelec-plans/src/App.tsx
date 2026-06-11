@@ -42,7 +42,7 @@ function Router() {
       </Route>
       <Route path="/plans/nouveau">
         {isAuthenticated ? (
-          <AppLayout><CreatePlan /></AppLayout>
+          <AppLayout roles={["direction"]}><CreatePlan /></AppLayout>
         ) : (
           <Redirect to="/login" />
         )}

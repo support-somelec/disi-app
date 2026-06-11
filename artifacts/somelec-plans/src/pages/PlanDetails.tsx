@@ -1111,7 +1111,7 @@ export default function PlanDetails() {
   const canValidateCT  = currentUser?.role === "controle_technique" && plan.statut === "en_attente_ct";
   const canValidateDGA = currentUser?.role === "dga"                && plan.statut === "en_attente_dga";
   const canValidateDG  = currentUser?.role === "directeur_general"  && plan.statut === "en_attente_dg";
-  const canCloturer    = plan.statut === "ouvert" && (plan.createdById === currentUser?.id || (currentUser?.role === "direction" && currentUser?.directionId === plan.directionId));
+  const canCloturer    = !isConsultant && plan.statut === "ouvert" && (plan.createdById === currentUser?.id || (currentUser?.role === "direction" && currentUser?.directionId === plan.directionId));
   const isDG = currentUser?.role === "directeur_general" || currentUser?.role === "dga";
 
   const isOwnDirectionPlan = currentUser?.role === "direction" &&
@@ -1123,6 +1123,7 @@ export default function PlanDetails() {
       : canDemanderExecution;
 
   const myRole = currentUser?.role ?? "";
+  const isConsultant = myRole === "consultant";
   const isDcgai = myRole === "dcgai";
   const isDA = myRole === "da";
   const myCategories = Object.entries(CATEGORY_ROLE).filter(([, role]) => role === myRole).map(([cat]) => cat);
