@@ -501,7 +501,7 @@ router.get("/plans/:id/certificat", async (req, res) => {
       <div class="info-item"><span class="info-label">Direction</span><span class="info-value">${direction}</span></div>
       <div class="info-item"><span class="info-label">Créé par</span><span class="info-value">${plan.createdByNom ?? "—"}</span></div>
       <div class="info-item"><span class="info-label">Date de début</span><span class="info-value">${new Date(plan.dateDebut).toLocaleDateString("fr-FR", { dateStyle: "long" })}</span></div>
-      <div class="info-item"><span class="info-label">Durée</span><span class="info-value">${plan.duree} mois</span></div>
+      <div class="info-item"><span class="info-label">Durée</span><span class="info-value">${plan.duree} jours</span></div>
       <div class="info-item"><span class="info-label">Budget total</span><span class="info-value">${formatMRU(budgetTotal)}</span></div>
       <div class="info-item"><span class="info-label">Nombre de moyens</span><span class="info-value">${(plan.moyens ?? []).length} moyen(s)</span></div>
       ${plan.description ? `<div class="info-item" style="grid-column:1/-1"><span class="info-label">Description</span><span class="info-value" style="font-weight:400">${plan.description}</span></div>` : ""}
