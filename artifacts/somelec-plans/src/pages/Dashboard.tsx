@@ -101,7 +101,7 @@ export default function Dashboard() {
     return <div className="flex h-[50vh] items-center justify-center"><div className="animate-spin text-primary"><Activity size={48} /></div></div>;
   }
 
-  const isDG = currentUser?.role === "directeur_general" || currentUser?.role === "dga";
+  const isDG = currentUser?.role === "directeur_general" || currentUser?.role === "dga" || currentUser?.role === "admin";
   const isDirection = currentUser?.role === "direction";
 
   return (

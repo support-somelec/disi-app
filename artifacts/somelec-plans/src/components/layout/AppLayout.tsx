@@ -184,7 +184,7 @@ export function AppLayout({ children, roles }: { children: React.ReactNode; role
     { href: "/", label: "Tableau de Bord", icon: LayoutDashboard },
     { href: "/plans/nouveau", label: "Nouveau Plan", icon: FilePlus, roles: ["direction"] },
     { href: "/demandes", label: "Demandes", icon: Layers, roles: DEMANDES_ROLES, badge: pendingCount > 0 ? pendingCount : undefined },
-    { href: "/analyse", label: "Analyse", icon: BarChart2, roles: ["directeur_general", "dga"] },
+    { href: "/analyse", label: "Analyse", icon: BarChart2, roles: ["directeur_general", "dga", "admin"] },
     { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users, roles: ["admin"] },
     { href: "/manuel", label: "Manuel", icon: BookOpen, roles: ["admin"] },
   ];

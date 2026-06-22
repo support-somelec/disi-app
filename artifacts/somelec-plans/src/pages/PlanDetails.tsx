@@ -1112,7 +1112,7 @@ export default function PlanDetails() {
   const canValidateDGA = currentUser?.role === "dga"                && plan.statut === "en_attente_dga";
   const canValidateDG  = currentUser?.role === "directeur_general"  && plan.statut === "en_attente_dg";
   const canCloturer    = currentUser?.role !== "consultant" && plan.statut === "ouvert" && (plan.createdById === currentUser?.id || (currentUser?.role === "direction" && currentUser?.directionId === plan.directionId));
-  const isDG = currentUser?.role === "directeur_general" || currentUser?.role === "dga";
+  const isDG = currentUser?.role === "directeur_general" || currentUser?.role === "dga" || currentUser?.role === "admin";
 
   const isOwnDirectionPlan = currentUser?.role === "direction" &&
     (plan.createdById === currentUser?.id || currentUser?.directionId === plan.directionId);
