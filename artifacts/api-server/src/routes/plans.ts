@@ -1466,6 +1466,21 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes", async (req, res) => {
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
 });
 
+// PATCH /plans/:id/moyens/:moyenId/depense-demandes/:demandeId  (admin: modifier nom bénéficiaire)
+router.patch("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId", async (req, res) => {
+  try {
+    const demandeId = Number(req.params.demandeId);
+    const { nomBeneficiaire, matriculeBeneficiaire } = req.body as { nomBeneficiaire?: string; matriculeBeneficiaire?: string };
+    if (!nomBeneficiaire?.trim()) return res.status(400).json({ error: "Nom du bénéficiaire requis." });
+    const [updated] = await db.update(depenseDemandesTable)
+      .set({ nomBeneficiaire: nomBeneficiaire.trim(), matriculeBeneficiaire: matriculeBeneficiaire?.trim() || null })
+      .where(eq(depenseDemandesTable.id, demandeId))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Demande introuvable." });
+    res.json(mapDepenseDemande(updated));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
 // POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dcgai-valider
 router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/dcgai-valider", async (req, res) => {
   try {

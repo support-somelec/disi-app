@@ -19,7 +19,7 @@ import {
   AlertCircle, FileDigit, Download, ShieldCheck, TrendingDown, Fuel,
   Package, Home, DollarSign, BadgeDollarSign, Loader2, ChevronRight,
   Lock, FilePlus, Trash2, UploadCloud, PlayCircle, Hourglass, CheckCheck, Send, TriangleAlert, Car, MessageSquare,
-  Search, Users, FileSpreadsheet, X, Plus, XCircle
+  Search, Users, FileSpreadsheet, X, Plus, XCircle, Pencil
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
@@ -160,6 +160,10 @@ export default function PlanDetails() {
   const [depenseNomBenef, setDepenseNomBenef] = useState("");
   const [depenseMatricule, setDepenseMatricule] = useState("");
   const [depenseDemLoading, setDepenseDemLoading] = useState(false);
+  const [editBenefDialog, setEditBenefDialog] = useState<{ id: number; moyenId: number } | null>(null);
+  const [editBenefNom, setEditBenefNom] = useState("");
+  const [editBenefMatricule, setEditBenefMatricule] = useState("");
+  const [editBenefLoading, setEditBenefLoading] = useState(false);
   const [dcgaiDepenseLoading, setDcgaiDepenseLoading] = useState<number | null>(null);
   const [dfcPayerDialog, setDfcPayerDialog] = useState<{ moyenId: number; demandeId: number; demande: DepenseDemande } | null>(null);
   const [dfcMontantInput, setDfcMontantInput] = useState("");
@@ -279,6 +283,28 @@ export default function PlanDetails() {
       setDepenseMatricule("");
     } catch { alert("Problème réseau. Votre demande a peut-être déjà été enregistrée — fermez cette fenêtre et actualisez la page avant de réessayer."); }
     finally { setDepenseDemLoading(false); }
+  };
+
+  const handleEditBeneficiaire = async () => {
+    if (!editBenefDialog || !editBenefNom.trim()) return;
+    setEditBenefLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${editBenefDialog.moyenId}/depense-demandes/${editBenefDialog.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nomBeneficiaire: editBenefNom.trim(), matriculeBeneficiaire: editBenefMatricule.trim() || undefined }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      const updated = await res.json();
+      setDepenseDemandesMap(prev => ({
+        ...prev,
+        [editBenefDialog.moyenId]: (prev[editBenefDialog.moyenId] ?? []).map(d =>
+          d.id === editBenefDialog.id ? { ...d, nomBeneficiaire: updated.nomBeneficiaire, matriculeBeneficiaire: updated.matriculeBeneficiaire } : d
+        ),
+      }));
+      setEditBenefDialog(null);
+    } catch { alert("Erreur réseau."); }
+    finally { setEditBenefLoading(false); }
   };
 
   const handleDcgaiDepenseValider = async (moyenId: number, demandeId: number) => {
@@ -1113,6 +1139,7 @@ export default function PlanDetails() {
   const canValidateDG  = currentUser?.role === "directeur_general"  && plan.statut === "en_attente_dg";
   const canCloturer    = currentUser?.role !== "consultant" && plan.statut === "ouvert" && (plan.createdById === currentUser?.id || (currentUser?.role === "direction" && currentUser?.directionId === plan.directionId));
   const isDG = currentUser?.role === "directeur_general" || currentUser?.role === "dga" || currentUser?.role === "admin";
+  const isAdmin = currentUser?.role === "admin";
 
   const isOwnDirectionPlan = currentUser?.role === "direction" &&
     (plan.createdById === currentUser?.id || currentUser?.directionId === plan.directionId);
@@ -1462,7 +1489,20 @@ export default function PlanDetails() {
                                     <tr><td colSpan={4} className="px-2 py-2 text-center text-muted-foreground">Aucune demande enregistrée.</td></tr>
                                   ) : depenseDemandesMap[m.id].map((b, bi) => (
                                     <tr key={bi} className="bg-white">
-                                      <td className="px-2 py-1.5 font-medium">{b.nomBeneficiaire}</td>
+                                      <td className="px-2 py-1.5 font-medium">
+                                        <span className="flex items-center gap-1">
+                                          {b.nomBeneficiaire}
+                                          {isAdmin && (
+                                            <button
+                                              className="ml-1 text-muted-foreground hover:text-primary transition-colors"
+                                              title="Modifier le bénéficiaire"
+                                              onClick={() => { setEditBenefDialog({ id: b.id, moyenId: m.id }); setEditBenefNom(b.nomBeneficiaire); setEditBenefMatricule(b.matriculeBeneficiaire ?? ""); }}
+                                            >
+                                              <Pencil className="w-3 h-3" />
+                                            </button>
+                                          )}
+                                        </span>
+                                      </td>
                                       <td className="px-2 py-1.5 text-muted-foreground">{b.matriculeBeneficiaire ?? "—"}</td>
                                       <td className="px-2 py-1.5 text-right font-semibold text-primary">{b.montantDemande.toLocaleString("fr-FR")} MRU</td>
                                       <td className="px-2 py-1.5 text-center">
@@ -1747,7 +1787,18 @@ export default function PlanDetails() {
                                 ) : (depenseDemandesMap[m.id] ?? []).map(dem => (
                                   <div key={dem.id} className="border border-emerald-200 rounded-lg bg-white p-3 text-xs space-y-1">
                                     <div className="flex items-center justify-between">
-                                      <span className="font-semibold text-emerald-900">Demande #{dem.id} — {dem.nomBeneficiaire}{dem.matriculeBeneficiaire ? ` (${dem.matriculeBeneficiaire})` : ""}</span>
+                                      <span className="font-semibold text-emerald-900 flex items-center gap-1.5">
+                                        Demande #{dem.id} — {dem.nomBeneficiaire}{dem.matriculeBeneficiaire ? ` (${dem.matriculeBeneficiaire})` : ""}
+                                        {isAdmin && (
+                                          <button
+                                            className="text-muted-foreground hover:text-primary transition-colors"
+                                            title="Modifier le bénéficiaire"
+                                            onClick={() => { setEditBenefDialog({ id: dem.id, moyenId: m.id }); setEditBenefNom(dem.nomBeneficiaire); setEditBenefMatricule(dem.matriculeBeneficiaire ?? ""); }}
+                                          >
+                                            <Pencil className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                      </span>
                                       <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium",
                                         dem.statut === "payee" ? "bg-green-100 text-green-700" :
                                         dem.statut === "en_attente_dfc" ? "bg-blue-100 text-blue-700" :
@@ -3476,6 +3527,47 @@ export default function PlanDetails() {
             >
               {demandingMoyen ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
               Confirmer la demande
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog : modifier bénéficiaire (admin) */}
+      <Dialog open={!!editBenefDialog} onOpenChange={open => { if (!open) setEditBenefDialog(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Pencil className="w-4 h-4 text-primary" /> Modifier le bénéficiaire</DialogTitle>
+            <DialogDescription>Correction du nom ou matricule d'un bénéficiaire (admin uniquement).</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-sm font-semibold text-foreground block mb-1">Nom complet <span className="text-destructive">*</span></label>
+              <input
+                className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                value={editBenefNom}
+                onChange={e => setEditBenefNom(e.target.value)}
+                placeholder="Nom du bénéficiaire"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-foreground block mb-1">Matricule <span className="text-muted-foreground text-xs">(optionnel)</span></label>
+              <input
+                className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                value={editBenefMatricule}
+                onChange={e => setEditBenefMatricule(e.target.value)}
+                placeholder="Matricule (optionnel)"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setEditBenefDialog(null)} disabled={editBenefLoading}>Annuler</Button>
+            <Button
+              className="bg-primary hover:bg-primary/90 text-white"
+              disabled={editBenefLoading || !editBenefNom.trim()}
+              onClick={handleEditBeneficiaire}
+            >
+              {editBenefLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Pencil className="w-4 h-4 mr-2" />}
+              Enregistrer
             </Button>
           </DialogFooter>
         </DialogContent>
