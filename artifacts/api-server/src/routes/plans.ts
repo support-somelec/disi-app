@@ -1621,6 +1621,63 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/justifi
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
 });
 
+// GET /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/justificatif  (télécharger le fichier)
+router.get("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/justificatif", async (req, res) => {
+  try {
+    const demandeId = Number(req.params.demandeId);
+    const [row] = await db.select({
+      justificatifNom: depenseDemandesTable.justificatifNom,
+      justificatifData: depenseDemandesTable.justificatifData,
+    }).from(depenseDemandesTable).where(eq(depenseDemandesTable.id, demandeId));
+    if (!row || !row.justificatifData || !row.justificatifNom) {
+      return res.status(404).json({ error: "Justificatif introuvable." });
+    }
+    let mimeType = "application/octet-stream";
+    let base64Data = row.justificatifData;
+    if (row.justificatifData.startsWith("data:")) {
+      const match = row.justificatifData.match(/^data:([^;]+);base64,(.+)$/s);
+      if (match) { mimeType = match[1]; base64Data = match[2]; }
+    }
+    const buffer = Buffer.from(base64Data, "base64");
+    res.setHeader("Content-Type", mimeType);
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(row.justificatifNom)}"`);
+    res.send(buffer);
+  } catch (err) { console.error(String(err)); res.status(500).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-justifier  (admin : upload sans contrainte statut)
+router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-justifier", async (req, res) => {
+  try {
+    const demandeId = Number(req.params.demandeId);
+    const { justificatifNom, justificatifData } = req.body as { justificatifNom: string; justificatifData: string };
+    if (!justificatifNom || !justificatifData) return res.status(400).json({ error: "Fichier requis." });
+    const [existing] = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.id, demandeId));
+    if (!existing) return res.status(404).json({ error: "Demande introuvable." });
+    const newStatut = existing.statut === "en_attente_justificatif" ? "payee" : existing.statut;
+    const [updated] = await db.update(depenseDemandesTable)
+      .set({ justificatifNom, justificatifData, justificatifAt: new Date(), statut: newStatut })
+      .where(eq(depenseDemandesTable.id, demandeId)).returning();
+    res.json(mapDepenseDemande(updated));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-justifier  (admin : batch upload)
+router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-justifier", async (req, res) => {
+  try {
+    const batchRef = req.params.batchRef;
+    const { justificatifNom, justificatifData } = req.body as { justificatifNom: string; justificatifData: string };
+    if (!justificatifNom || !justificatifData) return res.status(400).json({ error: "Fichier requis." });
+    const rows = await db.select().from(depenseDemandesTable)
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), inArray(depenseDemandesTable.statut, ["en_attente_justificatif", "payee"])));
+    if (rows.length === 0) return res.status(404).json({ error: "Batch introuvable ou statut incompatible." });
+    const updated = await db.update(depenseDemandesTable)
+      .set({ justificatifNom, justificatifData, justificatifAt: new Date(), statut: "payee" })
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), inArray(depenseDemandesTable.statut, ["en_attente_justificatif", "payee"])))
+      .returning();
+    res.json(updated.map(mapDepenseDemande));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
 // GET /depenses/non-justifiees — all depense demandes awaiting justificatif (for DFC tab)
 router.get("/depenses/non-justifiees", async (req, res) => {
   const cols = {

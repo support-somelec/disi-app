@@ -189,6 +189,8 @@ export default function PlanDetails() {
   const [dfcBatchDocGenerated, setDfcBatchDocGenerated] = useState(false);
   const [justifLoading, setJustifLoading] = useState<number | null>(null); // demandeId being justified
   const [justifBatchLoading, setJustifBatchLoading] = useState<string | null>(null); // batchRef being justified
+  const [adminJustifLoading, setAdminJustifLoading] = useState<number | null>(null);
+  const [adminJustifBatchLoading, setAdminJustifBatchLoading] = useState<string | null>(null);
 
   const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
@@ -519,6 +521,38 @@ export default function PlanDetails() {
       invalidatePlans();
     } catch { alert("Erreur réseau"); }
     finally { setJustifBatchLoading(null); }
+  };
+
+  const handleAdminJustifier = async (moyenId: number, demandeId: number, file: File) => {
+    const data = await toBase64(file);
+    setAdminJustifLoading(demandeId);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes/${demandeId}/admin-justifier`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ justificatifNom: file.name, justificatifData: data }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadDepenseData(moyenId);
+      invalidatePlans();
+    } catch { alert("Erreur réseau"); }
+    finally { setAdminJustifLoading(null); }
+  };
+
+  const handleAdminJustifierBatch = async (moyenId: number, batchRef: string, file: File) => {
+    const data = await toBase64(file);
+    setAdminJustifBatchLoading(batchRef);
+    try {
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes-batch/${encodeURIComponent(batchRef)}/admin-justifier`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ justificatifNom: file.name, justificatifData: data }),
+      });
+      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await loadDepenseData(moyenId);
+      invalidatePlans();
+    } catch { alert("Erreur réseau"); }
+    finally { setAdminJustifBatchLoading(null); }
   };
 
   const downloadPdfListe = (planObj: typeof plan, moyen: typeof moyens[0], demandes: DepenseDemande[]) => {
@@ -1808,6 +1842,16 @@ export default function PlanDetails() {
                                     </div>
                                     <div className="text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-FR")} MRU</span></div>
                                     {dem.statut === "payee" && <div className="text-success font-semibold">Montant payé : {(dem.montantPaye ?? 0).toLocaleString("fr-FR")} MRU — Réf : {dem.pieceReference}</div>}
+                                    {isAdmin && dem.justificatifNom && (
+                                      <a
+                                        href={`${BASE_URL}api/plans/${id}/moyens/${m.id}/depense-demandes/${dem.id}/justificatif`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                                      >
+                                        <Download className="w-3 h-3" /> {dem.justificatifNom}
+                                      </a>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -2594,6 +2638,90 @@ export default function PlanDetails() {
                                     await handleJustifierBatch(m.id, dem.batchRef, file);
                                   } else {
                                     await handleJustifier(m.id, dem.id, file);
+                                  }
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              );
+            })()
+          )}
+
+          {/* Admin — upload justificatifs pour les dépenses en attente ou remplacement */}
+          {isAdmin && plan.statut === "ouvert" && depenseMoyens.length > 0 && (
+            (() => {
+              const allPendingJustif: { moyen: typeof moyens[0]; dem: DepenseDemande }[] = [];
+              for (const m of depenseMoyens) {
+                const dems = depenseDemandesMap[m.id] ?? [];
+                for (const d of dems) {
+                  if (d.statut === "en_attente_justificatif" || (d.statut === "payee" && d.justificatifNom)) allPendingJustif.push({ moyen: m, dem: d });
+                }
+              }
+              const pendingOnly = allPendingJustif.filter(({ dem }) => dem.statut === "en_attente_justificatif");
+              if (pendingOnly.length === 0) return null;
+              return (
+                <Card className="border-violet-300 bg-violet-50/50">
+                  <CardHeader className="border-b border-violet-200/60 pb-4">
+                    <CardTitle className="text-base flex items-center gap-2 text-violet-800 font-bold">
+                      <FileText className="w-4 h-4" /> Justificatifs à fournir (Admin)
+                    </CardTitle>
+                    <p className="text-xs text-violet-700 mt-1">
+                      Ces dépenses sont payées mais en attente de justificatif. Vous pouvez uploader le document à la place de la direction.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="p-5 space-y-3">
+                    {pendingOnly.map(({ moyen: m, dem }) => {
+                      const isBatch = !!dem.batchRef;
+                      const isLoading = isBatch ? adminJustifBatchLoading === dem.batchRef : adminJustifLoading === dem.id;
+                      return (
+                        <div key={dem.id} className="border border-violet-200 rounded-lg bg-white p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-semibold text-violet-900">
+                                {CATEGORIE_LABELS[m.categorie]?.label ?? m.categorie} — {m.description}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Bénéficiaire : <span className="font-semibold">{dem.nomBeneficiaire}</span>
+                                {dem.matriculeBeneficiaire ? ` (${dem.matriculeBeneficiaire})` : ""}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Montant payé : <span className="font-semibold text-foreground">{(dem.montantPaye ?? 0).toLocaleString("fr-FR")} MRU</span>
+                                {dem.pieceReference ? <span className="ml-2 text-muted-foreground">— Réf. {dem.pieceReference}</span> : ""}
+                              </p>
+                              {dem.justificatifNom && (
+                                <a
+                                  href={`${BASE_URL}api/plans/${id}/moyens/${m.id}/depense-demandes/${dem.id}/justificatif`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium mt-1"
+                                >
+                                  <Download className="w-3 h-3" /> {dem.justificatifNom}
+                                </a>
+                              )}
+                            </div>
+                            <label className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors whitespace-nowrap shrink-0",
+                              isLoading ? "bg-gray-200 text-gray-400 pointer-events-none" : "bg-violet-600 hover:bg-violet-700 text-white"
+                            )}>
+                              {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <UploadCloud className="w-3 h-3" />}
+                              {isLoading ? "Upload…" : dem.justificatifNom ? "Remplacer" : "Uploader justificatif"}
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                                className="hidden"
+                                disabled={isLoading}
+                                onChange={async e => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  if (isBatch && dem.batchRef) {
+                                    await handleAdminJustifierBatch(m.id, dem.batchRef, file);
+                                  } else {
+                                    await handleAdminJustifier(m.id, dem.id, file);
                                   }
                                   e.target.value = "";
                                 }}
