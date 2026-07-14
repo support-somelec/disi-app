@@ -36,3 +36,15 @@ SMTP_PORT = "465"
 SMTP_USER = "planaction2026@gmail.com"
 SMTP_PASS = "8631191844Sa+"
 EMAIL_FROM = "SOMELEC Plans d'Action <planaction2026@gmail.com>"
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
+[[ports]]
+localPort = 21631
+externalPort = 80

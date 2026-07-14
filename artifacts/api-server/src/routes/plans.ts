@@ -2148,4 +2148,266 @@ router.get("/demandes-globales", async (_req, res) => {
   } catch (err) { res.status(500).json({ error: String(err) }); }
 });
 
+// GET /export/plans-csv — export complet de tous les plans + dépenses pour analyse IA
+router.get("/export/plans-csv", async (_req, res) => {
+  try {
+    const csvEsc = (v: string | number | null | undefined): string => {
+      if (v === null || v === undefined) return "";
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n\r]/.test(s) ? `"${s}"` : s;
+    };
+    const fmtDate = (d: Date | string | null | undefined) =>
+      d ? new Date(d).toLocaleDateString("fr-FR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+
+    // ---- 1. Tous les plans
+    const plans = await db
+      .select({
+        id: plansTable.id,
+        reference: plansTable.reference,
+        titre: plansTable.titre,
+        description: plansTable.description,
+        statut: plansTable.statut,
+        dateDebut: plansTable.dateDebut,
+        duree: plansTable.duree,
+        dateCloture: plansTable.dateCloture,
+        rapportCloture: plansTable.rapportCloture,
+        directionNom: directionsTable.nom,
+        creePar: sql<string>`${usersTable.prenom} || ' ' || ${usersTable.nom}`,
+        creeLe: plansTable.createdAt,
+      })
+      .from(plansTable)
+      .leftJoin(directionsTable, eq(plansTable.directionId, directionsTable.id))
+      .leftJoin(usersTable, eq(plansTable.createdById, usersTable.id));
+
+    // ---- 2. Tous les moyens
+    const moyens = await db.select().from(moyensTable);
+    const moyensByPlan: Record<number, typeof moyens> = {};
+    for (const m of moyens) { (moyensByPlan[m.planId] ??= []).push(m); }
+    const moyenById: Record<number, typeof moyens[0]> = {};
+    for (const m of moyens) moyenById[m.id] = m;
+
+    // ---- 3. Toutes les demandes dépenses
+    const depenses = await db
+      .select({
+        id: depenseDemandesTable.id,
+        planId: depenseDemandesTable.planId,
+        moyenId: depenseDemandesTable.moyenId,
+        statut: depenseDemandesTable.statut,
+        nomBeneficiaire: depenseDemandesTable.nomBeneficiaire,
+        matriculeBeneficiaire: depenseDemandesTable.matriculeBeneficiaire,
+        batchRef: depenseDemandesTable.batchRef,
+        montantDemande: depenseDemandesTable.montantDemande,
+        montantPaye: depenseDemandesTable.montantPaye,
+        pieceReference: depenseDemandesTable.pieceReference,
+        dcgaiValidatedAt: depenseDemandesTable.dcgaiValidatedAt,
+        dfcValidatedAt: depenseDemandesTable.dfcValidatedAt,
+        justificatifNom: depenseDemandesTable.justificatifNom,
+        justificatifAt: depenseDemandesTable.justificatifAt,
+        createdAt: depenseDemandesTable.createdAt,
+      })
+      .from(depenseDemandesTable);
+
+    // ---- 4. Toutes les demandes carburant
+    const carburants = await db
+      .select({
+        id: carburantDemandesTable.id,
+        planId: carburantDemandesTable.planId,
+        moyenId: carburantDemandesTable.moyenId,
+        statut: carburantDemandesTable.statut,
+        montantDemande: carburantDemandesTable.montantDemande,
+        montantValide: carburantDemandesTable.montantValide,
+        cadValidatedAt: carburantDemandesTable.cadValidatedAt,
+        createdAt: carburantDemandesTable.createdAt,
+      })
+      .from(carburantDemandesTable);
+
+    // ---- 5. Toutes les demandes matériel
+    const materiels = await db
+      .select({
+        id: materielDemandesTable.id,
+        planId: materielDemandesTable.planId,
+        moyenId: materielDemandesTable.moyenId,
+        statut: materielDemandesTable.statut,
+        itemsJson: materielDemandesTable.itemsJson,
+        montantTotal: materielDemandesTable.montantTotal,
+        bonNumber: materielDemandesTable.bonNumber,
+        daValidatedAt: materielDemandesTable.daValidatedAt,
+        dcgaiValidatedAt: materielDemandesTable.dcgaiValidatedAt,
+        createdAt: materielDemandesTable.createdAt,
+      })
+      .from(materielDemandesTable);
+
+    // materiel items for label resolution
+    const matItems = await db.select().from(materielItemsTable);
+    const matItemById: Record<number, typeof matItems[0]> = {};
+    for (const i of matItems) matItemById[i.id] = i;
+
+    // ---- 6. Toutes les demandes location
+    const locations = await db
+      .select({
+        id: locationDemandesTable.id,
+        planId: locationDemandesTable.planId,
+        moyenId: locationDemandesTable.moyenId,
+        statut: locationDemandesTable.statut,
+        itemsJson: locationDemandesTable.itemsJson,
+        montantTotal: locationDemandesTable.montantTotal,
+        dmgValidatedAt: locationDemandesTable.dmgValidatedAt,
+        createdAt: locationDemandesTable.createdAt,
+      })
+      .from(locationDemandesTable);
+
+    // ---- 7. Location items for label resolution
+    const locItems = await db.select().from(locationItemsTable);
+    const locItemById: Record<number, typeof locItems[0]> = {};
+    for (const i of locItems) locItemById[i.id] = i;
+
+    // ---- Build CSV rows
+    const HEADERS = [
+      "plan_reference", "plan_titre", "plan_description", "plan_direction",
+      "plan_statut", "plan_date_debut", "plan_duree_jours", "plan_date_cloture",
+      "plan_rapport_cloture", "plan_cree_par", "plan_cree_le",
+      "moyen_id", "moyen_categorie", "moyen_description",
+      "moyen_budget_mru", "moyen_quantite", "moyen_unite", "moyen_consomme_mru",
+      "type_demande", "demande_id", "demande_statut", "demande_cree_le",
+      "beneficiaire_nom", "beneficiaire_matricule", "batch_ref",
+      "montant_demande_mru", "montant_valide_mru", "montant_paye_mru", "montant_total_mru",
+      "piece_reference", "bon_number",
+      "dcgai_valide_le", "dfc_paye_le", "da_valide_le", "dmg_valide_le", "cad_valide_le",
+      "justificatif_fourni", "justificatif_le", "detail_items",
+    ];
+
+    const planById: Record<number, typeof plans[0]> = {};
+    for (const p of plans) planById[p.id] = p;
+
+    const rows: string[][] = [];
+
+    const planCtx = (planId: number) => {
+      const p = planById[planId];
+      if (!p) return Array(11).fill("");
+      return [
+        p.reference ?? "", p.titre, p.description, p.directionNom ?? "",
+        p.statut, p.dateDebut ?? "", String(p.duree),
+        fmtDate(p.dateCloture), (p.rapportCloture ?? "").slice(0, 500),
+        p.creePar ?? "", fmtDate(p.creeLe),
+      ];
+    };
+    const moyenCtx = (moyenId: number) => {
+      const m = moyenById[moyenId];
+      if (!m) return Array(8).fill("");
+      return [
+        String(m.id), m.categorie, m.description,
+        m.budget, m.quantite ?? "", m.unite ?? "", m.montantConsomme ?? "0",
+      ];
+    };
+    const emptyDem = Array(21).fill("");
+
+    // Dépenses
+    for (const d of depenses) {
+      const m = moyenById[d.moyenId];
+      rows.push([
+        ...planCtx(d.planId),
+        ...moyenCtx(d.moyenId),
+        m?.categorie ?? "depense", String(d.id), d.statut, fmtDate(d.createdAt),
+        d.nomBeneficiaire, d.matriculeBeneficiaire ?? "", d.batchRef ?? "",
+        d.montantDemande ?? "", "", d.montantPaye ?? "", "",
+        d.pieceReference ?? "", "",
+        fmtDate(d.dcgaiValidatedAt), fmtDate(d.dfcValidatedAt), "", "", "",
+        d.justificatifNom ? "Oui" : "Non", fmtDate(d.justificatifAt), "",
+      ]);
+    }
+
+    // Carburant
+    for (const d of carburants) {
+      rows.push([
+        ...planCtx(d.planId),
+        ...moyenCtx(d.moyenId),
+        "Carburant", String(d.id), d.statut, fmtDate(d.createdAt),
+        "", "", "",
+        d.montantDemande ?? "", d.montantValide ?? "", "", "",
+        "", "",
+        "", "", "", "", fmtDate(d.cadValidatedAt),
+        "", "", "",
+      ]);
+    }
+
+    // Matériel
+    for (const d of materiels) {
+      let itemsDetail = "";
+      try {
+        const items: { materielItemId: number; qte: number }[] = JSON.parse(d.itemsJson ?? "[]");
+        itemsDetail = items.map(i => {
+          const item = matItemById[i.materielItemId];
+          return `${item?.item ?? `Item#${i.materielItemId}`} × ${i.qte}`;
+        }).join(" | ");
+      } catch { itemsDetail = d.itemsJson ?? ""; }
+      rows.push([
+        ...planCtx(d.planId),
+        ...moyenCtx(d.moyenId),
+        "Matériel", String(d.id), d.statut, fmtDate(d.createdAt),
+        "", "", "",
+        "", "", "", d.montantTotal ?? "",
+        "", d.bonNumber ?? "",
+        "", "", fmtDate(d.daValidatedAt), "", "",
+        "", "", itemsDetail,
+      ]);
+    }
+
+    // Location
+    for (const d of locations) {
+      let itemsDetail = "";
+      try {
+        const items: { locationItemId: number; typeEngin: string; nbJoursDemandes: number }[] = JSON.parse(d.itemsJson ?? "[]");
+        itemsDetail = items.map(i => `${i.typeEngin} × ${i.nbJoursDemandes}j`).join(" | ");
+      } catch { itemsDetail = d.itemsJson ?? ""; }
+      rows.push([
+        ...planCtx(d.planId),
+        ...moyenCtx(d.moyenId),
+        "Location", String(d.id), d.statut, fmtDate(d.createdAt),
+        "", "", "",
+        "", "", "", d.montantTotal ?? "",
+        "", "",
+        "", "", "", fmtDate(d.dmgValidatedAt), "",
+        "", "", itemsDetail,
+      ]);
+    }
+
+    // Plans sans demandes (pour avoir quand même une ligne par moyen)
+    for (const p of plans) {
+      const mList = moyensByPlan[p.id] ?? [];
+      if (mList.length === 0) {
+        rows.push([...planCtx(p.id), ...Array(8).fill(""), ...emptyDem]);
+      } else {
+        for (const m of mList) {
+          const hasDem = [
+            ...depenses.filter(d => d.moyenId === m.id),
+            ...carburants.filter(d => d.moyenId === m.id),
+            ...materiels.filter(d => d.moyenId === m.id),
+            ...locations.filter(d => d.moyenId === m.id),
+          ];
+          if (hasDem.length === 0) {
+            rows.push([...planCtx(p.id), String(m.id), m.categorie, m.description, m.budget, m.quantite ?? "", m.unite ?? "", m.montantConsomme ?? "0", ...emptyDem]);
+          }
+        }
+      }
+    }
+
+    // Sort: by plan reference then demande date
+    rows.sort((a, b) => {
+      const refCmp = (a[0] ?? "").localeCompare(b[0] ?? "");
+      if (refCmp !== 0) return refCmp;
+      return (a[21] ?? "").localeCompare(b[21] ?? "");
+    });
+
+    const csvLines = [
+      HEADERS.join(","),
+      ...rows.map(r => r.map(csvEsc).join(","))
+    ];
+
+    const now = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="somelec-plans-export-${now}.csv"`);
+    res.send("\uFEFF" + csvLines.join("\r\n")); // BOM for Excel
+  } catch (err) { console.error(String(err)); res.status(500).json({ error: String(err) }); }
+});
+
 export default router;

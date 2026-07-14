@@ -5,7 +5,7 @@ import { useAuth, ROLES_SEE_ALL, ROLE_LABELS } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { FilePlus, Clock, CheckCircle2, ShieldCheck, Activity, Search, AlertCircle, TrendingDown, AlertTriangle, CalendarX, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { FilePlus, Clock, CheckCircle2, ShieldCheck, Activity, Search, AlertCircle, TrendingDown, AlertTriangle, CalendarX, Trash2, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { format, addDays, isAfter } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/utils";
@@ -220,7 +220,7 @@ export default function Dashboard() {
       <Card>
         <CardHeader className="border-b border-border/50 bg-muted/20 pb-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <CardTitle className="text-lg flex items-center gap-2">
+            <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
               Liste des Plans d'Action
               <span className="text-sm font-normal text-muted-foreground">({plans.length})</span>
               {filterOverrun && (
@@ -248,6 +248,16 @@ export default function Dashboard() {
                 <option value="delai">⏱ Délai dépassé</option>
                 <option value="both">⚠⏱ Budget ou délai</option>
               </select>
+              {isDG && (
+                <a
+                  href={`${BASE_URL}api/export/plans-csv`}
+                  download
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-primary/40 bg-primary/5 text-primary text-sm font-medium hover:bg-primary/15 transition-colors whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4" />
+                  Export CSV
+                </a>
+              )}
             </div>
           </div>
         </CardHeader>
