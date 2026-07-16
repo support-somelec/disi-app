@@ -1850,7 +1850,7 @@ export default function PlanDetails() {
                                     </div>
                                     <div className="text-muted-foreground">Montant demandé : <span className="font-semibold text-foreground">{dem.montantDemande.toLocaleString("fr-FR")} MRU</span></div>
                                     {dem.statut === "payee" && <div className="text-success font-semibold">Montant payé : {(dem.montantPaye ?? 0).toLocaleString("fr-FR")} MRU — Réf : {dem.pieceReference}</div>}
-                                    {isAdmin && dem.justificatifNom && (
+                                    {dem.justificatifNom && (
                                       <a
                                         href={`${BASE_URL}api/plans/${id}/moyens/${m.id}/depense-demandes/${dem.id}/justificatif`}
                                         target="_blank"
@@ -2531,7 +2531,9 @@ export default function PlanDetails() {
                                   </Button>
                                   {awaitingJustif
                                     ? <span className="text-xs text-amber-700 flex items-center gap-1"><Clock className="w-3 h-3" /> Attente justificatif</span>
-                                    : <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Payé + Justifié</span>
+                                    : dems[0]?.justificatifNom
+                                      ? <a href={`${BASE_URL}api/plans/${id}/moyens/${m.id}/depense-demandes/${dems[0].id}/justificatif`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"><Download className="w-3 h-3" /> {dems[0].justificatifNom}</a>
+                                      : <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Payé + Justifié</span>
                                   }
                                 </div>
                               </div>
@@ -2576,9 +2578,20 @@ export default function PlanDetails() {
                         </div>
                       ))}
                       {paid.map(dem => (
-                        <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between">
-                          <span className="text-xs text-green-800 font-semibold">{dem.nomBeneficiaire} — {(dem.montantPaye ?? 0).toLocaleString("fr-FR")} MRU — {dem.pieceReference}</span>
-                          <span className="text-xs text-green-700 flex items-center gap-1"><CheckCheck className="w-3 h-3" /> Payée + Justifiée</span>
+                        <div key={dem.id} className="border border-green-200 rounded-lg bg-green-50/40 p-2 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-xs text-green-800 font-semibold block truncate">{dem.nomBeneficiaire} — {(dem.montantPaye ?? 0).toLocaleString("fr-FR")} MRU — {dem.pieceReference}</span>
+                            {dem.justificatifNom && (
+                              <a
+                                href={`${BASE_URL}api/plans/${id}/moyens/${m.id}/depense-demandes/${dem.id}/justificatif`}
+                                target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium mt-0.5"
+                              >
+                                <Download className="w-3 h-3" /> {dem.justificatifNom}
+                              </a>
+                            )}
+                          </div>
+                          <span className="text-xs text-green-700 flex items-center gap-1 shrink-0"><CheckCheck className="w-3 h-3" /> Payée + Justifiée</span>
                         </div>
                       ))}
                     </div>
@@ -2664,27 +2677,28 @@ export default function PlanDetails() {
           {/* Admin — upload justificatifs pour les dépenses en attente ou remplacement */}
           {isAdmin && plan.statut === "ouvert" && depenseMoyens.length > 0 && (
             (() => {
-              const allPendingJustif: { moyen: typeof moyens[0]; dem: DepenseDemande }[] = [];
+              const adminJustifList: { moyen: typeof moyens[0]; dem: DepenseDemande }[] = [];
               for (const m of depenseMoyens) {
                 const dems = depenseDemandesMap[m.id] ?? [];
                 for (const d of dems) {
-                  if (d.statut === "en_attente_justificatif" || (d.statut === "payee" && d.justificatifNom)) allPendingJustif.push({ moyen: m, dem: d });
+                  if (d.statut === "en_attente_justificatif" || d.statut === "payee") adminJustifList.push({ moyen: m, dem: d });
                 }
               }
-              const pendingOnly = allPendingJustif.filter(({ dem }) => dem.statut === "en_attente_justificatif");
-              if (pendingOnly.length === 0) return null;
+              if (adminJustifList.length === 0) return null;
+              const pendingCount = adminJustifList.filter(({ dem }) => dem.statut === "en_attente_justificatif").length;
               return (
                 <Card className="border-violet-300 bg-violet-50/50">
                   <CardHeader className="border-b border-violet-200/60 pb-4">
                     <CardTitle className="text-base flex items-center gap-2 text-violet-800 font-bold">
-                      <FileText className="w-4 h-4" /> Justificatifs à fournir (Admin)
+                      <FileText className="w-4 h-4" /> Gestion des Justificatifs (Admin)
+                      {pendingCount > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">{pendingCount} en attente</span>}
                     </CardTitle>
                     <p className="text-xs text-violet-700 mt-1">
-                      Ces dépenses sont payées mais en attente de justificatif. Vous pouvez uploader le document à la place de la direction.
+                      Uploadez ou remplacez les justificatifs de toutes les dépenses payées.
                     </p>
                   </CardHeader>
                   <CardContent className="p-5 space-y-3">
-                    {pendingOnly.map(({ moyen: m, dem }) => {
+                    {adminJustifList.map(({ moyen: m, dem }) => {
                       const isBatch = !!dem.batchRef;
                       const isLoading = isBatch ? adminJustifBatchLoading === dem.batchRef : adminJustifLoading === dem.id;
                       return (
