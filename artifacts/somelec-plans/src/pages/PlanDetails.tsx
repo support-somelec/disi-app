@@ -27,6 +27,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 const CATEGORIE_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   materiel:             { label: "Matériel",             icon: Package,        color: "text-blue-600 bg-blue-50" },
@@ -90,6 +91,7 @@ export default function PlanDetails() {
   const cloturerMutation = useCloturerPlan();
   const addAttachmentMutation = useAddAttachment();
   const demanderMutation = useDemanderMoyen();
+  const { toast } = useToast();
 
   const invalidatePlans = () => queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
 
@@ -849,6 +851,12 @@ export default function PlanDetails() {
       }
       await cloturerMutation.mutateAsync({ id, data: { rapportCloture: rapportCloture.trim(), cloturedById: currentUser.id } });
       await Promise.all([refetchPlan(), refetchAttachments(), invalidatePlans()]);
+      toast({ title: "Plan clôturé avec succès", description: "Le plan d'action a été clôturé." });
+      setRapportCloture("");
+      setClotureFiles([]);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? err?.message ?? String(err);
+      toast({ title: "Erreur lors de la clôture", description: msg, variant: "destructive" });
     } finally {
       setIsClosing(false);
     }
