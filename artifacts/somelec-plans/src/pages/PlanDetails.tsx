@@ -101,7 +101,7 @@ export default function PlanDetails() {
   const [savingMoyen, setSavingMoyen] = useState<number | null>(null);
   const [demandingMoyen, setDemandingMoyen] = useState<number | null>(null);
   const [demandConfirm, setDemandConfirm] = useState<Moyen | null>(null);
-  const [dechargeFiles, setDechargeFiles] = useState<Record<number, { file: File; base64: string } | null>>({});
+  const [dechargeFiles, setDechargeFiles] = useState<Record<number, File | null>>({});
   const [beneficiairesMap, setBeneficiairesMap] = useState<Record<number, { id: number; nom: string; matricule: string | null; nni: string | null; montant: number }[]>>({});
   const [expandedBenef, setExpandedBenef] = useState<Record<number, boolean>>({});
   const { data: directions = [] } = useGetDirections();
@@ -196,13 +196,57 @@ export default function PlanDetails() {
 
   const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
 
-  const toBase64 = (file: File): Promise<string> =>
+  // Helper: read File as base64 (used for embedded decharges in carburant/materiel/location workflows)
+  const fileToBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve((reader.result as string).split(",")[1]);
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+
+  // Upload a file as multipart FormData to the disk-storage endpoint
+  const uploadAttachmentFile = async (planId: number, file: File, moyenId?: number): Promise<void> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (moyenId != null) formData.append("moyenId", String(moyenId));
+    const res = await fetch(`${BASE_URL}api/plans/${planId}/attachments/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { error?: string }).error ?? "Erreur upload fichier");
+    }
+  };
+
+  // Upload a justificatif multipart for a single depense-demande
+  const uploadJustificatifFile = async (planId: number, moyenId: number, demandeId: number, file: File): Promise<void> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${BASE_URL}api/plans/${planId}/moyens/${moyenId}/depense-demandes/${demandeId}/upload-justificatif`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { error?: string }).error ?? "Erreur upload justificatif");
+    }
+  };
+
+  // Upload a justificatif multipart for a batch
+  const uploadJustificatifBatchFile = async (planId: number, moyenId: number, batchRef: string, file: File): Promise<void> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${BASE_URL}api/plans/${planId}/moyens/${moyenId}/depense-demandes-batch/${encodeURIComponent(batchRef)}/upload-justificatif`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { error?: string }).error ?? "Erreur upload justificatif batch");
+    }
+  };
 
   const DEPENSE_CATS = ["prime", "logement", "indemnite_journaliere", "logistique", "autres"];
 
@@ -242,7 +286,7 @@ export default function PlanDetails() {
     try {
       let decharge: { nom: string; mimeType: string; taille: number; data: string } | undefined;
       if (cadDechargeFile) {
-        decharge = { nom: cadDechargeFile.name, mimeType: cadDechargeFile.type, taille: cadDechargeFile.size, data: await toBase64(cadDechargeFile) };
+        decharge = { nom: cadDechargeFile.name, mimeType: cadDechargeFile.type, taille: cadDechargeFile.size, data: await fileToBase64(cadDechargeFile) };
       }
       const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/carburant-demandes/${demandeId}/cad-valider`, {
         method: "POST",
@@ -494,45 +538,33 @@ export default function PlanDetails() {
   };
 
   const handleJustifier = async (moyenId: number, demandeId: number, file: File) => {
-    const data = await toBase64(file);
     setJustifLoading(demandeId);
     try {
-      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes/${demandeId}/justifier`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ justificatifNom: file.name, justificatifData: data }),
-      });
-      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await uploadJustificatifFile(id, moyenId, demandeId, file);
       await loadDepenseData(moyenId);
       invalidatePlans();
-    } catch { alert("Erreur réseau"); }
+    } catch (err: any) { alert(err?.message ?? "Erreur réseau"); }
     finally { setJustifLoading(null); }
   };
 
   const handleJustifierBatch = async (moyenId: number, batchRef: string, file: File) => {
-    const data = await toBase64(file);
     setJustifBatchLoading(batchRef);
     try {
-      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes-batch/${encodeURIComponent(batchRef)}/justifier`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ justificatifNom: file.name, justificatifData: data }),
-      });
-      if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
+      await uploadJustificatifBatchFile(id, moyenId, batchRef, file);
       await loadDepenseData(moyenId);
       invalidatePlans();
-    } catch { alert("Erreur réseau"); }
+    } catch (err: any) { alert(err?.message ?? "Erreur réseau"); }
     finally { setJustifBatchLoading(null); }
   };
 
   const handleAdminJustifier = async (moyenId: number, demandeId: number, file: File) => {
-    const data = await toBase64(file);
     setAdminJustifLoading(demandeId);
     try {
-      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes/${demandeId}/admin-justifier`, {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes/${demandeId}/admin-upload-justificatif`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ justificatifNom: file.name, justificatifData: data }),
+        body: formData,
       });
       if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
       await loadDepenseData(moyenId);
@@ -542,13 +574,13 @@ export default function PlanDetails() {
   };
 
   const handleAdminJustifierBatch = async (moyenId: number, batchRef: string, file: File) => {
-    const data = await toBase64(file);
     setAdminJustifBatchLoading(batchRef);
     try {
-      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes-batch/${encodeURIComponent(batchRef)}/admin-justifier`, {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/depense-demandes-batch/${encodeURIComponent(batchRef)}/admin-upload-justificatif`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ justificatifNom: file.name, justificatifData: data }),
+        body: formData,
       });
       if (!res.ok) { const e = await res.json(); alert(e.error ?? "Erreur"); return; }
       await loadDepenseData(moyenId);
@@ -702,7 +734,7 @@ export default function PlanDetails() {
 
   // Closure state
   const [rapportCloture, setRapportCloture] = useState("");
-  const [clotureFiles, setClotureFiles] = useState<Array<{ file: File; base64: string }>>([]);
+  const [clotureFiles, setClotureFiles] = useState<Array<File>>([]);
   const [isClosing, setIsClosing] = useState(false);
 
   const loadMaterielData = async (moyenId: number) => {
@@ -780,13 +812,7 @@ export default function PlanDetails() {
   const handleDechargeChange = (moyenId: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      if (evt.target?.result) {
-        setDechargeFiles(prev => ({ ...prev, [moyenId]: { file, base64: evt.target!.result!.toString() } }));
-      }
-    };
-    reader.readAsDataURL(file);
+    setDechargeFiles(prev => ({ ...prev, [moyenId]: file }));
     e.target.value = "";
   };
 
@@ -810,10 +836,7 @@ export default function PlanDetails() {
 
     setSavingMoyen(moyen.id);
     try {
-      await addAttachmentMutation.mutateAsync({
-        id,
-        data: { moyenId: moyen.id, nom: decharge.file.name, type: decharge.file.type, taille: decharge.file.size, data: decharge.base64 },
-      });
+      await uploadAttachmentFile(id, decharge, moyen.id);
       await consommerMutation.mutateAsync({ id, moyenId: moyen.id, data: { montant: val } });
       setConsommationValues(prev => ({ ...prev, [moyen.id]: "" }));
       setDechargeFiles(prev => ({ ...prev, [moyen.id]: null }));
@@ -830,24 +853,15 @@ export default function PlanDetails() {
   const handleClotureFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setClotureFiles(prev => [...prev, { file, base64: event.target!.result!.toString() }]);
-      }
-    };
-    reader.readAsDataURL(file);
+    setClotureFiles(prev => [...prev, file]);
   };
 
   const handleCloturer = async () => {
     if (!currentUser || !rapportCloture.trim()) return;
     setIsClosing(true);
     try {
-      for (const att of clotureFiles) {
-        await addAttachmentMutation.mutateAsync({
-          id,
-          data: { nom: att.file.name, type: att.file.type, taille: att.file.size, data: att.base64 }
-        });
+      for (const file of clotureFiles) {
+        await uploadAttachmentFile(id, file);
       }
       await cloturerMutation.mutateAsync({ id, data: { rapportCloture: rapportCloture.trim(), cloturedById: currentUser.id } });
       await Promise.all([refetchPlan(), refetchAttachments(), invalidatePlans()]);
@@ -916,7 +930,7 @@ export default function PlanDetails() {
           nom: daDechargeFile.name,
           mimeType: daDechargeFile.type,
           taille: daDechargeFile.size,
-          data: await toBase64(daDechargeFile),
+          data: await fileToBase64(daDechargeFile),
         };
       }
       const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/materiel-demandes/${demandeId}/da-soumettre`, {
@@ -1256,7 +1270,7 @@ export default function PlanDetails() {
           nom: dmgDechargeFile.name,
           mimeType: dmgDechargeFile.type,
           taille: dmgDechargeFile.size,
-          data: await toBase64(dmgDechargeFile),
+          data: await fileToBase64(dmgDechargeFile),
         };
       }
       const res = await fetch(`${BASE_URL}api/plans/${id}/moyens/${moyenId}/location-demandes/${demandeId}/dmg-valider`, {
@@ -2029,10 +2043,10 @@ export default function PlanDetails() {
                   </div>
                   {clotureFiles.length > 0 && (
                     <ul className="space-y-1.5">
-                      {clotureFiles.map((att, i) => (
+                      {clotureFiles.map((file, i) => (
                         <li key={i} className="flex items-center gap-2 p-2 border rounded-lg bg-white text-sm">
                           <FilePlus className="w-4 h-4 text-primary shrink-0" />
-                          <span className="flex-1 truncate text-xs">{att.file.name}</span>
+                          <span className="flex-1 truncate text-xs">{file.name}</span>
                           <button onClick={() => setClotureFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2852,7 +2866,7 @@ export default function PlanDetails() {
                         {decharge ? (
                           <div className="flex items-center gap-2 p-2 border border-orange-200 rounded-lg bg-orange-50 text-xs">
                             <FilePlus className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                            <span className="flex-1 truncate text-orange-800 font-medium">{decharge.file.name}</span>
+                            <span className="flex-1 truncate text-orange-800 font-medium">{decharge.name}</span>
                             <button onClick={() => setDechargeFiles(prev => ({ ...prev, [m.id]: null }))} className="text-muted-foreground hover:text-destructive shrink-0">
                               <Trash2 className="w-3 h-3" />
                             </button>

@@ -10,7 +10,7 @@ import { useLocation } from "wouter";
 import {
   Pencil, Trash2, X, Check, Loader2, Search, UserPlus, Shield,
   Building2, Plus, AlertTriangle, Clock, Users, Upload, FileText,
-  RefreshCw, Copy, CheckCircle2, KeyRound, Eye, EyeOff,
+  RefreshCw, Copy, CheckCircle2, KeyRound, Eye, EyeOff, HardDrive, Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -64,7 +64,7 @@ interface DirEditState {
   code: string;
 }
 
-type Tab = "utilisateurs" | "directions" | "employes" | "doublons";
+type Tab = "utilisateurs" | "directions" | "employes" | "doublons" | "stockage";
 
 interface DoublonSimple {
   type: string;
@@ -144,6 +144,45 @@ export default function AdminUsers() {
   const [loadingDoublons, setLoadingDoublons] = useState(false);
   const [deletingDemande, setDeletingDemande] = useState<string | null>(null);
   const [confirmDeleteDemande, setConfirmDeleteDemande] = useState<string | null>(null);
+
+  // Settings (stockage) state
+  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [loadingSettings, setLoadingSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [sharePathInput, setSharePathInput] = useState("");
+
+  const loadSettings = async () => {
+    setLoadingSettings(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/admin/settings`);
+      if (res.ok) {
+        const data = await res.json();
+        setSettings(data);
+        setSharePathInput(data["SHARE_PATH"] ?? "/data/somelec-files");
+      }
+    } catch { /* ignore */ }
+    finally { setLoadingSettings(false); }
+  };
+
+  const handleSaveSetting = async (key: string, value: string) => {
+    setSavingSettings(true);
+    setSettingsMsg(null);
+    try {
+      const res = await fetch(`${BASE_URL}api/admin/settings/${key}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value }),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? "Erreur"); }
+      setSettings(prev => ({ ...prev, [key]: value }));
+      setSettingsMsg({ type: "success", text: "Paramètre enregistré avec succès." });
+    } catch (err: any) {
+      setSettingsMsg({ type: "error", text: err?.message ?? "Erreur lors de l'enregistrement." });
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const [resetPwdDialog, setResetPwdDialog] = useState<{ userId: number; userName: string } | null>(null);
   const [resetPwdValue, setResetPwdValue] = useState("");
@@ -460,6 +499,18 @@ export default function AdminUsers() {
           {doublons && totalDoublons > 0 && (
             <span className="ml-1 flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold">{totalDoublons}</span>
           )}
+        </button>
+        <button
+          onClick={() => { setTab("stockage"); if (!settings["SHARE_PATH"]) loadSettings(); }}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
+            tab === "stockage"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <HardDrive className="h-4 w-4" />
+          Stockage
         </button>
       </div>
 
@@ -907,6 +958,97 @@ export default function AdminUsers() {
             </table>
           </div>
         </>
+      )}
+
+      {/* ══════════════ ONGLET STOCKAGE ══════════════ */}
+      {tab === "stockage" && (
+        <div className="max-w-xl space-y-6">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Paramètres de stockage des fichiers</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Configurez le chemin du partage réseau ou du dossier local où seront stockées toutes les pièces jointes.
+              Les fichiers sont organisés par plan : <code className="bg-muted px-1 rounded text-[11px]">{"{chemin}/{référence-plan}/fichier.pdf"}</code>
+            </p>
+          </div>
+
+          {loadingSettings ? (
+            <div className="flex items-center gap-2 text-muted-foreground py-4">
+              <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+            </div>
+          ) : (
+            <div className="bg-white border border-border rounded-xl p-5 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <HardDrive className="h-4 w-4 text-muted-foreground" />
+                  Chemin du partage fichiers (SHARE_PATH)
+                </label>
+                <input
+                  type="text"
+                  value={sharePathInput}
+                  onChange={e => setSharePathInput(e.target.value)}
+                  placeholder="/data/somelec-files"
+                  className="w-full px-3 py-2.5 border border-input rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Exemples : <code className="bg-muted px-1 rounded">/data/somelec-files</code>,{" "}
+                  <code className="bg-muted px-1 rounded">/mnt/nas/plans</code>,{" "}
+                  <code className="bg-muted px-1 rounded">//serveur/partage/plans</code>
+                </p>
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  ⚠️ Assurez-vous que ce dossier existe sur le serveur et que l'application y a les droits d'écriture.
+                  Les pièces jointes existantes (stockées en base de données) restent accessibles.
+                </p>
+              </div>
+
+              {settingsMsg && (
+                <div className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg border ${
+                  settingsMsg.type === "success"
+                    ? "bg-green-50 border-green-200 text-green-700"
+                    : "bg-red-50 border-red-200 text-red-700"
+                }`}>
+                  {settingsMsg.type === "success" ? <Check className="h-4 w-4 shrink-0" /> : <X className="h-4 w-4 shrink-0" />}
+                  {settingsMsg.text}
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  onClick={() => handleSaveSetting("SHARE_PATH", sharePathInput)}
+                  disabled={savingSettings || !sharePathInput.trim()}
+                  className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Enregistrer
+                </button>
+                <button
+                  onClick={loadSettings}
+                  disabled={loadingSettings}
+                  className="flex items-center gap-2 border border-border text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Actualiser
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Info: structure des fichiers */}
+          <div className="bg-muted/40 border border-border rounded-xl p-4 space-y-2">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              Structure des fichiers sur le partage
+            </h3>
+            <div className="text-[12px] text-muted-foreground font-mono space-y-0.5">
+              <p>{sharePathInput || "/data/somelec-files"}/</p>
+              <p className="pl-4">{"DIS-062025-001/"}</p>
+              <p className="pl-8">{"1720000000000-rapport_final.pdf"}</p>
+              <p className="pl-8">{"justificatifs/"}</p>
+              <p className="pl-12">{"1720000000001-reçu_paiement.jpg"}</p>
+              <p className="pl-4">{"DIS-072025-002/"}</p>
+              <p className="pl-8">{"1720000000002-decharge.pdf"}</p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ══════════════ ONGLET DOUBLONS ══════════════ */}

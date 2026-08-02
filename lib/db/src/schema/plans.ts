@@ -46,8 +46,15 @@ export const attachmentsTable = pgTable("attachments", {
   nom: text("nom").notNull(),
   type: text("type").notNull(),
   taille: integer("taille"),
-  data: text("data"),
+  data: text("data"),           // legacy: base64 data (old records)
+  filePath: text("file_path"),  // new: relative path from share root
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const settingsTable = pgTable("settings", {
+  key: varchar("key", { length: 100 }).primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const employesTable = pgTable("employes", {
@@ -145,7 +152,8 @@ export const depenseDemandesTable = pgTable("depense_demandes", {
   montantPaye: numeric("montant_paye", { precision: 12, scale: 2 }),
   pieceReference: text("piece_reference"),
   justificatifNom: text("justificatif_nom"),
-  justificatifData: text("justificatif_data"),
+  justificatifData: text("justificatif_data"),  // legacy base64
+  justificatifPath: text("justificatif_path"),  // new: relative path from share root
   justificatifAt: timestamp("justificatif_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

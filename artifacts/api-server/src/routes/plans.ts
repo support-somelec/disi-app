@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable, materielItemsTable, materielDemandesTable, locationItemsTable, locationDemandesTable, carburantDemandesTable, depenseDemandesTable, planCommentsTable } from "@workspace/db/schema";
+import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable, materielItemsTable, materielDemandesTable, locationItemsTable, locationDemandesTable, carburantDemandesTable, depenseDemandesTable, planCommentsTable, settingsTable } from "@workspace/db/schema";
 import { eq, and, or, SQL, sql, inArray, isNull } from "drizzle-orm";
 import {
   CreatePlanBody,
@@ -12,6 +12,90 @@ import {
   CloturerPlanBody,
 } from "@workspace/api-zod";
 import { z } from "zod/v4";
+import multer from "multer";
+import fs from "node:fs/promises";
+import fsSync from "node:fs";
+import path from "node:path";
+
+// multer: memory storage for manual disk write (dynamic path from settings)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
+});
+
+// Helper: get the configured share path from settings (or default)
+async function getSharePath(): Promise<string> {
+  try {
+    const rows = await db.select({ value: settingsTable.value })
+      .from(settingsTable).where(eq(settingsTable.key, "SHARE_PATH"));
+    return rows[0]?.value ?? "/data/somelec-files";
+  } catch {
+    return "/data/somelec-files";
+  }
+}
+
+// Helper: get plan reference by ID
+async function getPlanRef(planId: number): Promise<string> {
+  const rows = await db.select({ reference: plansTable.reference }).from(plansTable).where(eq(plansTable.id, planId));
+  return rows[0]?.reference ?? String(planId);
+}
+
+// Helper: sanitize a filename for disk storage
+function safeName(original: string): string {
+  return `${Date.now()}-${original.replace(/[^a-zA-Z0-9._\-\u00C0-\u017E]/g, "_")}`;
+}
+
+// Helper: save a buffer to disk under {sharePath}/{planRef}/[subdir]/
+async function saveFileToDisk(
+  sharePath: string,
+  planRef: string,
+  subdir: string | null,
+  filename: string,
+  buffer: Buffer,
+): Promise<string> {
+  const dir = subdir
+    ? path.join(sharePath, planRef, subdir)
+    : path.join(sharePath, planRef);
+  await fs.mkdir(dir, { recursive: true });
+  const diskName = safeName(filename);
+  const fullPath = path.join(dir, diskName);
+  await fs.writeFile(fullPath, buffer);
+  // return relative path from share root (for portability)
+  return path.relative(sharePath, fullPath);
+}
+
+// Helper: serve a file from disk or fall back to base64 in DB
+async function sendFileOrBase64(
+  res: any,
+  filePath: string | null | undefined,
+  base64Data: string | null | undefined,
+  nom: string,
+  sharePath: string,
+): Promise<void> {
+  if (filePath) {
+    const fullPath = path.join(sharePath, filePath);
+    if (!fsSync.existsSync(fullPath)) {
+      res.status(404).json({ error: "Fichier introuvable sur le disque. Chemin: " + fullPath });
+      return;
+    }
+    const buffer = await fs.readFile(fullPath);
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(nom)}"`);
+    res.setHeader("Content-Length", buffer.length.toString());
+    res.send(buffer);
+    return;
+  }
+  if (base64Data) {
+    const match = base64Data.match(/^data:([^;]+);base64,(.+)$/s);
+    if (!match) { res.status(400).json({ error: "Format base64 invalide" }); return; }
+    const buffer = Buffer.from(match[2], "base64");
+    res.setHeader("Content-Type", match[1]);
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(nom)}"`);
+    res.setHeader("Content-Length", buffer.length.toString());
+    res.send(buffer);
+    return;
+  }
+  res.status(404).json({ error: "Aucune donnée pour ce fichier" });
+}
 
 const router: IRouter = Router();
 
@@ -816,7 +900,7 @@ router.get("/plans/:id/attachments", async (req, res) => {
   }
 });
 
-// POST /plans/:id/attachments
+// POST /plans/:id/attachments — legacy JSON/base64 endpoint (kept for backward compat)
 router.post("/plans/:id/attachments", async (req, res) => {
   try {
     const planId = Number(req.params.id);
@@ -834,7 +918,38 @@ router.post("/plans/:id/attachments", async (req, res) => {
   }
 });
 
-// GET /plans/:id/attachments/:attachmentId/download
+// POST /plans/:id/attachments/upload — multipart upload (new large-file endpoint)
+router.post("/plans/:id/attachments/upload", upload.single("file"), async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    if (!req.file) return res.status(400).json({ error: "Aucun fichier reçu" });
+    const moyenId = req.body.moyenId ? Number(req.body.moyenId) : null;
+
+    const sharePath = await getSharePath();
+    const planRef = await getPlanRef(planId);
+    const relPath = await saveFileToDisk(sharePath, planRef, null, req.file.originalname, req.file.buffer);
+
+    const [attachment] = await db.insert(attachmentsTable).values({
+      planId,
+      moyenId,
+      nom: req.file.originalname,
+      type: req.file.mimetype,
+      taille: req.file.size,
+      filePath: relPath,
+    }).returning();
+
+    res.status(201).json({
+      id: attachment.id, planId: attachment.planId, moyenId: attachment.moyenId,
+      nom: attachment.nom, type: attachment.type, taille: attachment.taille,
+      filePath: attachment.filePath, createdAt: attachment.createdAt,
+    });
+  } catch (err) {
+    console.error(String(err));
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// GET /plans/:id/attachments/:attachmentId/download — serve from disk (fallback: base64)
 router.get("/plans/:id/attachments/:attachmentId/download", async (req, res) => {
   try {
     const planId = Number(req.params.id);
@@ -843,15 +958,8 @@ router.get("/plans/:id/attachments/:attachmentId/download", async (req, res) => 
       .where(and(eq(attachmentsTable.id, attachmentId), eq(attachmentsTable.planId, planId)));
     if (!rows.length) return res.status(404).json({ error: "Attachment not found" });
     const att = rows[0];
-    if (!att.data) return res.status(404).json({ error: "No file data stored" });
-    const match = att.data.match(/^data:(.+);base64,(.+)$/);
-    if (!match) return res.status(400).json({ error: "Invalid file data format" });
-    const mimeType = match[1];
-    const buffer = Buffer.from(match[2], "base64");
-    res.setHeader("Content-Type", mimeType);
-    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(att.nom)}"`);
-    res.setHeader("Content-Length", buffer.length.toString());
-    res.send(buffer);
+    const sharePath = await getSharePath();
+    await sendFileOrBase64(res, att.filePath, att.data, att.nom, sharePath);
   } catch (err) {
     console.error(String(err));
     res.status(500).json({ error: "Internal server error" });
@@ -863,6 +971,14 @@ router.delete("/plans/:id/attachments/:attachmentId", async (req, res) => {
   try {
     const planId = Number(req.params.id);
     const attachmentId = Number(req.params.attachmentId);
+    // Delete from disk if filePath is set
+    const rows = await db.select({ filePath: attachmentsTable.filePath }).from(attachmentsTable)
+      .where(and(eq(attachmentsTable.id, attachmentId), eq(attachmentsTable.planId, planId)));
+    if (rows[0]?.filePath) {
+      const sharePath = await getSharePath();
+      const fullPath = path.join(sharePath, rows[0].filePath);
+      await fs.unlink(fullPath).catch(() => { /* ignore if already gone */ });
+    }
     await db.delete(attachmentsTable).where(and(eq(attachmentsTable.id, attachmentId), eq(attachmentsTable.planId, planId)));
     res.status(204).send();
   } catch (err) {
@@ -1621,31 +1737,69 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/justifi
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
 });
 
-// GET /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/justificatif  (télécharger le fichier)
+// GET /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/justificatif
 router.get("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/justificatif", async (req, res) => {
   try {
     const demandeId = Number(req.params.demandeId);
     const [row] = await db.select({
       justificatifNom: depenseDemandesTable.justificatifNom,
       justificatifData: depenseDemandesTable.justificatifData,
+      justificatifPath: depenseDemandesTable.justificatifPath,
     }).from(depenseDemandesTable).where(eq(depenseDemandesTable.id, demandeId));
-    if (!row || !row.justificatifData || !row.justificatifNom) {
+    if (!row || (!row.justificatifPath && !row.justificatifData) || !row.justificatifNom) {
       return res.status(404).json({ error: "Justificatif introuvable." });
     }
-    let mimeType = "application/octet-stream";
-    let base64Data = row.justificatifData;
-    if (row.justificatifData.startsWith("data:")) {
-      const match = row.justificatifData.match(/^data:([^;]+);base64,(.+)$/s);
-      if (match) { mimeType = match[1]; base64Data = match[2]; }
-    }
-    const buffer = Buffer.from(base64Data, "base64");
-    res.setHeader("Content-Type", mimeType);
-    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(row.justificatifNom)}"`);
-    res.send(buffer);
+    const sharePath = await getSharePath();
+    await sendFileOrBase64(res, row.justificatifPath, row.justificatifData, row.justificatifNom, sharePath);
   } catch (err) { console.error(String(err)); res.status(500).json({ error: String(err) }); }
 });
 
-// POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-justifier  (admin : upload sans contrainte statut)
+// POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/upload-justificatif (multipart)
+router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/upload-justificatif", upload.single("file"), async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const demandeId = Number(req.params.demandeId);
+    if (!req.file) return res.status(400).json({ error: "Aucun fichier reçu" });
+    const [existing] = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.id, demandeId));
+    if (!existing || existing.statut !== "en_attente_justificatif") return res.status(400).json({ error: "Demande introuvable ou statut incorrect." });
+
+    const sharePath = await getSharePath();
+    const planRef = await getPlanRef(planId);
+    const relPath = await saveFileToDisk(sharePath, planRef, "justificatifs", req.file.originalname, req.file.buffer);
+
+    const [updated] = await db.update(depenseDemandesTable)
+      .set({ statut: "payee", justificatifNom: req.file.originalname, justificatifPath: relPath, justificatifAt: new Date() })
+      .where(eq(depenseDemandesTable.id, demandeId)).returning();
+
+    res.json(mapDepenseDemande(updated));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/upload-justificatif (multipart batch)
+router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/upload-justificatif", upload.single("file"), async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const batchRef = req.params.batchRef;
+    if (!req.file) return res.status(400).json({ error: "Aucun fichier reçu" });
+
+    const rows = await db.select().from(depenseDemandesTable)
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_justificatif")));
+    if (rows.length === 0) return res.status(400).json({ error: "Aucune demande en attente de justificatif pour ce batch." });
+
+    const sharePath = await getSharePath();
+    const planRef = await getPlanRef(planId);
+    const relPath = await saveFileToDisk(sharePath, planRef, "justificatifs", req.file.originalname, req.file.buffer);
+
+    const updated = await db.update(depenseDemandesTable)
+      .set({ statut: "payee", justificatifNom: req.file.originalname, justificatifPath: relPath, justificatifAt: new Date() })
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), eq(depenseDemandesTable.statut, "en_attente_justificatif")))
+      .returning();
+
+    res.json(updated.map(mapDepenseDemande));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-justifier  (admin : JSON base64, backward compat)
 router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-justifier", async (req, res) => {
   try {
     const demandeId = Number(req.params.demandeId);
@@ -1661,7 +1815,28 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-justif
   } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
 });
 
-// POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-justifier  (admin : batch upload)
+// POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-upload-justificatif (admin : multipart, no status restriction)
+router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-upload-justificatif", upload.single("file"), async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const demandeId = Number(req.params.demandeId);
+    if (!req.file) return res.status(400).json({ error: "Aucun fichier reçu" });
+    const [existing] = await db.select().from(depenseDemandesTable).where(eq(depenseDemandesTable.id, demandeId));
+    if (!existing) return res.status(404).json({ error: "Demande introuvable." });
+
+    const sharePath = await getSharePath();
+    const planRef = await getPlanRef(planId);
+    const relPath = await saveFileToDisk(sharePath, planRef, "justificatifs", req.file.originalname, req.file.buffer);
+
+    const newStatut = existing.statut === "en_attente_justificatif" ? "payee" : existing.statut;
+    const [updated] = await db.update(depenseDemandesTable)
+      .set({ justificatifNom: req.file.originalname, justificatifPath: relPath, justificatifAt: new Date(), statut: newStatut })
+      .where(eq(depenseDemandesTable.id, demandeId)).returning();
+    res.json(mapDepenseDemande(updated));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-justifier  (admin : batch JSON base64, backward compat)
 router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-justifier", async (req, res) => {
   try {
     const batchRef = req.params.batchRef;
@@ -1672,6 +1847,28 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-j
     if (rows.length === 0) return res.status(404).json({ error: "Batch introuvable ou statut incompatible." });
     const updated = await db.update(depenseDemandesTable)
       .set({ justificatifNom, justificatifData, justificatifAt: new Date(), statut: "payee" })
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), inArray(depenseDemandesTable.statut, ["en_attente_justificatif", "payee"])))
+      .returning();
+    res.json(updated.map(mapDepenseDemande));
+  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+});
+
+// POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-upload-justificatif (admin : multipart batch)
+router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-upload-justificatif", upload.single("file"), async (req, res) => {
+  try {
+    const planId = Number(req.params.id);
+    const batchRef = req.params.batchRef;
+    if (!req.file) return res.status(400).json({ error: "Aucun fichier reçu" });
+    const rows = await db.select().from(depenseDemandesTable)
+      .where(and(eq(depenseDemandesTable.batchRef, batchRef), inArray(depenseDemandesTable.statut, ["en_attente_justificatif", "payee"])));
+    if (rows.length === 0) return res.status(404).json({ error: "Batch introuvable ou statut incompatible." });
+
+    const sharePath = await getSharePath();
+    const planRef = await getPlanRef(planId);
+    const relPath = await saveFileToDisk(sharePath, planRef, "justificatifs", req.file.originalname, req.file.buffer);
+
+    const updated = await db.update(depenseDemandesTable)
+      .set({ justificatifNom: req.file.originalname, justificatifPath: relPath, justificatifAt: new Date(), statut: "payee" })
       .where(and(eq(depenseDemandesTable.batchRef, batchRef), inArray(depenseDemandesTable.statut, ["en_attente_justificatif", "payee"])))
       .returning();
     res.json(updated.map(mapDepenseDemande));
