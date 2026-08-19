@@ -5,6 +5,29 @@ import { eq } from "drizzle-orm";
 
 const router = Router();
 
+const getDatabaseErrorCode = (error: unknown): string | undefined => {
+  if (!error || typeof error !== "object") return undefined;
+  const direct = error as { code?: unknown; cause?: { code?: unknown } };
+  if (typeof direct.code === "string") return direct.code;
+  if (typeof direct.cause?.code === "string") return direct.cause.code;
+  return undefined;
+};
+
+const settingsErrorMessage = (error: unknown) => {
+  const code = getDatabaseErrorCode(error);
+  if (code === "42P01" || code === "42703") {
+    return "La migration de stockage n'a pas encore été appliquée à la base de données. Appliquez la migration puis réessayez.";
+  }
+  return "Impossible d'enregistrer les paramètres de stockage.";
+};
+
+const logSettingsError = (operation: string, error: unknown) => {
+  console.error(`[settings] ${operation} failed`, {
+    errorType: error instanceof Error ? error.name : typeof error,
+    databaseCode: getDatabaseErrorCode(error),
+  });
+};
+
 // GET /admin/settings — retrieve all settings as key-value map
 router.get("/admin/settings", async (req, res) => {
   try {
@@ -15,7 +38,8 @@ router.get("/admin/settings", async (req, res) => {
     if (!result["SHARE_PATH"]) result["SHARE_PATH"] = "/data/somelec-files";
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    logSettingsError("read", err);
+    res.status(500).json({ error: settingsErrorMessage(err) });
   }
 });
 
@@ -32,7 +56,8 @@ router.put("/admin/settings/:key", async (req, res) => {
 
     res.json({ key, value });
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    logSettingsError("save", err);
+    res.status(500).json({ error: settingsErrorMessage(err) });
   }
 });
 

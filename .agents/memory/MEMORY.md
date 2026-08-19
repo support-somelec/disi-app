@@ -1,1 +1,2 @@
 - [Docker file storage](docker-file-storage.md) — attachment storage must be a writable, persistent bind mount at the configured in-container path.
+- [Storage schema deployment](storage-schema-deployment.md) — configure file storage only after its settings schema has reached the target database.
