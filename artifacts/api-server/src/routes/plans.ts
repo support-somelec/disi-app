@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { plansTable, moyensTable, attachmentsTable, directionsTable, usersTable, beneficiairesMoyenTable, materielItemsTable, materielDemandesTable, locationItemsTable, locationDemandesTable, carburantDemandesTable, depenseDemandesTable, planCommentsTable, settingsTable } from "@workspace/db/schema";
 import { eq, and, or, SQL, sql, inArray, isNull } from "drizzle-orm";
@@ -17,11 +17,73 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 
+const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024;
+type FileStorageErrorCode = "ENOENT" | "EACCES" | "EROFS" | "ENOSPC" | "UNKNOWN";
+
+class FileStorageError extends Error {
+  constructor(readonly storageCode: FileStorageErrorCode) {
+    super("File storage operation failed");
+    this.name = "FileStorageError";
+  }
+}
+
+const getFileStorageErrorCode = (error: unknown): FileStorageErrorCode => {
+  const code = error && typeof error === "object" && "code" in error
+    ? String((error as { code?: unknown }).code)
+    : "UNKNOWN";
+  return ["ENOENT", "EACCES", "EROFS", "ENOSPC"].includes(code)
+    ? code as FileStorageErrorCode
+    : "UNKNOWN";
+};
+
+const getFileStorageErrorMessage = (error: unknown) => {
+  if (!(error instanceof FileStorageError)) {
+    return "Impossible d'enregistrer le fichier sur le stockage.";
+  }
+  if (error.storageCode === "ENOENT") {
+    return "Le dossier de stockage configuré est introuvable. Vérifiez SHARE_PATH et le volume Docker.";
+  }
+  if (error.storageCode === "EACCES" || error.storageCode === "EROFS") {
+    return "Le dossier de stockage n'est pas accessible en écriture. Vérifiez les permissions du volume Docker.";
+  }
+  if (error.storageCode === "ENOSPC") {
+    return "Le disque de stockage est plein.";
+  }
+  return "Impossible d'enregistrer le fichier sur le stockage.";
+};
+
 // multer: memory storage for manual disk write (dynamic path from settings)
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
+  limits: { fileSize: MAX_FILE_SIZE_BYTES },
 });
+
+/**
+ * Never print multipart errors themselves: depending on the upstream proxy,
+ * they can contain raw request data and make application logs unusable.
+ */
+const singleFileUpload = (req: Request, res: Response, next: NextFunction) => {
+  upload.single("file")(req, res, (err: unknown) => {
+    if (!err) return next();
+
+    const tooLarge = err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE";
+    console.error("[file-upload] Multipart request rejected", {
+      reason: tooLarge ? "file_too_large" : "invalid_multipart_request",
+    });
+    return res.status(tooLarge ? 413 : 400).json({
+      error: tooLarge
+        ? "Le fichier dépasse la taille maximale autorisée de 500 Mo."
+        : "Le fichier n'a pas pu être reçu. Vérifiez le format et réessayez.",
+    });
+  });
+};
+
+const logFileStorageError = (operation: string, error: unknown) => {
+  console.error(`[file-storage] ${operation} failed`, {
+    errorType: error instanceof Error ? error.name : typeof error,
+    storageCode: error instanceof FileStorageError ? error.storageCode : undefined,
+  });
+};
 
 // Helper: get the configured share path from settings (or default)
 async function getSharePath(): Promise<string> {
@@ -56,12 +118,16 @@ async function saveFileToDisk(
   const dir = subdir
     ? path.join(sharePath, planRef, subdir)
     : path.join(sharePath, planRef);
-  await fs.mkdir(dir, { recursive: true });
-  const diskName = safeName(filename);
-  const fullPath = path.join(dir, diskName);
-  await fs.writeFile(fullPath, buffer);
-  // return relative path from share root (for portability)
-  return path.relative(sharePath, fullPath);
+  try {
+    await fs.mkdir(dir, { recursive: true });
+    const diskName = safeName(filename);
+    const fullPath = path.join(dir, diskName);
+    await fs.writeFile(fullPath, buffer);
+    // return relative path from share root (for portability)
+    return path.relative(sharePath, fullPath);
+  } catch (error) {
+    throw new FileStorageError(getFileStorageErrorCode(error));
+  }
 }
 
 // Helper: serve a file from disk or fall back to base64 in DB
@@ -75,7 +141,7 @@ async function sendFileOrBase64(
   if (filePath) {
     const fullPath = path.join(sharePath, filePath);
     if (!fsSync.existsSync(fullPath)) {
-      res.status(404).json({ error: "Fichier introuvable sur le disque. Chemin: " + fullPath });
+      res.status(404).json({ error: "Fichier introuvable sur le stockage." });
       return;
     }
     const buffer = await fs.readFile(fullPath);
@@ -913,17 +979,20 @@ router.post("/plans/:id/attachments", async (req, res) => {
       nom: attachment.nom, type: attachment.type, taille: attachment.taille, createdAt: attachment.createdAt,
     });
   } catch (err) {
-    console.error(String(err));
-    res.status(400).json({ error: String(err) });
+    logFileStorageError("legacy attachment create", err);
+    res.status(400).json({ error: "Impossible d'enregistrer la pièce jointe." });
   }
 });
 
 // POST /plans/:id/attachments/upload — multipart upload (new large-file endpoint)
-router.post("/plans/:id/attachments/upload", upload.single("file"), async (req, res) => {
+router.post("/plans/:id/attachments/upload", singleFileUpload, async (req, res) => {
   try {
     const planId = Number(req.params.id);
     if (!req.file) return res.status(400).json({ error: "Aucun fichier reçu" });
     const moyenId = req.body.moyenId ? Number(req.body.moyenId) : null;
+    const attachmentType = typeof req.body.type === "string" && req.body.type.trim()
+      ? req.body.type.trim()
+      : req.file.mimetype;
 
     const sharePath = await getSharePath();
     const planRef = await getPlanRef(planId);
@@ -933,7 +1002,7 @@ router.post("/plans/:id/attachments/upload", upload.single("file"), async (req, 
       planId,
       moyenId,
       nom: req.file.originalname,
-      type: req.file.mimetype,
+      type: attachmentType,
       taille: req.file.size,
       filePath: relPath,
     }).returning();
@@ -944,8 +1013,8 @@ router.post("/plans/:id/attachments/upload", upload.single("file"), async (req, 
       filePath: attachment.filePath, createdAt: attachment.createdAt,
     });
   } catch (err) {
-    console.error(String(err));
-    res.status(500).json({ error: String(err) });
+    logFileStorageError("attachment upload", err);
+    res.status(err instanceof FileStorageError ? 503 : 500).json({ error: getFileStorageErrorMessage(err) });
   }
 });
 
@@ -1511,7 +1580,7 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dcgai-v
   try {
     const planId = Number(req.params.id);
     const moyenId = Number(req.params.moyenId);
-    const batchRef = req.params.batchRef;
+    const batchRef = String(req.params.batchRef);
     const { dcgaiUserId } = req.body as { dcgaiUserId: number };
 
     const rows = await db.select().from(depenseDemandesTable)
@@ -1530,7 +1599,7 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dcgai-v
 // POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dcgai-annuler
 router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/dcgai-annuler", async (req, res) => {
   try {
-    const batchRef = req.params.batchRef;
+    const batchRef = String(req.params.batchRef);
     const { dcgaiUserId } = req.body as { dcgaiUserId: number };
 
     const rows = await db.select().from(depenseDemandesTable)
@@ -1755,7 +1824,7 @@ router.get("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/justificatif"
 });
 
 // POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/upload-justificatif (multipart)
-router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/upload-justificatif", upload.single("file"), async (req, res) => {
+router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/upload-justificatif", singleFileUpload, async (req, res) => {
   try {
     const planId = Number(req.params.id);
     const demandeId = Number(req.params.demandeId);
@@ -1772,14 +1841,17 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/upload-justi
       .where(eq(depenseDemandesTable.id, demandeId)).returning();
 
     res.json(mapDepenseDemande(updated));
-  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+  } catch (err) {
+    logFileStorageError("justificatif upload", err);
+    res.status(400).json({ error: "Impossible d'enregistrer le justificatif." });
+  }
 });
 
 // POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/upload-justificatif (multipart batch)
-router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/upload-justificatif", upload.single("file"), async (req, res) => {
+router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/upload-justificatif", singleFileUpload, async (req, res) => {
   try {
     const planId = Number(req.params.id);
-    const batchRef = req.params.batchRef;
+    const batchRef = String(req.params.batchRef);
     if (!req.file) return res.status(400).json({ error: "Aucun fichier reçu" });
 
     const rows = await db.select().from(depenseDemandesTable)
@@ -1796,7 +1868,10 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/upload-
       .returning();
 
     res.json(updated.map(mapDepenseDemande));
-  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+  } catch (err) {
+    logFileStorageError("batch justificatif upload", err);
+    res.status(400).json({ error: "Impossible d'enregistrer le justificatif." });
+  }
 });
 
 // POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-justifier  (admin : JSON base64, backward compat)
@@ -1816,7 +1891,7 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-justif
 });
 
 // POST /plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-upload-justificatif (admin : multipart, no status restriction)
-router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-upload-justificatif", upload.single("file"), async (req, res) => {
+router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-upload-justificatif", singleFileUpload, async (req, res) => {
   try {
     const planId = Number(req.params.id);
     const demandeId = Number(req.params.demandeId);
@@ -1833,7 +1908,10 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes/:demandeId/admin-upload
       .set({ justificatifNom: req.file.originalname, justificatifPath: relPath, justificatifAt: new Date(), statut: newStatut })
       .where(eq(depenseDemandesTable.id, demandeId)).returning();
     res.json(mapDepenseDemande(updated));
-  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+  } catch (err) {
+    logFileStorageError("admin justificatif upload", err);
+    res.status(400).json({ error: "Impossible d'enregistrer le justificatif." });
+  }
 });
 
 // POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-justifier  (admin : batch JSON base64, backward compat)
@@ -1854,10 +1932,10 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-j
 });
 
 // POST /plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-upload-justificatif (admin : multipart batch)
-router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-upload-justificatif", upload.single("file"), async (req, res) => {
+router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-upload-justificatif", singleFileUpload, async (req, res) => {
   try {
     const planId = Number(req.params.id);
-    const batchRef = req.params.batchRef;
+    const batchRef = String(req.params.batchRef);
     if (!req.file) return res.status(400).json({ error: "Aucun fichier reçu" });
     const rows = await db.select().from(depenseDemandesTable)
       .where(and(eq(depenseDemandesTable.batchRef, batchRef), inArray(depenseDemandesTable.statut, ["en_attente_justificatif", "payee"])));
@@ -1872,7 +1950,10 @@ router.post("/plans/:id/moyens/:moyenId/depense-demandes-batch/:batchRef/admin-u
       .where(and(eq(depenseDemandesTable.batchRef, batchRef), inArray(depenseDemandesTable.statut, ["en_attente_justificatif", "payee"])))
       .returning();
     res.json(updated.map(mapDepenseDemande));
-  } catch (err) { console.error(String(err)); res.status(400).json({ error: String(err) }); }
+  } catch (err) {
+    logFileStorageError("admin batch justificatif upload", err);
+    res.status(400).json({ error: "Impossible d'enregistrer le justificatif." });
+  }
 });
 
 // GET /depenses/non-justifiees — all depense demandes awaiting justificatif (for DFC tab)

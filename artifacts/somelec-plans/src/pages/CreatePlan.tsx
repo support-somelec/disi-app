@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { useCreatePlan, useGetDirections, useAddMoyen, useAddAttachment, useValidatePlan } from "@workspace/api-client-react";
+import { useCreatePlan, useGetDirections, useAddMoyen, useValidatePlan } from "@workspace/api-client-react";
 import type { Plan, CreateMoyenRequestCategorie } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -11,6 +11,7 @@ import { ArrowRight, ArrowLeft, CheckCircle2, UploadCloud, Plus, Trash2, FilePlu
 import * as XLSX from "xlsx";
 
 const BASE_URL = import.meta.env.BASE_URL ?? "/somelec-plans/";
+const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024;
 
 const STEPS = [
   { id: 1, title: "Informations" },
@@ -37,7 +38,6 @@ export default function CreatePlan() {
   const { data: directions } = useGetDirections();
   const createPlanMutation = useCreatePlan();
   const addMoyenMutation = useAddMoyen();
-  const addAttachmentMutation = useAddAttachment();
   const validatePlanMutation = useValidatePlan();
 
   // Step 1 State
@@ -48,7 +48,9 @@ export default function CreatePlan() {
     duree: "",
     directionId: currentUser?.directionId?.toString() || ""
   });
-  const [attachments, setAttachments] = useState<Array<{ file: File; base64: string }>>([]);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
+  const [attachmentUploadError, setAttachmentUploadError] = useState<string | null>(null);
 
   // Step 2 State
   const [moyens, setMoyens] = useState<Array<{ categorie: string; description: string; budget: string; quantite: string; unite: string; autresDirectionNom?: string }>>([]);
@@ -66,14 +68,61 @@ export default function CreatePlan() {
 
   // Liste matériel state (for materiel)
   const [listeMaterielRows, setListeMaterielRows] = useState<ListeMaterielRow[]>([]);
-  const [listeMaterielFile, setListeMaterielFile] = useState<{ file: File; base64: string } | null>(null);
+  const [listeMaterielFile, setListeMaterielFile] = useState<File | null>(null);
   const materielExcelRef = useRef<HTMLInputElement>(null);
 
   const isMaterielCat = currentMoyen.categorie === "materiel";
 
+  const uploadAttachmentFile = async (
+    planId: number,
+    file: File,
+    moyenId?: number,
+    attachmentType?: string,
+  ): Promise<void> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (moyenId !== undefined) formData.append("moyenId", String(moyenId));
+    if (attachmentType) formData.append("type", attachmentType);
+
+    const res = await fetch(`${BASE_URL}api/plans/${planId}/attachments/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const response = await res.json().catch(() => ({}));
+      throw new Error(response.error ?? "L'envoi du fichier a échoué.");
+    }
+  };
+
+  const uploadPendingAttachments = async (planId: number): Promise<boolean> => {
+    if (attachments.length === 0) return true;
+
+    setIsUploadingAttachments(true);
+    setAttachmentUploadError(null);
+    try {
+      for (const file of attachments) {
+        await uploadAttachmentFile(planId, file);
+        // Preserve only files that still need an upload, allowing a safe retry.
+        setAttachments(prev => prev.filter(candidate => candidate !== file));
+      }
+      return true;
+    } catch (err) {
+      setAttachmentUploadError(
+        err instanceof Error ? err.message : "Impossible d'enregistrer une pièce jointe.",
+      );
+      return false;
+    } finally {
+      setIsUploadingAttachments(false);
+    }
+  };
+
   const handleMaterielExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      alert("Le fichier dépasse la taille maximale autorisée de 500 Mo.");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
@@ -89,12 +138,7 @@ export default function CreatePlan() {
           quantite: Number(getField(row, ["QUANTITÉ", "Quantité", "QTE", "Qte", "quantite", "QUANTITE", "QTÉ", "QTE"])) || 0,
         })).filter(r => r.item);
         setListeMaterielRows(parsed);
-        // Store base64 for upload
-        const b64reader = new FileReader();
-        b64reader.onload = (ev2) => {
-          if (ev2.target?.result) setListeMaterielFile({ file, base64: ev2.target.result.toString() });
-        };
-        b64reader.readAsDataURL(file);
+        setListeMaterielFile(file);
       } catch {
         alert("Erreur lors de la lecture du fichier Excel matériel.");
       }
@@ -106,18 +150,19 @@ export default function CreatePlan() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setAttachments(prev => [...prev, { file, base64: event.target!.result!.toString() }]);
-      }
-    };
-    reader.readAsDataURL(file);
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setAttachmentUploadError("Le fichier dépasse la taille maximale autorisée de 500 Mo.");
+      return;
+    }
+    setAttachmentUploadError(null);
+    setAttachments(prev => [...prev, file]);
+    e.target.value = "";
   };
 
   const handleCreatePlan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
+    setAttachmentUploadError(null);
     try {
       const plan = await createPlanMutation.mutateAsync({
         data: {
@@ -130,21 +175,11 @@ export default function CreatePlan() {
         }
       });
 
-      for (const att of attachments) {
-        try {
-          await addAttachmentMutation.mutateAsync({
-            id: plan.id,
-            data: { nom: att.file.name, type: att.file.type, taille: att.file.size, data: att.base64 }
-          });
-        } catch (err) {
-          console.error("Failed to upload attachment", String(err));
-        }
-      }
-
       setCreatedPlan(plan);
+      await uploadPendingAttachments(plan.id);
       setStep(2);
-    } catch (err) {
-      console.error("Failed to create plan", err);
+    } catch {
+      setAttachmentUploadError("Impossible de créer le plan. Vérifiez les informations saisies et réessayez.");
     }
   };
 
@@ -168,21 +203,12 @@ export default function CreatePlan() {
         }
       });
 
-      // Save liste matériel Excel file as attachment for materiel
+      // Save the original Excel file on disk as an attachment for this moyen.
       if (isMaterielCat && listeMaterielFile) {
         try {
-          await addAttachmentMutation.mutateAsync({
-            id: createdPlan.id,
-            data: {
-              nom: listeMaterielFile.file.name,
-              type: "liste_materiel",
-              taille: listeMaterielFile.file.size,
-              data: listeMaterielFile.base64,
-              moyenId: moyen.id,
-            }
-          });
-        } catch (err) {
-          console.error("Failed to save liste matériel file", err);
+          await uploadAttachmentFile(createdPlan.id, listeMaterielFile, moyen.id, "liste_materiel");
+        } catch {
+          alert("Le moyen a été ajouté, mais le fichier Excel n'a pas pu être enregistré. Réessayez depuis la fiche du plan.");
         }
       }
 
@@ -202,6 +228,10 @@ export default function CreatePlan() {
 
   const handleFinish = async () => {
     if (!createdPlan || !currentUser) return;
+    if (attachments.length > 0) {
+      setAttachmentUploadError("Des pièces jointes restent à envoyer avant la soumission du plan.");
+      return;
+    }
     try {
       await validatePlanMutation.mutateAsync({
         id: createdPlan.id,
@@ -271,7 +301,7 @@ export default function CreatePlan() {
                       <input ref={fileInputRef} type="file" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                       <UploadCloud className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                       <p className="text-sm font-medium text-foreground">Cliquez ou glissez un fichier</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">PDF, Excel, Images (Max 10MB)</p>
+                       <p className="text-xs text-muted-foreground mt-0.5">PDF, Excel, Images (max. 500 Mo)</p>
                     </div>
                     {attachments.length > 0 && (
                       <ul className="space-y-2">
@@ -279,7 +309,7 @@ export default function CreatePlan() {
                           <li key={i} className="p-3 border rounded-xl flex items-center justify-between bg-white shadow-sm">
                             <div className="flex items-center gap-3 overflow-hidden">
                               <div className="p-2 bg-secondary rounded-lg"><FilePlus className="w-4 h-4 text-primary" /></div>
-                              <span className="text-sm font-medium truncate">{att.file.name}</span>
+                               <span className="text-sm font-medium truncate">{att.name}</span>
                             </div>
                             <button type="button" onClick={() => setAttachments(attachments.filter((_, idx) => idx !== i))} className="p-2 text-muted-foreground hover:text-destructive transition-colors">
                               <Trash2 className="w-4 h-4" />
@@ -287,6 +317,11 @@ export default function CreatePlan() {
                           </li>
                         ))}
                       </ul>
+                    )}
+                    {attachmentUploadError && (
+                      <p className="text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2">
+                        {attachmentUploadError}
+                      </p>
                     )}
                   </div>
 
@@ -315,7 +350,7 @@ export default function CreatePlan() {
                 </div>
 
                 <div className="pt-6 flex justify-end">
-                  <Button type="submit" size="lg" isLoading={createPlanMutation.isPending || addAttachmentMutation.isPending} className="w-full sm:w-auto">
+                  <Button type="submit" size="lg" isLoading={createPlanMutation.isPending || isUploadingAttachments} className="w-full sm:w-auto">
                     Créer le plan & Continuer <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>
                 </div>
@@ -325,6 +360,19 @@ export default function CreatePlan() {
             {/* STEP 2 — Moyens */}
             {step === 2 && (
               <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
+                {attachmentUploadError && attachments.length > 0 && createdPlan && (
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+                    <p className="flex-1 text-sm text-destructive">{attachmentUploadError}</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void uploadPendingAttachments(createdPlan.id)}
+                      isLoading={isUploadingAttachments}
+                    >
+                      Réessayer l'envoi
+                    </Button>
+                  </div>
+                )}
                 <div className="bg-muted/30 p-6 rounded-2xl border border-border/50 space-y-4">
                   <h3 className="font-semibold text-foreground flex items-center gap-2">
                     <Plus className="w-5 h-5 text-primary" /> Ajouter un moyen nécessaire

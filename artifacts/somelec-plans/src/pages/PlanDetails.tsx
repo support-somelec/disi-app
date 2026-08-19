@@ -1667,7 +1667,7 @@ export default function PlanDetails() {
                         </td>
                         <td className="px-5 py-4 text-center">
                           {moyenDecharge ? (
-                            <a href={`/api/plans/${plan.id}/attachments/${moyenDecharge.id}/download`} download={moyenDecharge.nom} title={moyenDecharge.nom}>
+                            <a href={`${BASE_URL}api/plans/${plan.id}/attachments/${moyenDecharge.id}/download`} download={moyenDecharge.nom} title={moyenDecharge.nom}>
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium hover:bg-green-200 transition-colors cursor-pointer">
                                 <Download className="w-3 h-3" /> OK
                               </span>
@@ -1907,7 +1907,7 @@ export default function PlanDetails() {
                         <p className="text-xs text-muted-foreground uppercase">{att.type.split("/")[1] ?? "Fichier"} • {((att.taille ?? 0) / 1024).toFixed(0)} KB</p>
                       </div>
                       <a
-                        href={`/api/plans/${plan.id}/attachments/${att.id}/download`}
+                        href={`${BASE_URL}api/plans/${plan.id}/attachments/${att.id}/download`}
                         download={att.nom}
                         className="shrink-0"
                       >

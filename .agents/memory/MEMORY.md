@@ -1,0 +1,1 @@
+- [Docker file storage](docker-file-storage.md) — attachment storage must be a writable, persistent bind mount at the configured in-container path.
