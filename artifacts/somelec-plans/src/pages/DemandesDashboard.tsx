@@ -418,10 +418,11 @@ export default function DemandesDashboard() {
                         <td className="px-4 py-3 text-right">
                           <button
                             onClick={() => navigate(`/plans/${item.planId}`)}
+                            title="Ouvrir le plan et gérer le justificatif"
                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors whitespace-nowrap"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
-                            Ouvrir
+                            Ouvrir & justifier
                           </button>
                         </td>
                       </tr>

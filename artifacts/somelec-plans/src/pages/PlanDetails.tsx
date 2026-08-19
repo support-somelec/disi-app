@@ -779,7 +779,7 @@ export default function PlanDetails() {
       const carburantIds = moyens.filter(m => m.categorie === "carburant").map(m => m.id);
       carburantIds.forEach(mid => loadCarburantData(mid));
     }
-    if (role === "dcgai" || role === "direction_financiere") {
+    if (role === "dcgai" || role === "direction_financiere" || role === "admin") {
       const DCATS = ["prime", "logement", "indemnite_journaliere", "logistique", "autres"];
       const depIds = moyens.filter(m => DCATS.includes(m.categorie)).map(m => m.id);
       depIds.forEach(mid => loadDepenseData(mid));
@@ -2688,8 +2688,8 @@ export default function PlanDetails() {
             })()
           )}
 
-          {/* Admin — upload justificatifs pour les dépenses en attente ou remplacement */}
-          {isAdmin && plan.statut === "ouvert" && depenseMoyens.length > 0 && (
+          {/* Admin — consult, download, upload or replace expense justificatifs */}
+          {isAdmin && depenseMoyens.length > 0 && (
             (() => {
               const adminJustifList: { moyen: typeof moyens[0]; dem: DepenseDemande }[] = [];
               for (const m of depenseMoyens) {
@@ -2708,7 +2708,7 @@ export default function PlanDetails() {
                       {pendingCount > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">{pendingCount} en attente</span>}
                     </CardTitle>
                     <p className="text-xs text-violet-700 mt-1">
-                      Uploadez ou remplacez les justificatifs de toutes les dépenses payées.
+                      Consultez les fichiers envoyés par les utilisateurs, ajoutez un justificatif manquant ou remplacez un document existant.
                     </p>
                   </CardHeader>
                   <CardContent className="p-5 space-y-3">
